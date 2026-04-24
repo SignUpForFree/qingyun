@@ -1,0 +1,1089 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MeihuaResultCard · 6 方向对比</title>
+  <style>
+    :root {
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "PingFang SC", "Noto Sans SC", sans-serif;
+      color-scheme: light;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: #F5F6F8;
+      color: #111;
+      min-height: 100vh;
+    }
+    .page-header {
+      max-width: 1280px;
+      margin: 0 auto 24px;
+    }
+    .page-header h1 {
+      font-size: 20px;
+      font-weight: 600;
+      margin: 0 0 4px;
+    }
+    .page-header p {
+      font-size: 13px;
+      color: #666;
+      margin: 0;
+    }
+    .page-header p code { background: #fff; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+    @media (max-width: 960px) {
+      .grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 640px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+    .variant {
+      background: #fff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      display: flex;
+      flex-direction: column;
+    }
+    .variant-header {
+      padding: 12px 16px 8px;
+      border-bottom: 1px solid #eee;
+    }
+    .variant-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0 0 4px;
+    }
+    .variant-title .letter {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #111;
+      color: #fff;
+      text-align: center;
+      line-height: 20px;
+      font-size: 11px;
+      margin-right: 6px;
+      font-family: "SF Mono", ui-monospace, monospace;
+    }
+    .variant-desc {
+      font-size: 12px;
+      color: #666;
+      margin: 0;
+      line-height: 1.4;
+    }
+    .variant-stage {
+      /* Each variant renders a 390px wide mobile viewport snippet */
+      background: #f8f8fa;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 520px;
+    }
+    .viewport {
+      width: 350px;
+      max-width: 100%;
+    }
+
+    /* ================================================================ */
+    /* VARIANT A · 素笺水墨                                              */
+    /* ================================================================ */
+    .var-a {
+      background: #fff;
+      font-family: "Noto Serif SC", "Songti SC", "STSongti-SC-Regular", serif;
+      color: #2a2a2a;
+      padding: 24px 20px;
+      border-radius: 2px;
+    }
+    .var-a .title {
+      text-align: center;
+      font-size: 15px;
+      letter-spacing: 0.3em;
+      color: #555;
+      font-weight: 400;
+      margin-bottom: 24px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid #e8e4dd;
+    }
+    .var-a .grid4 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px 14px;
+      margin-bottom: 20px;
+    }
+    .var-a .cell {
+      text-align: center;
+      padding-top: 12px;
+      position: relative;
+    }
+    .var-a .ink-dot {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      filter: blur(4px);
+      opacity: 0.45;
+    }
+    .var-a .cell-label {
+      font-size: 10px;
+      letter-spacing: 0.4em;
+      color: #999;
+      margin-bottom: 6px;
+    }
+    .var-a .bagua {
+      font-size: 26px;
+      color: #888;
+      line-height: 1.1;
+      letter-spacing: -2px;
+    }
+    .var-a .gua-name {
+      font-size: 16px;
+      color: #2a2a2a;
+      margin-top: 6px;
+      letter-spacing: 0.15em;
+    }
+    .var-a .elements {
+      font-size: 10px;
+      color: #aaa;
+      margin-top: 3px;
+      letter-spacing: 0.2em;
+    }
+    .var-a .divider {
+      height: 1px;
+      background: #e8e4dd;
+      margin: 18px 0 14px;
+    }
+    .var-a .meta {
+      font-size: 11px;
+      color: #666;
+      text-align: center;
+      line-height: 1.9;
+      letter-spacing: 0.1em;
+      font-family: "Noto Sans SC", -apple-system, sans-serif;
+    }
+    .var-a .verdict {
+      display: inline-block;
+      color: #5d7a4e;
+      font-size: 12px;
+      letter-spacing: 0.3em;
+      padding: 2px 10px;
+      margin-top: 4px;
+    }
+
+    /* ================================================================ */
+    /* VARIANT B · 新中式渐变                                            */
+    /* ================================================================ */
+    .var-b {
+      background: linear-gradient(135deg, #FFE4EE 0%, #E8DEFF 100%);
+      padding: 20px 14px 18px;
+      border-radius: 20px;
+      font-family: "Noto Sans SC", -apple-system, sans-serif;
+      position: relative;
+    }
+    .var-b .title {
+      text-align: center;
+      font-size: 14px;
+      color: #6b4555;
+      font-weight: 500;
+      margin-bottom: 16px;
+      letter-spacing: 0.25em;
+    }
+    .var-b .sparkle {
+      color: #C9A96B;
+      opacity: 0.7;
+      margin: 0 8px;
+    }
+    .var-b .grid4 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .var-b .cell {
+      background: rgba(255,255,255,0.55);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 0.5px solid rgba(183, 110, 121, 0.25);
+      border-radius: 14px;
+      padding: 12px 8px 10px;
+      text-align: center;
+      box-shadow: 0 4px 12px rgba(183, 110, 121, 0.06);
+    }
+    .var-b .cell-label {
+      font-size: 10px;
+      color: #B76E79;
+      letter-spacing: 0.2em;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    .var-b .bagua {
+      font-size: 22px;
+      color: #C9A96B;
+      line-height: 1.1;
+      letter-spacing: -1px;
+      text-shadow: 0 1px 2px rgba(201, 169, 107, 0.15);
+    }
+    .var-b .gua-name {
+      font-family: "Noto Serif SC", serif;
+      font-size: 15px;
+      color: #B76E79;
+      margin-top: 4px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+    }
+    .var-b .elements {
+      font-size: 10px;
+      color: #8a7989;
+      margin-top: 3px;
+      letter-spacing: 0.15em;
+    }
+    .var-b .dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      vertical-align: middle;
+      margin: 0 3px 1px;
+    }
+    .var-b .bottom-panel {
+      background: rgba(255,255,255,0.5);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 12px;
+      padding: 10px 12px;
+      text-align: center;
+    }
+    .var-b .row {
+      font-size: 11px;
+      color: #6b4555;
+      line-height: 1.9;
+      letter-spacing: 0.08em;
+    }
+    .var-b .verdict {
+      display: inline-block;
+      background: linear-gradient(135deg, #A3E4D7 0%, #A7D8F0 100%);
+      color: #2d6a5d;
+      font-size: 12px;
+      padding: 4px 12px;
+      border-radius: 10px;
+      margin: 6px 0;
+      font-weight: 500;
+      letter-spacing: 0.15em;
+      box-shadow: 0 2px 8px rgba(163, 228, 215, 0.4);
+    }
+
+    /* ================================================================ */
+    /* VARIANT C · Neumorphism 奶油瓷                                    */
+    /* ================================================================ */
+    .var-c {
+      background: #F3EDE4;
+      padding: 24px 18px;
+      border-radius: 24px;
+      font-family: "Noto Sans SC", "PingFang SC", -apple-system, sans-serif;
+      color: #3C2E24;
+    }
+    .var-c .title {
+      text-align: center;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.35em;
+      color: #6b5b4d;
+      margin-bottom: 20px;
+    }
+    .var-c .grid4 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .var-c .cell {
+      /* Inset neumorphic pod */
+      background: #F3EDE4;
+      border-radius: 16px;
+      padding: 14px 10px 10px;
+      text-align: center;
+      position: relative;
+      box-shadow:
+        inset 3px 3px 8px #d4ceb9,
+        inset -3px -3px 8px #ffffff;
+    }
+    .var-c .cell-label {
+      font-size: 9px;
+      letter-spacing: 0.3em;
+      color: #8d7d6e;
+      margin-bottom: 6px;
+    }
+    .var-c .bagua {
+      font-size: 24px;
+      color: #5c4e42;
+      line-height: 1.1;
+      letter-spacing: -2px;
+      text-shadow: 1px 1px 2px rgba(255,255,255,0.8), -1px -1px 2px rgba(120,100,80,0.15);
+    }
+    .var-c .gua-name {
+      font-size: 15px;
+      color: #3C2E24;
+      font-weight: 600;
+      margin-top: 4px;
+      letter-spacing: 0.1em;
+    }
+    .var-c .stones {
+      margin-top: 5px;
+      display: flex;
+      justify-content: center;
+      gap: 4px;
+    }
+    .var-c .stone {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      box-shadow: inset 1px 1px 2px rgba(255,255,255,0.6), 0 1px 2px rgba(0,0,0,0.15);
+    }
+    .var-c .stone-label {
+      font-size: 9px;
+      color: #8d7d6e;
+      margin-left: 4px;
+      letter-spacing: 0.1em;
+      align-self: center;
+    }
+    .var-c .groove {
+      height: 6px;
+      background: #F3EDE4;
+      border-radius: 3px;
+      box-shadow: inset 1px 1px 3px #d4ceb9, inset -1px -1px 3px #ffffff;
+      margin: 16px 0 14px;
+    }
+    .var-c .meta {
+      font-size: 11px;
+      color: #6b5b4d;
+      line-height: 1.9;
+      text-align: center;
+      letter-spacing: 0.1em;
+    }
+    .var-c .verdict {
+      display: inline-block;
+      background: #F3EDE4;
+      color: #5d7a4e;
+      font-size: 12px;
+      padding: 6px 16px;
+      border-radius: 12px;
+      margin-top: 4px;
+      font-weight: 500;
+      letter-spacing: 0.25em;
+      box-shadow: 3px 3px 6px #d4ceb9, -3px -3px 6px #ffffff;
+    }
+
+    /* ================================================================ */
+    /* VARIANT D · Glassmorphism 晨雾                                    */
+    /* ================================================================ */
+    .var-d-wrap {
+      background: linear-gradient(160deg, #B8C9D4 0%, #E8EEF2 45%, #D4D0DE 100%);
+      padding: 22px 14px;
+      border-radius: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .var-d-wrap::before {
+      content: "";
+      position: absolute;
+      top: 10%;
+      left: -20%;
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,255,255,0.6) 0%, transparent 70%);
+      filter: blur(30px);
+    }
+    .var-d-wrap::after {
+      content: "";
+      position: absolute;
+      bottom: 20%;
+      right: -10%;
+      width: 150px;
+      height: 150px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,255,255,0.5) 0%, transparent 70%);
+      filter: blur(25px);
+    }
+    .var-d {
+      position: relative;
+      z-index: 1;
+      font-family: "Inter", "Noto Sans SC", -apple-system, sans-serif;
+      color: #1a2633;
+    }
+    .var-d .title {
+      text-align: center;
+      font-size: 13px;
+      color: #1a2633;
+      letter-spacing: 0.3em;
+      margin-bottom: 18px;
+      text-shadow: 0 0 12px rgba(255,255,255,0.8);
+    }
+    .var-d .grid4 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .var-d .cell {
+      background: rgba(255,255,255,0.35);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.5);
+      border-left: 3px solid;
+      border-radius: 12px;
+      padding: 12px 10px 10px;
+      text-align: center;
+    }
+    .var-d .cell.c1 { border-left-color: #3BA1C7; } /* 水 */
+    .var-d .cell.c2 { border-left-color: #3BA1C7; }
+    .var-d .cell.c3 { border-left-color: #C7A13B; } /* 土 */
+    .var-d .cell.c4 { border-left-color: #6BC73B; } /* 木 */
+    .var-d .cell-label {
+      font-size: 9px;
+      color: #4a5b6b;
+      letter-spacing: 0.3em;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+    .var-d .bagua {
+      font-size: 24px;
+      color: #fff;
+      line-height: 1;
+      letter-spacing: -1px;
+      text-shadow: 0 0 6px rgba(255,255,255,0.8), 0 1px 2px rgba(26, 38, 51, 0.2);
+    }
+    .var-d .gua-name {
+      font-size: 14px;
+      color: #1a2633;
+      margin-top: 4px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+    }
+    .var-d .elements {
+      font-size: 10px;
+      color: #4a5b6b;
+      margin-top: 2px;
+      letter-spacing: 0.15em;
+    }
+    .var-d .bottom-panel {
+      background: rgba(255,255,255,0.4);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.5);
+      border-radius: 12px;
+      padding: 10px;
+      text-align: center;
+    }
+    .var-d .row {
+      font-size: 11px;
+      color: #2a3c4e;
+      line-height: 1.9;
+      letter-spacing: 0.08em;
+    }
+    .var-d .verdict {
+      display: inline-block;
+      background: linear-gradient(135deg, rgba(107, 231, 215, 0.5) 0%, rgba(123, 180, 232, 0.5) 100%);
+      color: #1a4d3f;
+      font-size: 12px;
+      padding: 4px 14px;
+      border-radius: 10px;
+      margin: 5px 0;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      box-shadow: 0 0 12px rgba(107, 231, 215, 0.5);
+      border: 1px solid rgba(255,255,255,0.5);
+    }
+
+    /* ================================================================ */
+    /* VARIANT E · 宋画淡彩                                              */
+    /* ================================================================ */
+    .var-e {
+      background: #F5EFE0;
+      background-image:
+        repeating-linear-gradient(45deg, transparent 0 2px, rgba(180,160,120,0.04) 2px 3px),
+        repeating-linear-gradient(-45deg, transparent 0 2px, rgba(180,160,120,0.04) 2px 3px);
+      padding: 24px 18px;
+      border-radius: 4px;
+      font-family: "Noto Serif SC", "STSongti-SC-Regular", "KaiTi", serif;
+      color: #2B2820;
+      position: relative;
+    }
+    .var-e::before {
+      content: "";
+      position: absolute;
+      top: 18px;
+      bottom: 18px;
+      left: 50%;
+      width: 0.5px;
+      background: #2B2820;
+      opacity: 0.12;
+    }
+    .var-e .title {
+      text-align: center;
+      font-size: 16px;
+      font-weight: 700;
+      color: #2B2820;
+      margin-bottom: 18px;
+      letter-spacing: 0.3em;
+      position: relative;
+      z-index: 1;
+    }
+    .var-e .title .seal {
+      display: inline-block;
+      background: #B84A3E;
+      color: #F5EFE0;
+      font-size: 9px;
+      padding: 1px 4px;
+      margin-left: 8px;
+      border-radius: 1px;
+      letter-spacing: 0.1em;
+      vertical-align: middle;
+    }
+    .var-e .grid4 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 16px;
+      position: relative;
+      z-index: 1;
+    }
+    .var-e .cell {
+      border: 0.5px solid #2B2820;
+      padding: 10px 8px 8px;
+      text-align: center;
+      background: rgba(245, 239, 224, 0.6);
+      position: relative;
+    }
+    .var-e .cell .mini-seal {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      background: #B84A3E;
+      color: #F5EFE0;
+      font-size: 7px;
+      padding: 1px 2px;
+      letter-spacing: 0.1em;
+      line-height: 1;
+    }
+    .var-e .bagua {
+      font-size: 22px;
+      color: #2B2820;
+      line-height: 1.1;
+      letter-spacing: -2px;
+      margin-top: 4px;
+    }
+    .var-e .gua-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: #2B2820;
+      margin-top: 4px;
+      letter-spacing: 0.15em;
+    }
+    .var-e .elements {
+      font-size: 10px;
+      color: #6b5c3d;
+      margin-top: 3px;
+      letter-spacing: 0.15em;
+    }
+    .var-e .chip {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      vertical-align: middle;
+      margin: 0 2px 1px;
+    }
+    .var-e .divider {
+      height: 0.5px;
+      background: #2B2820;
+      opacity: 0.3;
+      margin: 14px 0 12px;
+      position: relative;
+      z-index: 1;
+    }
+    .var-e .meta {
+      font-size: 11px;
+      color: #2B2820;
+      line-height: 1.95;
+      text-align: center;
+      letter-spacing: 0.12em;
+      position: relative;
+      z-index: 1;
+    }
+    .var-e .verdict {
+      display: inline-block;
+      background: #B84A3E;
+      color: #F5EFE0;
+      font-size: 11px;
+      padding: 3px 10px;
+      margin: 4px 0;
+      letter-spacing: 0.25em;
+      font-weight: 600;
+      border-radius: 1px;
+    }
+
+    /* ================================================================ */
+    /* VARIANT F · 极简线框                                              */
+    /* ================================================================ */
+    .var-f {
+      background: #fff;
+      padding: 24px 16px;
+      border-radius: 8px;
+      font-family: "Geist", "Inter", "Noto Sans SC", -apple-system, sans-serif;
+      color: #111;
+    }
+    .var-f .title {
+      font-size: 12px;
+      font-weight: 500;
+      color: #111;
+      margin-bottom: 18px;
+      letter-spacing: 0.05em;
+    }
+    .var-f .title .dot {
+      color: #4F46E5;
+      margin: 0 6px;
+    }
+    .var-f .grid4 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border-top: 1px solid #E5E5E5;
+      border-left: 1px solid #E5E5E5;
+      margin-bottom: 16px;
+    }
+    .var-f .cell {
+      border-right: 1px solid #E5E5E5;
+      border-bottom: 1px solid #E5E5E5;
+      padding: 14px 10px;
+      text-align: left;
+    }
+    .var-f .cell-label {
+      font-size: 9px;
+      color: #666;
+      letter-spacing: 0.15em;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      font-family: "SF Mono", ui-monospace, monospace;
+    }
+    .var-f .bagua {
+      font-size: 20px;
+      color: #4F46E5;
+      line-height: 1.1;
+      letter-spacing: -1px;
+      margin-bottom: 6px;
+    }
+    .var-f .gua-name {
+      font-size: 13px;
+      color: #111;
+      font-weight: 500;
+    }
+    .var-f .elements {
+      font-size: 10px;
+      color: #999;
+      margin-top: 2px;
+      font-family: "SF Mono", ui-monospace, monospace;
+    }
+    .var-f .data-row {
+      display: flex;
+      gap: 12px;
+      font-size: 11px;
+      color: #333;
+      font-family: "SF Mono", ui-monospace, monospace;
+      padding: 8px 0;
+      border-bottom: 1px solid #E5E5E5;
+    }
+    .var-f .data-row span { display: inline-flex; gap: 4px; }
+    .var-f .data-row .label { color: #999; }
+    .var-f .verdict {
+      display: inline-block;
+      font-size: 10px;
+      color: #4F46E5;
+      border: 1px solid #4F46E5;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.1em;
+      margin-top: 10px;
+      font-family: "SF Mono", ui-monospace, monospace;
+      text-transform: uppercase;
+    }
+
+    /* ================================================================ */
+    /* Scoring strip                                                     */
+    /* ================================================================ */
+    .variant-footer {
+      padding: 10px 14px 12px;
+      font-size: 11px;
+      color: #555;
+      line-height: 1.5;
+      background: #fafafa;
+      border-top: 1px solid #eee;
+    }
+    .variant-footer strong { color: #111; }
+    .variant-footer .tag {
+      display: inline-block;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      padding: 1px 6px;
+      border-radius: 3px;
+      margin-right: 4px;
+      font-size: 10px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="page-header">
+    <h1>MeihuaResultCard · 6 方向视觉对比</h1>
+    <p>目标视口 390×844 · 卡片宽度 350px · 内容数据统一（水天需 / 水雷屯 / 山天大畜 / 风天小畜 · 动爻 2 · 用生体 吉 · 本周内 戌时）</p>
+  </div>
+
+  <div class="grid">
+
+    <!-- ==================== Variant A ==================== -->
+    <div class="variant">
+      <div class="variant-header">
+        <h2 class="variant-title"><span class="letter">A</span>素笺水墨</h2>
+        <p class="variant-desc">日式白底大留白 · 宋体 + 水墨点缀 · 八卦符号淡灰不抢眼 · 仪式感在留白</p>
+      </div>
+      <div class="variant-stage">
+        <div class="viewport">
+          <div class="var-a">
+            <div class="title">你 抽 到 的 梅 花 卦</div>
+            <div class="grid4">
+              <div class="cell">
+                <div class="ink-dot" style="background: #4a6fa5;"></div>
+                <div class="cell-label">本 卦</div>
+                <div class="bagua">☵<br/>☰</div>
+                <div class="gua-name">水天需</div>
+                <div class="elements">水 · 金</div>
+              </div>
+              <div class="cell">
+                <div class="ink-dot" style="background: #4a6fa5;"></div>
+                <div class="cell-label">互 卦</div>
+                <div class="bagua">☵<br/>☳</div>
+                <div class="gua-name">水雷屯</div>
+                <div class="elements">水 · 木</div>
+              </div>
+              <div class="cell">
+                <div class="ink-dot" style="background: #c9a55f;"></div>
+                <div class="cell-label">变 卦</div>
+                <div class="bagua">☶<br/>☰</div>
+                <div class="gua-name">山天大畜</div>
+                <div class="elements">土 · 金</div>
+              </div>
+              <div class="cell">
+                <div class="ink-dot" style="background: #7fa06b;"></div>
+                <div class="cell-label">卦中卦</div>
+                <div class="bagua">☴<br/>☰</div>
+                <div class="gua-name">风天小畜</div>
+                <div class="elements">木 · 金</div>
+              </div>
+            </div>
+            <div class="divider"></div>
+            <div class="meta">
+              动爻 · 第 二 爻<br/>
+              体 上卦 水 · 用 下卦 金<br/>
+              <span class="verdict">用 生 体 · 吉</span><br/>
+              应期 · 本周内 · 戌时 19–21
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="variant-footer">
+        <strong>适合：</strong>偏文艺、留白型产品<br/>
+        <span class="tag">优</span>克制有意境 <span class="tag">劣</span>年轻用户可能觉得太素
+      </div>
+    </div>
+
+    <!-- ==================== Variant B ==================== -->
+    <div class="variant">
+      <div class="variant-header">
+        <h2 class="variant-title"><span class="letter">B</span>新中式渐变</h2>
+        <p class="variant-desc">粉紫渐变底 + frosted glass 卡 + 玫瑰金卦名 · 小红书女性向调性</p>
+      </div>
+      <div class="variant-stage">
+        <div class="viewport">
+          <div class="var-b">
+            <div class="title"><span class="sparkle">✦</span>你抽到的梅花卦<span class="sparkle">✦</span></div>
+            <div class="grid4">
+              <div class="cell">
+                <div class="cell-label">本卦</div>
+                <div class="bagua">☵<br/>☰</div>
+                <div class="gua-name">水天需</div>
+                <div class="elements"><span class="dot" style="background:#7BB4E8;"></span>水·<span class="dot" style="background:#F2EFE7;border:0.5px solid #ccc"></span>金</div>
+              </div>
+              <div class="cell">
+                <div class="cell-label">互卦</div>
+                <div class="bagua">☵<br/>☳</div>
+                <div class="gua-name">水雷屯</div>
+                <div class="elements"><span class="dot" style="background:#7BB4E8;"></span>水·<span class="dot" style="background:#A8D5A8;"></span>木</div>
+              </div>
+              <div class="cell">
+                <div class="cell-label">变卦</div>
+                <div class="bagua">☶<br/>☰</div>
+                <div class="gua-name">山天大畜</div>
+                <div class="elements"><span class="dot" style="background:#E8D39B;"></span>土·<span class="dot" style="background:#F2EFE7;border:0.5px solid #ccc"></span>金</div>
+              </div>
+              <div class="cell">
+                <div class="cell-label">卦中卦</div>
+                <div class="bagua">☴<br/>☰</div>
+                <div class="gua-name">风天小畜</div>
+                <div class="elements"><span class="dot" style="background:#A8D5A8;"></span>木·<span class="dot" style="background:#F2EFE7;border:0.5px solid #ccc"></span>金</div>
+              </div>
+            </div>
+            <div class="bottom-panel">
+              <div class="row">动爻 第 2 爻 · 体 上卦·水 · 用 下卦·金</div>
+              <div class="verdict">用 生 体 · 吉</div>
+              <div class="row">应期 本周内 · 戌时 19–21 点</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="variant-footer">
+        <strong>适合：</strong>小红书/女性向社交 MVP<br/>
+        <span class="tag">优</span>第一眼好看抓人 <span class="tag">劣</span>偏女性，男性用户可能会觉得软
+      </div>
+    </div>
+
+    <!-- ==================== Variant C ==================== -->
+    <div class="variant">
+      <div class="variant-header">
+        <h2 class="variant-title"><span class="letter">C</span>Neumorphism 奶油瓷</h2>
+        <p class="variant-desc">奶白底 + 柔软嵌入卦格 · 五行做小宝石 badge · 玉器光泽感</p>
+      </div>
+      <div class="variant-stage">
+        <div class="viewport">
+          <div class="var-c">
+            <div class="title">你 抽 到 的 梅 花 卦</div>
+            <div class="grid4">
+              <div class="cell">
+                <div class="cell-label">本 卦</div>
+                <div class="bagua">☵<br/>☰</div>
+                <div class="gua-name">水天需</div>
+                <div class="stones">
+                  <span class="stone" style="background:linear-gradient(135deg,#7BB4E8,#4a6fa5);"></span>
+                  <span class="stone" style="background:linear-gradient(135deg,#fff,#d9d9d9);"></span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-label">互 卦</div>
+                <div class="bagua">☵<br/>☳</div>
+                <div class="gua-name">水雷屯</div>
+                <div class="stones">
+                  <span class="stone" style="background:linear-gradient(135deg,#7BB4E8,#4a6fa5);"></span>
+                  <span class="stone" style="background:linear-gradient(135deg,#A8D5A8,#5d7a4e);"></span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-label">变 卦</div>
+                <div class="bagua">☶<br/>☰</div>
+                <div class="gua-name">山天大畜</div>
+                <div class="stones">
+                  <span class="stone" style="background:linear-gradient(135deg,#E8D39B,#c9a55f);"></span>
+                  <span class="stone" style="background:linear-gradient(135deg,#fff,#d9d9d9);"></span>
+                </div>
+              </div>
+              <div class="cell">
+                <div class="cell-label">卦中卦</div>
+                <div class="bagua">☴<br/>☰</div>
+                <div class="gua-name">风天小畜</div>
+                <div class="stones">
+                  <span class="stone" style="background:linear-gradient(135deg,#A8D5A8,#5d7a4e);"></span>
+                  <span class="stone" style="background:linear-gradient(135deg,#fff,#d9d9d9);"></span>
+                </div>
+              </div>
+            </div>
+            <div class="groove"></div>
+            <div class="meta">
+              动 爻 · 第 二 爻<br/>
+              体 上卦 水 · 用 下卦 金<br/>
+              <span class="verdict">用 生 体 · 吉</span><br/>
+              应 期 · 本 周 内 · 戌 时 19–21
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="variant-footer">
+        <strong>适合：</strong>高单价品类 / 希望有"质感"溢价的产品<br/>
+        <span class="tag">优</span>触感丰富、高级感强 <span class="tag">劣</span>Neumorphism 对 accessibility 不友好，复杂
+      </div>
+    </div>
+
+    <!-- ==================== Variant D ==================== -->
+    <div class="variant">
+      <div class="variant-header">
+        <h2 class="variant-title"><span class="letter">D</span>Glassmorphism 晨雾</h2>
+        <p class="variant-desc">雾蓝渐变 + 磨砂玻璃卡 + 五行霓虹边 · 未来国学氛围</p>
+      </div>
+      <div class="variant-stage">
+        <div class="viewport">
+          <div class="var-d-wrap">
+            <div class="var-d">
+              <div class="title">你 抽 到 的 梅 花 卦</div>
+              <div class="grid4">
+                <div class="cell c1">
+                  <div class="cell-label">BEN GUA</div>
+                  <div class="bagua">☵<br/>☰</div>
+                  <div class="gua-name">水天需</div>
+                  <div class="elements">水 · 金</div>
+                </div>
+                <div class="cell c2">
+                  <div class="cell-label">HU GUA</div>
+                  <div class="bagua">☵<br/>☳</div>
+                  <div class="gua-name">水雷屯</div>
+                  <div class="elements">水 · 木</div>
+                </div>
+                <div class="cell c3">
+                  <div class="cell-label">BIAN GUA</div>
+                  <div class="bagua">☶<br/>☰</div>
+                  <div class="gua-name">山天大畜</div>
+                  <div class="elements">土 · 金</div>
+                </div>
+                <div class="cell c4">
+                  <div class="cell-label">GUA ZHONG</div>
+                  <div class="bagua">☴<br/>☰</div>
+                  <div class="gua-name">风天小畜</div>
+                  <div class="elements">木 · 金</div>
+                </div>
+              </div>
+              <div class="bottom-panel">
+                <div class="row">动爻 · 第 2 爻</div>
+                <div class="row">体 上卦·水 · 用 下卦·金</div>
+                <div class="verdict">用生体 · 吉</div>
+                <div class="row">应期 · 本周内 · 戌时 19–21</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="variant-footer">
+        <strong>适合：</strong>未来感 + 国学轻度的混搭调性<br/>
+        <span class="tag">优</span>氛围感强、适配 dark mode <span class="tag">劣</span>backdrop-filter 性能开销，低端机卡
+      </div>
+    </div>
+
+    <!-- ==================== Variant E ==================== -->
+    <div class="variant">
+      <div class="variant-header">
+        <h2 class="variant-title"><span class="letter">E</span>宋画淡彩</h2>
+        <p class="variant-desc">绢本米底 + 墨色宋体 + 朱砂印 · 最传统但不古板 · 故宫博物院调性</p>
+      </div>
+      <div class="variant-stage">
+        <div class="viewport">
+          <div class="var-e">
+            <div class="title">你抽到的梅花卦<span class="seal">梅花</span></div>
+            <div class="grid4">
+              <div class="cell">
+                <span class="mini-seal">本</span>
+                <div class="bagua">☵<br/>☰</div>
+                <div class="gua-name">水天需</div>
+                <div class="elements"><span class="chip" style="background:#4A6FA5"></span>水·<span class="chip" style="background:#E8E0CE;border:0.5px solid #bbb"></span>金</div>
+              </div>
+              <div class="cell">
+                <span class="mini-seal">互</span>
+                <div class="bagua">☵<br/>☳</div>
+                <div class="gua-name">水雷屯</div>
+                <div class="elements"><span class="chip" style="background:#4A6FA5"></span>水·<span class="chip" style="background:#7a8f5b"></span>木</div>
+              </div>
+              <div class="cell">
+                <span class="mini-seal">变</span>
+                <div class="bagua">☶<br/>☰</div>
+                <div class="gua-name">山天大畜</div>
+                <div class="elements"><span class="chip" style="background:#C9A55F"></span>土·<span class="chip" style="background:#E8E0CE;border:0.5px solid #bbb"></span>金</div>
+              </div>
+              <div class="cell">
+                <span class="mini-seal">中</span>
+                <div class="bagua">☴<br/>☰</div>
+                <div class="gua-name">风天小畜</div>
+                <div class="elements"><span class="chip" style="background:#7a8f5b"></span>木·<span class="chip" style="background:#E8E0CE;border:0.5px solid #bbb"></span>金</div>
+              </div>
+            </div>
+            <div class="divider"></div>
+            <div class="meta">
+              动爻 · 第 二 爻<br/>
+              体 上卦 水 · 用 下卦 金<br/>
+              <span class="verdict">用生体 · 吉</span><br/>
+              应期 · 本周内 · 戌时 一九至二一
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="variant-footer">
+        <strong>适合：</strong>重度国学爱好者 / 品牌走"博物级"定位<br/>
+        <span class="tag">优</span>最"认真" <span class="tag">劣</span>对纯 Z 世代可能"太老"
+      </div>
+    </div>
+
+    <!-- ==================== Variant F ==================== -->
+    <div class="variant">
+      <div class="variant-header">
+        <h2 class="variant-title"><span class="letter">F</span>极简线框</h2>
+        <p class="variant-desc">纯白 + 细线描边 + 单一 indigo · Linear/Vercel 式工具感</p>
+      </div>
+      <div class="variant-stage">
+        <div class="viewport">
+          <div class="var-f">
+            <div class="title">你抽到的梅花卦<span class="dot">·</span>Meihua</div>
+            <div class="grid4">
+              <div class="cell">
+                <div class="cell-label">BEN GUA · 本卦</div>
+                <div class="bagua">☵<br/>☰</div>
+                <div class="gua-name">水天需</div>
+                <div class="elements">水 · 金</div>
+              </div>
+              <div class="cell">
+                <div class="cell-label">HU GUA · 互卦</div>
+                <div class="bagua">☵<br/>☳</div>
+                <div class="gua-name">水雷屯</div>
+                <div class="elements">水 · 木</div>
+              </div>
+              <div class="cell">
+                <div class="cell-label">BIAN · 变卦</div>
+                <div class="bagua">☶<br/>☰</div>
+                <div class="gua-name">山天大畜</div>
+                <div class="elements">土 · 金</div>
+              </div>
+              <div class="cell">
+                <div class="cell-label">GUA ZHONG · 卦中卦</div>
+                <div class="bagua">☴<br/>☰</div>
+                <div class="gua-name">风天小畜</div>
+                <div class="elements">木 · 金</div>
+              </div>
+            </div>
+            <div class="data-row">
+              <span><span class="label">YAO</span>2</span>
+              <span><span class="label">TI</span>上卦·水</span>
+              <span><span class="label">YONG</span>下卦·金</span>
+            </div>
+            <div class="data-row">
+              <span><span class="label">TIMING</span>本周内 / 戌时 19-21</span>
+            </div>
+            <div class="verdict">用生体 · Ji</div>
+          </div>
+        </div>
+      </div>
+      <div class="variant-footer">
+        <strong>适合：</strong>开发者型 / 数据向用户 / 快速迭代阶段<br/>
+        <span class="tag">优</span>落地最快、可访问性最好 <span class="tag">劣</span>没有情绪氛围，对占卜场景可能太冷
+      </div>
+    </div>
+
+  </div>
+
+  <div class="page-header" style="margin-top:32px;text-align:center;">
+    <p>回复我 "我选 X"（X = A/B/C/D/E/F），或 "X+Y 混合：…" 组合指示，我就把挑中那个直接生成可落地的 MeihuaResultCard.tsx</p>
+  </div>
+</body>
+</html>
