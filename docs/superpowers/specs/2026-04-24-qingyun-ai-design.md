@@ -1,15 +1,17 @@
 # 轻运 AI · V1.0 MVP 设计方案
 
-> **日期**：2026-04-24
+> **日期**：2026-04-24（V1 初稿）/ 2026-04-24 修订（加入梅花易数档 4）
 > **作者**：edy + Claude（brainstorming skill）
 > **状态**：已确认，等待进入实现计划阶段
 > **源需求**：`/Users/edy/Downloads/轻运AI需求文档.docx`
+>
+> **本次修订摘要**：梅花易数从 V1.1 提前到 V1.0 + V1.0.5 分批上线。V1.0 含 2 种起卦方式（时间/数字）+ 档 4 完整解读（本/互/变/卦中卦 + 体用生克 + 应期推算 + 外应 AI 对话）；V1.0.5 补齐 3 种起卦方式（报数/文字/摇铜钱动画）。5 周 MVP 时间不延，W3 末设硬 gate。
 
 ---
 
 ## 0. 一句话总结
 
-**Next.js + Supabase + DeepSeek + lunar-javascript** 的 1 人 Web MVP，5 周内上线"档案 + AI 对话 + 抽签 + 解梦 + 八字解读 + 首页运势"6 个核心闭环，部署到 Vercel 默认域名作为测试环境。数据模型为多档案做好准备但 UI 不露出；AI 层走 **规则引擎（确定性） + DeepSeek（解读）** 的分离架构，prompt 全部落表便于零发版调优；运势评分用简化版公式，等正式规则引擎到位后只替换一个文件。月成本 < ¥200。
+**Next.js + Supabase + DeepSeek + lunar-javascript** 的 1 人 Web MVP，5 周内上线"档案 + AI 对话 + 抽签 + 解梦 + 八字解读 + 首页运势 + 梅花易数"7 个核心闭环，部署到 Vercel 默认域名作为测试环境。数据模型为多档案做好准备但 UI 不露出；AI 层走 **规则引擎（确定性） + DeepSeek（解读）** 的分离架构，prompt 全部落表便于零发版调优；运势评分用简化版公式，等正式规则引擎到位后只替换一个文件。梅花易数走档 4（专家档）：体用/应期硬算 + 外应 AI 对话式。月成本 < ¥200。
 
 ---
 
@@ -34,18 +36,24 @@
 
 ## 2. MVP 功能范围
 
-### 2.1 包含（6 个核心闭环）
+### 2.1 包含（7 个核心闭环）
 
 1. **M1 档案**：首次打开 → 引导建档案（出生时间、出生地、性别）→ 入库
 2. **M2 首页运势**：读档案 → 算八字 + 当日干支 → AI 出 7 维度解读 → 缓存
-3. **M3 AI 对话**：意图识别 → 分发到抽签/解梦/八字/通用问答 → 流式返回 → 落库
+3. **M3 AI 对话**：意图识别 → 分发到抽签/解梦/八字/梅花/通用问答 → 流式返回 → 落库
 4. **M4 抽灵签**：6 类主题 + 用户问题 → 随机抽签 → AI 结合签文 + 问题做解读（在 M3 内的子流程）
 5. **M5 AI 解梦**：快速模式对话引导 → 三重维度解读（周公 + 弗洛伊德 + 荣格）
 6. **M6 八字解读**：档案已存在 → 直接排盘 → AI 解读 + 追问
+7. **M7 梅花易数测算**：时间/数字 2 种起卦方式 → 档 4 完整推演（本/互/变/卦中卦 + 体用 + 应期）→ 4 宫格卡片 + AI 流式解读 + 外应轻问（V1.0.5 补齐 3 种起卦方式）
 
-### 2.2 不包含（V1.1 回补清单）
+### 2.2 不包含
 
-- 梅花易数测算（爬 buyiju.com → 64 卦解读 → 梅花易数算法）
+**V1.0.5（MVP 上线后 2–3 周内补）**：
+- 梅花易数 · 报数起卦
+- 梅花易数 · 文字起卦（按笔画）
+- 梅花易数 · 摇铜钱起卦 + Lottie 动画
+
+**V1.1 回补清单**：
 - 周/月运势详情
 - 精准解梦表单
 - 语音输入（ASR）
@@ -89,15 +97,17 @@
 - **I1 AI Gateway**：统一调 DeepSeek，含流式、超时、错误处理、token 统计、用户级限流
 - **I2 意图路由器**：识别 `divination/dream/bazi/meihua/chat` 五种意图，分发到对应 Prompt 模板
 - **I3 八字计算器**：lunar-javascript 封装，公历/农历 → 真太阳时 → 四柱干支/五行/十神/大运
+- **I4 梅花易数引擎**：起卦（时间/数字）+ 互卦/变卦/卦中卦推演 + 体用生克判断 + 应期推算。代码确定性输出结构化结果，供 AI 解读；V1.0.5 补齐 3 种起卦方式时复用后端
 
 ### 3.3 核心设计决策
 
-1. **所有"占卜"动作收敛在 AI 对话页**：抽签/解梦/八字都是"对话页 + 不同意图"，1 人只需要做一个对话页的交互。
+1. **所有"占卜"动作收敛在 AI 对话页**：抽签/解梦/八字/梅花易数都是"对话页 + 不同意图"，1 人只需要做一个对话页的交互。梅花易数结果用专用 4 宫格卡片组件（`MeihuaResultCard`）呈现，和抽签的"签文卡片 + 解读流"模式一致。
 2. **计算和解读分离**：
-   - **计算层**（确定性）：八字、大运、当日干支、签号、卦象 — 全部用代码/库算出来
-   - **解读层**（AI）：把计算结果 + 用户问题塞给 DeepSeek，流式返回
+   - **计算层**（确定性）：八字、大运、当日干支、签号、卦象、**梅花易数的本/互/变/卦中卦 + 体用生克 + 应期** — 全部用代码/库算出来
+   - **解读层**（AI）：把计算结果 + 用户问题塞给 DeepSeek，流式返回；梅花易数额外在解读后以"轻问一次"的形式让 AI 收集外应，融合到解读里
    - 好处：可验证、可缓存、成本可控、输出风格可调
 3. **首页运势用简化版评分公式先顶上**，规则引擎 PRD 到位后只替换 `lib/fortune/scorer.ts` 一个文件。
+4. **梅花易数应期规则也按"单文件可替换"设计**：`lib/meihua/ying-qi.ts` 独立封装简化规则，V1.1 有更严谨规则引擎时整块替换。
 
 ---
 
@@ -180,15 +190,45 @@ tokens_used     int
 created_at
 ```
 
-#### `divination_records` — 占卜/解梦/八字详情（关联到 message）
+#### `divination_records` — 占卜/解梦/八字/梅花易数详情（关联到 message）
 ```sql
 id              uuid PK
 message_id      uuid FK UNIQUE
 type            text               -- 'qianwen' | 'dream' | 'bazi' | 'meihua'
-input           jsonb              -- 用户问题/梦境/数字等
-result          jsonb              -- 签号+等级+签题 / 卦象 / 排盘结果
+input           jsonb              -- 用户问题/梦境/数字/起卦方式等
+result          jsonb              -- 签号+等级+签题 / 卦象 / 排盘结果 / 梅花(本互变+体用+应期)
 ai_reading      text               -- AI 解读全文（markdown）
 created_at
+```
+
+**`type='meihua'` 的 input/result 结构**（档 4）：
+```json
+// input
+{
+  "method": "time" | "number",        // V1.0 只含这两种
+  "raw": { "numbers": [1,2,3], "castAt": "2026-04-24T12:30:00+08:00" },
+  "userQuestion": "最近换工作合适吗",
+  "waiying": "打翻了水杯"              // 外应，可空；由 AI 对话收集后落回
+}
+// result
+{
+  "benGua":   { "number": 5,  "name": "水天需", "upperWuxing": "水", "lowerWuxing": "金", "lines": [...] },
+  "huGua":    { "number": ... },
+  "bianGua":  { "number": ... },
+  "guaZhongGua": { "number": ... },   // 档 4 加项，变卦的互卦
+  "dongYao": 2,                        // 动爻位 1–6
+  "tiYong": {
+    "ti": "lower" | "upper",
+    "yong": "upper" | "lower",
+    "relation": "ti_ke_yong" | "yong_ke_ti" | "ti_sheng_yong" | "yong_sheng_ti" | "bi_he",
+    "verdict": "吉" | "凶" | "平"
+  },
+  "yingQi": {
+    "speed": "fast" | "medium" | "slow",
+    "timeHint": "本周内",
+    "branchHour": "戌时 19–21 点"
+  }
+}
 ```
 
 #### `prompts` — Prompt 版本管理（零发版调优）
@@ -215,13 +255,32 @@ image_url       text               -- 可选
 ```
 **来源**：从需求文档第 69–169 行提取为 SQL seed。
 
+#### `hexagrams` — 64 卦种子表（梅花易数用）
+```sql
+number          int PK             -- 1-64（先天序，代码常量锁死）
+name            text               -- 卦名，如"乾为天"
+upper_trigram   text               -- 上卦："乾"|"兑"|"离"|"震"|"巽"|"坎"|"艮"|"坤"
+lower_trigram   text               -- 下卦
+upper_wuxing    text               -- 上卦五行："金"|"木"|"水"|"火"|"土"
+lower_wuxing    text
+judgment        text               -- 卦辞
+image           text               -- 象辞
+lines           jsonb              -- [{position:"初九",text:"..."},...] × 6 爻辞
+```
+**来源（W3 初决定）**：
+- **优先 B**：从 npm 开源包（`iching` / `yijing` / `i-ching-npm` 等）导出 64 卦 JSON → 转成 SQL seed
+- **fallback D**：若开源包数据格式不满意，从公版古籍（朱熹《周易本义》，已过版权期）手工整理
+
+五行生克规则、体用关系表、应期时辰表等 **硬编码在代码里**（`lib/meihua/wuxing.ts` 等），不入库。
+
 ### 4.3 关键设计点
 
 1. `bazi_charts` 跟 **profile_id** 绑，不跟 user_id 绑 — 一个账号可以给多人算八字
 2. `fortunes` 按 `(profile_id, fortune_date)` 唯一 — 同一天查 N 次只生成 1 次
-3. `messages` 是流水，`divination_records` 是结构化结果 — 通过 `message.metadata.divination_id` 反查原始签文，支持追问
+3. `messages` 是流水，`divination_records` 是结构化结果 — 通过 `message.metadata.divination_id` 反查原始签文/卦象，支持追问
 4. RLS 统一策略：`WHERE user_id = auth.uid()` 或通过 `profile_id → profiles.user_id` 反查
 5. `prompts` 表让提示词调整不用发版，运营期极其重要
+6. **梅花易数不建独立表**，复用 `divination_records` + `type='meihua'`，减少表数和 RLS 策略；`hexagrams` 是只读种子表，不挂 RLS（所有用户可读）
 
 ---
 
@@ -236,16 +295,22 @@ image_url       text               -- 可选
    ↓ 未命中
 [DeepSeek 分类]（低温度、极短 prompt，<200 tokens）
    ↓
-五选一: divination | dream | bazi | meihua(暂停) | chat
+五选一: divination | dream | bazi | meihua | chat
    ↓
 分发到对应 handler
 ```
+
+**规则层关键词**（命中即 0 token 直接路由）：
+- `divination`：抽签 / 抽灵签 / 抽支签
+- `dream`：解梦 / 我梦见 / 梦到
+- `bazi`：八字 / 算命 / 命盘
+- `meihua`：梅花 / 梅花易数 / 起卦 / 起一卦 / 算一卦 / 卜一卦
 
 快捷入口点击时直接带 `?intent=xxx` 参数跳转，跳过识别。
 
 ### 5.2 Prompt 模板（落 `prompts` 表）
 
-共 **5 个核心 prompt**：
+共 **6 个核心 prompt**：
 
 | key | 场景 |
 |---|---|
@@ -253,6 +318,7 @@ image_url       text               -- 可选
 | `divination.qianwen` | 灵签解读（结合签文 + 用户问题 + 选中维度） |
 | `dream.parse` | 三重维度解梦（周公 + 弗洛伊德 + 荣格） |
 | `bazi.interpret` | 八字命盘解读 |
+| `meihua.interpret` | 梅花易数档 4 解读（本/互/变/卦中卦 + 体用 + 应期 + 外应分支） |
 | `chat.general` | 通用国学问答 |
 
 **共同原则**：
@@ -289,7 +355,91 @@ image_url       text               -- 可选
 - 其他（幸运花/事物/随身物）= 按五行查静态表
 - 全部可覆盖，到位后重写 `lib/fortune/attributes.ts`
 
-### 5.4 AI Gateway 封装
+### 5.4 梅花易数算法说明（档 4 · MVP 简化规则）
+
+**起卦（V1.0 两种）**：
+
+```
+时间起卦（零输入，按用户点击瞬间）:
+  lunar-javascript 取 年支序(1-12) + 月数(1-12) + 日数(1-30) + 时支序(1-12)
+  上卦 = (年支+月+日) mod 8     (0 视为 8)
+  下卦 = (年支+月+日+时支) mod 8
+  动爻 = (年支+月+日+时支) mod 6 (0 视为 6)
+
+数字起卦（1 / 2 / 3 个数字三种入口）:
+  1 个:  上下卦都 = N mod 8, 动爻 = N mod 6    (对称起法)
+  2 个:  上 = N1 mod 8, 下 = N2 mod 8, 动 = (N1+N2) mod 6
+  3 个:  上 = N1 mod 8, 下 = N2 mod 8, 动 = N3 mod 6
+```
+
+**八卦序（先天）**：乾=1，兑=2，离=3，震=4，巽=5，坎=6，艮=7，坤=8
+**八卦五行**：乾/兑=金，离=火，震/巽=木，坎=水，艮/坤=土
+
+**卦推演**：
+
+```
+本卦 = 上下两卦合并成 6 爻
+互卦 = 本卦 2-3-4 爻作下卦 + 3-4-5 爻作上卦
+变卦 = 本卦动爻位阴阳翻转
+卦中卦 = 变卦的互卦                  ← 档 4 加项
+```
+
+**体用生克判断**：
+
+```
+动爻在 1/2/3 爻 (下卦)  →  下卦=用, 上卦=体
+动爻在 4/5/6 爻 (上卦)  →  上卦=用, 下卦=体
+
+五行生克:
+  相生: 金→水→木→火→土→金
+  相克: 金→木→土→水→火→金
+
+输出 relation 五选一:
+  ti_ke_yong    (体克用 · 吉)
+  yong_ke_ti    (用克体 · 凶)
+  ti_sheng_yong (体生用 · 泄气，略不利)
+  yong_sheng_ti (用生体 · 大吉)
+  bi_he         (体用比和 · 平顺)
+```
+
+**应期推算（简化版）**：
+
+```
+输入: tiYong.relation + dongYao + bianGua 变爻地支
+规则:
+  相生类关系 (ti_sheng_yong / yong_sheng_ti)  → speed='fast',  timeHint='1-3 日内' 或 '本周内'
+  比和 (bi_he)                                 → speed='medium', timeHint='本月内'
+  相克类关系 (ti_ke_yong / yong_ke_ti)         → speed='slow',  timeHint='1-3 个月内'
+  branchHour = 变爻地支反查时辰表（子时=23-1点, 丑时=1-3点, ...）
+```
+
+**抽象层**：`lib/meihua/ying-qi.ts` 独立文件，正式应期规则引擎到位后整块替换（同 `fortune/scorer.ts` 模式）。
+
+**外应收集（AI 对话式，不走代码）**：
+- 在 `meihua.interpret` prompt 输出末尾，若 `waiying` 为空则 AI 主动追问一句"起卦那一刻你周围有没有让你印象深刻的画面、声音或一句话？没有就说"跳过"即可"
+- 用户回答后重新调一次 `meihua.interpret`（这次 waiying 有值）→ AI 输出"外应融合段"补充到原解读前面
+- 外应五行归类表硬编码在 prompt system 里（水:水/液体/雨/哭/流/冷；火:火/热/红/笑/明/亮；木:花/树/绿/风/纸/长条；金:金属/白/声响/刀/圆/硬；土:土/石/黄/厚/静/方）
+
+**`meihua.interpret` user template 输入**：
+
+```
+本卦={name}({upper_wuxing}/{lower_wuxing}), 卦辞={judgment}, 动爻={dongYao}辞={lineText}
+互卦={name}, 变卦={name}, 卦中卦={name}
+体用: {ti}={wuxing} / {yong}={wuxing}, 关系={relation}({verdict})
+应期: {speed}, {timeHint}, 时辰={branchHour}
+用户问题: {userQuestion}
+{若 waiying 非空: 外应: {waiying}}
+```
+
+**输出结构**：
+1. 本卦象意（3–5 句，结合卦辞和用户问题）
+2. 体用 + 变化解读（4–6 句，讲体用关系、变卦指向、卦中卦暗示）
+3. 应期 + 行动建议（2–3 句，具体时间 + 落地动作）
+4. 若有外应 → 插一段"外应融合"（2–3 句）；若无外应 → 末尾追加一句轻问
+
+**输出调性**（和其它 prompt 共同原则）：年轻化、治愈向；把"凶/相克"转化为"善意提醒/需要留神"；禁用"大凶/倒霉/厄运"等字眼；结尾必给可落地建议。
+
+### 5.5 AI Gateway 封装
 
 ```ts
 // lib/ai/client.ts
@@ -340,6 +490,8 @@ app/
 │       ├── QuickActions.tsx
 │       ├── SlipAnimation.tsx    -- 摇签 Lottie
 │       ├── SlipResultCard.tsx
+│       ├── MeihuaInputCard.tsx  -- 梅花起卦方式选择器（V1.0 时间/数字 亮；其它 3 种 V1.0.5 灰占位）
+│       ├── MeihuaResultCard.tsx -- 梅花 4 宫格卦象卡（本/互/变/卦中卦 + 体用 + 应期）
 │       └── HistoryDrawer.tsx
 ├── fortune/[date]/page.tsx
 ├── me/
@@ -351,6 +503,7 @@ app/
     ├── divination/qianwen/route.ts
     ├── divination/dream/route.ts
     ├── divination/bazi/route.ts
+    ├── divination/meihua/route.ts  -- 起卦 + 推演（返回 result 给前端渲染 Card；解读走 /api/chat SSE）
     └── profile/route.ts
 
 components/
@@ -374,6 +527,19 @@ lib/
 ├── divination/
 │   ├── slips.ts                 -- 从 100 支签随机抽
 │   └── dream-parser.ts          -- 梦境内容校验
+├── meihua/                       -- 梅花易数引擎（I4）
+│   ├── hexagram-data.ts         -- 64 卦静态数据（W3 从开源包导出）
+│   ├── casting/
+│   │   ├── time-casting.ts      -- 时间起卦
+│   │   ├── number-casting.ts    -- 数字起卦 (1/2/3 数字)
+│   │   ├── random-casting.ts    -- V1.0.5 报数（V1.0 留空桩）
+│   │   ├── stroke-casting.ts    -- V1.0.5 文字（V1.0 留空桩）
+│   │   └── coin-casting.ts      -- V1.0.5 摇铜钱（V1.0 留空桩）
+│   ├── derivation.ts            -- 互卦/变卦/卦中卦
+│   ├── wuxing.ts                -- 五行生克规则
+│   ├── ti-yong.ts               -- 体用判断
+│   ├── ying-qi.ts               -- 应期推算（单文件可替换）
+│   └── index.ts                 -- castAndAnalyze(input) → result
 ├── supabase/
 │   ├── client.ts                -- 浏览器
 │   ├── server.ts                -- 服务端（cookie）
@@ -383,7 +549,8 @@ lib/
 db/
 ├── migrations/
 ├── seed/
-│   └── 100_slips.sql            -- 从需求文档提取
+│   ├── 100_slips.sql            -- 从需求文档提取
+│   └── 64_hexagrams.sql         -- W3 从 npm 开源包导出（梅花易数）
 └── rls/                         -- 行级安全策略
 
 types/
@@ -425,8 +592,35 @@ types/
 
 关键：**结构化 UI 通过 `message.metadata.ui: {type:'options', items:[...]}` 驱动前端渲染按钮**，不让 AI 直接输出按钮。
 
-**(3) 摇签/生成动画**
+**(3) 梅花易数对话流（档 4，V1.0 时间/数字起卦）**
+
+```
+用户 "我要起个梅花卦" / 点快捷入口"梅花"
+  ↓ 意图路由命中 'meihua'（规则层 0 token 直路由）
+AI "好，先选起卦方式"
+  ↓ 渲染 <MeihuaInputCard>  (message.metadata.ui = 'meihua_input')
+用户选 "时间起卦"  → 直接提交
+  或选 "数字起卦" → 卡片展开输入框 → 输 1/2/3 个数字 → 提交
+  ↓ POST /api/divination/meihua  (起卦 + 推演 + 体用 + 应期)
+  ↓ 服务端写 divination_records，返回 {recordId, result}
+前端：
+  1) 渲染 <MeihuaResultCard> (message.metadata.ui = 'meihua_result')
+     展示 4 宫格 本/互/变/卦中卦 + 体用标签 + 应期提示（全是代码硬算值）
+  2) 若对话历史里还没问过用户问题 → AI "你的问题是什么？" → 用户回答
+  3) 把 result + userQuestion + waiying(空) 喂给 meihua.interpret → 流式出解读前 3 段
+  4) 解读末尾 AI 追问："起卦那一刻你周围有没有让你印象深刻的画面、声音或一句话？没有就说'跳过'"
+用户回 "打翻了水杯" 或 "跳过"
+  ├─ 跳过 → AI 固定 2-3 句温柔收尾
+  └─ 给了外应 → 服务端把 waiying 回填 divination_records，再调一次 meihua.interpret
+               → AI 输出"外应融合"补充段
+  ↓ 全部对话落 messages；最终解读写入 divination_records.ai_reading
+```
+
+4 宫格卡片视觉：卦象符号用八卦 Unicode（☰☱☲☳☴☵☶☷）大字号；每格标五行色（金白/木青/水蓝/火红/土黄）；动爻位和体/用标签高亮；应期提示小字在卡片底部。
+
+**(4) 摇签/生成动画**
 - 摇签：Lottie（`lottie-react` + 免费摇签 JSON）
+- 摇铜钱（V1.0.5）：Lottie 3 枚铜钱翻转 × 6 次；V1.0 先不做
 - AI loading：shadcn `<Skeleton />` + 打字机效果
 
 ### 6.5 易忽略但必做的几块
@@ -443,16 +637,17 @@ types/
 | 周 | 目标 | 交付物 | 关键动作 |
 |---|---|---|---|
 | **W1** | 骨架跑通 | 能登录、能填档案、能算八字 | Next.js 初始化 / Supabase 建表 + RLS / 匿名登录 / onboarding 3 步表单 / lunar-javascript 封装 + 单测 |
-| **W2** | AI 对话闭环 | `/chat` 来回对话 + 历史记录 | AI Gateway / Prompt 仓库 / `/api/chat` SSE / 对话页 UI / 意图路由规则层 |
-| **W3** | 抽签 + 解梦 | 走完两条链路 | 100 签 seed 入库 / 抽签动画 / 解梦对话式引导 / 两种 prompt 落库 |
-| **W4** | 首页运势 + 八字解读 | 首页运势 + 八字报告 | Scorer / Attributes / 运势缓存 / 八字解读 handler / v0.dev 出首页视觉 |
-| **W5** | 打磨 + 测试上线 | Vercel 默认域名可演示 | 敏感词 / 错误边界 / PWA / 真机测试 / 埋点（Plausible 或 Umami） |
+| **W2** | AI 对话闭环 | `/chat` 来回对话 + 历史记录 | AI Gateway / Prompt 仓库（预留 `meihua.interpret` 行）/ `/api/chat` SSE / 对话页 UI / 意图路由规则层（含 meihua 关键词） |
+| **W3** | 抽签 + 解梦 + **梅花算法层** | 走完抽签/解梦两链路 + 梅花算法单测全绿 | 100 签 + **64 卦 seed 入库** / 抽签动画 / 解梦对话式引导 / 两种 prompt 落库 / **`lib/meihua/*` 起卦(时间+数字) + 互/变/卦中卦推演 + 体用 + 应期 + 单测** / **W3 末硬 gate：找懂梅花的朋友验 5 个真实案例，≥4 个"合理"才放行** |
+| **W4** | 首页运势 + 八字解读 + **梅花 prompt/API** | 首页运势 + 八字报告 + 梅花算法能 API 调通 | Scorer / Attributes / 运势缓存 / 八字解读 handler / v0.dev 出首页视觉 / `meihua.interpret` 落 prompts 表 / `/api/divination/meihua` 完成 / `MeihuaInputCard` + `MeihuaResultCard` 静态样式完成 |
+| **W5** | 打磨 + **梅花 UI 联调 + 外应分支** + 上线 | Vercel 默认域名可演示，梅花流程端到端跑通 | 梅花 UI 联调（输入卡 + 结果卡 + 流式解读）/ 外应 AI 轻问分支 prompt 调优 / 敏感词 / 错误边界 / PWA / 真机测试 / 埋点（Plausible 或 Umami） |
 
 **每周末**必须有可演示的完整用户路径；做不到就砍特性，不往后推。
 
 **关键验证点**：
 - **W1 末**：出生信息 → 完整排盘（干支/五行/十神/大运）能对上
 - **W2 末**：SSE 在微信 X5 内核里能跑（不能跑要改 fetch streams）
+- **W3 末**（硬 gate）：梅花算法单测全绿 + 朋友 5 案例验收 ≥4 合理。验收不过 → **立即触发降级预案**：梅花易数整体推到 V1.0.1（MVP 上线后 1 周内补），**主 MVP 5 周不延期**
 - **W4 末**：能发给朋友真机试
 
 ---
@@ -476,13 +671,15 @@ types/
 - 抽签解读 ¥0.003/次
 - 解梦 ¥0.0045/次
 - 八字解读 ¥0.007/次
+- **梅花易数解读 ¥0.008/次**（档 4 prompt 约 1.2K tokens 输入 + 600 tokens 输出；含外应则约 +¥0.003 追加一轮）
 - 普通对话 ¥0.002/轮
 
-假设 100 DAU × 5 动作 × 30 天 = 15000 次 × 均价 ¥0.004 = **¥60/月**。缓存命中再省 30%。
+假设 100 DAU × 5 动作 × 30 天 = 15000 次 × 均价 ¥0.0045 = **¥70/月**（梅花易数按占 10% 动作估算）。缓存命中再省 30%。
 
 **超预算信号**：
 - 单用户单日 > 100 次调用 → 限流生效
 - 某 prompt 输出 > 3000 tokens → 压缩 system prompt
+- 梅花易数单用户单日起卦 >20 次 → 命中 30 条/小时通用限流
 
 ---
 
@@ -495,6 +692,9 @@ types/
 | DeepSeek 限流/宕机 | 低 | 高 | AI Gateway 3 秒超时 + 友好 fallback；备选 Kimi / 百炼 |
 | 运势评分公式"太假"被察觉 | 中 | 中 | AI 解读含糊化、弱化分数、强化感受；规则引擎到位后替换 |
 | 100 支签文字有瑕疵 | 高 | 低 | seed 后通读一遍修错字；AI 解读再润色 |
+| 梅花易数档 4 应期规则被懂行用户挑错 | 中 | 中 | W3 末找 1 位懂梅花的朋友验 5 个真实案例；上线后反馈入口持续收集；`ying-qi.ts` 独立文件，规则错可单文件替换 |
+| W3 梅花算法层跑不通 → 压垮 5 周节奏 | 中 | 高 | W3 末硬 gate：验收不过立即触发降级，梅花易数整体推 V1.0.1；**不因梅花易数延期主 MVP** |
+| 64 卦开源 npm 包数据不全 | 中 | 低 | W3 初先评估 3 个候选包；都不满意走 fallback D（《周易本义》公版手工整理） |
 | 1 人精力枯竭 | **高** | **极高** | 每周五 review：没做完先砍特性，不加班 |
 
 ---
@@ -504,6 +704,26 @@ types/
 1. **埋点**：关键漏斗（打开 → 填档案 → 首次对话 → 追问）
 2. **反馈入口**：个人页加"吐槽"按钮，收集到 Supabase 表，每周扫一次
 3. **Prompt 调优**：观察 `messages.content` 实际 AI 输出，改 `prompts` 表里的 system prompt（零发版）
+4. **梅花易数案例复盘**：每周挑 5 个真实卦例看解读质量，重点盯应期准确度和外应融合效果
+
+---
+
+## 10bis. V1.0.5 计划（上线后 2–3 周补梅花易数其余 3 种起卦）
+
+**范围**：报数起卦 / 文字起卦 / 摇铜钱起卦（含 Lottie 动画）
+**工期**：≈ 1–1.5 周
+
+| 子项 | 估算 | 依赖 |
+|---|---|---|
+| 报数起卦（随机 3 数 → 起卦） | 0.5 天 | `random-casting.ts` 桩文件实现；UI 只需按钮触发 |
+| 文字起卦（2 汉字按笔画） | 1–1.5 天 | 集成中文笔画字典（npm `cn-kanji-strokes` 或类似） |
+| 摇铜钱起卦 + Lottie 动画 | 2–3 天 | 动画素材 + 音效；6 次铜钱投掷组合 → 爻组 |
+| `MeihuaInputCard` 放开 3 个灰色占位项 | 0.5 天 | 上面三项完成后开灯 |
+| 回归测试 | 1 天 | 5 种方式全跑一遍；确认和 V1.0 档 4 解读链路兼容 |
+
+**前置条件**：V1.0 算法层已支持（`lib/meihua/*` 的 `casting/` 桩文件只需补实现，其它推演/体用/应期层代码 0 改动）。
+
+**上线后用户感知**：`MeihuaInputCard` 5 种方式全部亮起，呈现"功能完整"。
 
 ---
 
@@ -516,7 +736,7 @@ types/
 3. 微信授权登录 + 手机号绑定/换绑
 4. 周/月运势详情
 5. 精准解梦表单（4 字段）
-6. 梅花易数测算（爬 buyiju.com + 64 卦数据 + 算法）
+6. 梅花易数档次升级（档 4 → 更完整，含更严谨应期规则引擎）— 替换 `lib/meihua/ying-qi.ts`
 7. 每日运势定时推送
 8. 语音输入（ASR）
 9. 会员/解锁未来运势
