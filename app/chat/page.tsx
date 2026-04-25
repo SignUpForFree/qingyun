@@ -5,6 +5,7 @@ import { AppHeader } from "@/components/layout";
 import { GlassCard, Sparkle, Divider } from "@/components/su";
 import { QuickActions } from "./_components/QuickActions";
 import { ChatInput } from "./_components/ChatInput";
+import { HistoryDrawer } from "./_components/HistoryDrawer";
 
 /**
  * /chat 招呼页（spec §3 Chat Welcome）
@@ -17,7 +18,7 @@ export default function ChatHomePage() {
   const router = useRouter();
   return (
     <>
-      <AppHeader title="对话" />
+      <AppHeader title="对话" left={<HistoryDrawer />} />
       <div className="flex flex-1 flex-col gap-5 p-4">
         <GlassCard className="space-y-2 p-5 text-center">
           <h2 className="text-lg tracking-ritual2">

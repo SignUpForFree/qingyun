@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { AppHeader } from "@/components/layout";
 import { ChatWindow } from "../_components/ChatWindow";
+import { HistoryDrawer } from "../_components/HistoryDrawer";
 import type { Intent } from "@/types/domain";
 
 const INTENT_VALUES: readonly Intent[] = ["chat", "divination", "dream", "bazi", "meihua"];
@@ -41,9 +42,8 @@ export default function ChatSessionPage() {
     <>
       <AppHeader
         title={title}
-        left={
-          <BackLink />
-        }
+        left={<HistoryDrawer currentId={isNew ? undefined : sessionId} />}
+        right={<BackLink />}
       />
       <ChatWindow
         conversationId={isNew ? null : sessionId}
