@@ -1,102 +1,61 @@
 "use client";
 
 import * as React from "react";
-import { AppHeader } from "@/components/layout";
-import { GlassCard, Sparkle, Divider } from "@/components/su";
-import { DatePicker, type DatePickerValue } from "@/components/onboarding/DatePicker";
-import { RegionPicker, type RegionPickerValue } from "@/components/onboarding/RegionPicker";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Step1Identity } from "./_components/Step1Identity";
+import { Step2BirthInfo } from "./_components/Step2BirthInfo";
+import { Step3Confirm } from "./_components/Step3Confirm";
+import { onboardingSchema, type OnboardingForm } from "./_components/schema";
 
 /**
- * P1 阶段占位 — 用于 design lab 验证 F2 / F3 组件视觉与交互。
- * F4 / F5 完成后会替换为完整 3 步 wizard + 提交 /api/profile。
+ * Onboarding 3 步 wizard 容器（spec §6.4.M1）
+ *
+ * 设计：
+ *   - 表单状态由本页 useState 管理（不用 zustand / react-hook-form 整体管），
+ *     单步内部用本地 state，提交后 merge 到父态
+ *   - Step3 提交前用 onboardingSchema 兜底校验，挡住任何 step 跳过
+ *   - hideNav：onboarding 是全屏流程，不显示 BottomNav（root layout 默认显示，
+ *     这里不能用 AppShell hideNav，但 onboarding 路由加 BottomNav 视觉影响小，
+ *     待 F4 完成视觉走查时再决定是否 hide）
  */
-export default function OnboardingPlaceholderPage() {
-  const [nickname, setNickname] = React.useState("");
-  const [gender, setGender] = React.useState<"male" | "female" | "">("");
-  const [birth, setBirth] = React.useState<DatePickerValue | null>(null);
-  const [region, setRegion] = React.useState<RegionPickerValue | null>(null);
+export default function OnboardingPage() {
+  const [step, setStep] = React.useState<1 | 2 | 3>(1);
+  const [form, setForm] = React.useState<Partial<OnboardingForm>>({});
 
-  const canPreview = nickname && gender && birth && region;
+  if (step === 1) {
+    return (
+      <Step1Identity
+        initial={form}
+        onNext={(v) => {
+          setForm((prev) => ({ ...prev, ...v }));
+          setStep(2);
+        }}
+      />
+    );
+  }
 
-  return (
-    <>
-      <AppHeader title="档案 (P1 占位)" />
-      <div className="flex flex-1 items-start justify-center p-6">
-        <GlassCard className="w-full max-w-md space-y-5 p-6">
-          <div className="text-center">
-            <h2 className="text-xl tracking-ritual2">
-              建立你的档案 <Sparkle size={14} />
-            </h2>
-            <p className="mt-1 text-xs text-[var(--color-ink-fade)]">
-              P1 W1 design lab · F4 容器后续接入
-            </p>
-          </div>
+  if (step === 2) {
+    return (
+      <Step2BirthInfo
+        initial={form}
+        onPrev={() => setStep(1)}
+        onNext={(v) => {
+          setForm((prev) => ({ ...prev, ...v }));
+          setStep(3);
+        }}
+      />
+    );
+  }
 
-          <Divider />
-
-          <div className="space-y-2">
-            <Label htmlFor="nickname">如何称呼你</Label>
-            <Input
-              id="nickname"
-              placeholder="昵称"
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>性别</Label>
-            <Select value={gender} onValueChange={(v) => setGender((v ?? "") as typeof gender)}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="选择性别" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="male">男</SelectItem>
-                <SelectItem value="female">女</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>出生日期 + 时辰</Label>
-            <DatePicker value={birth} onChange={setBirth} />
-          </div>
-
-          <div className="space-y-2">
-            <Label>出生地</Label>
-            <RegionPicker value={region} onChange={setRegion} />
-          </div>
-
-          <Divider />
-
-          <Button
-            type="button"
-            disabled={!canPreview}
-            className="w-full"
-            onClick={() => {
-              // P1 占位：仅打印，F5 实装真实 POST /api/profile
-              console.log("[onboarding 占位] 表单数据", {
-                nickname,
-                gender,
-                birth,
-                region,
-              });
-            }}
-          >
-            预览表单数据（P1 占位）
-          </Button>
-        </GlassCard>
+  // step === 3
+  const parsed = onboardingSchema.safeParse(form);
+  if (!parsed.success) {
+    // 防御：理论上 step 1/2 校验后到 3 应该全合法
+    return (
+      <div className="mx-auto max-w-md p-6 text-sm text-[var(--color-ink-fade)]">
+        信息不完整，请<button onClick={() => setStep(1)} className="text-[var(--color-accent-plum)] underline">重新填写</button>。
       </div>
-    </>
-  );
+    );
+  }
+
+  return <Step3Confirm form={parsed.data} onPrev={() => setStep(2)} />;
 }
