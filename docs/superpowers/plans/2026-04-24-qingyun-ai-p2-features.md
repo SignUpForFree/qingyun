@@ -112,6 +112,28 @@ app/
 
 ---
 
+## 视觉系统 · 素笺仙气（沿用 P1 已建 token）
+
+> **设计源**：`docs/superpowers/designs/prompts-all-pages.md`
+>
+> P1 Section S 已建设：tailwind token / Noto Serif SC + Noto Sans SC / mist 背景 / `<Sparkle> <GlassCard> <WatercolorDot> <Divider>` 仙气原子 / `<AppShell> <AppHeader> <BottomNav>` 共享布局。**P2 阶段所有 UI Task 必须套用以上原子，不再手写 hex 色或 backdrop-blur 自由组合。**
+>
+> 每个 UI Task 末尾增加"视觉走查（对照 §X）"步骤，差异 ≥80% 接近通过。
+
+## P2 涉及的页面排期
+
+| 页面 / 组件 | 设计 prompt | P2 任务 | 视觉走查归属 |
+|---|---|---|---|
+| Home `/` | §1 | D5（接数据）+ D6（DailyFortuneCard 出图）| D6 末步 |
+| FortuneDetail `/fortune/[date]` | §11 | **D7（新增）** | D7 末步 |
+| Chat Session 增强（嵌入 Slip / Meihua 卡）| §4 | A7（抽签接线）+ F4（梅花 ResultCard）| 各任务末步 |
+| SlipResultCard | §7 | A6 | A6 末步 |
+| BaziChart 卡 | §8 | E2 | E2 末步 |
+| MeihuaInputCard | §5 | F3 | F3 末步 |
+| MeihuaResultCard | §6（已定 mockup `a-refined-fairy.html`）| F4 | F4 末步（已对齐） |
+
+---
+
 ## Section A — 抽签（M4）
 
 ### Task A1: 提取 100 支灵签 seed 到 SQL
@@ -478,11 +500,26 @@ export function SlipResultCard({ slip }: { slip: Slip }) {
 
 `pnpm dev` → 模拟 metadata.ui = 'slip_result' 的消息 → 看卡片样式
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: 视觉走查（对照 §7 SlipResultCard）— 套素笺仙气重写**
+
+把 Step 1 的 `<div className="rounded-lg border p-4">` 升级到设计文档 §7 的规约：
+
+- [ ] 容器换成 `<GlassCard rounded="card" shadow="glass">`
+- [ ] 签号 "第 八·十·六 签" 用 serif 15px 墨紫 `tracking-ritual2`，数字大字渲染（中文数字 or 大号阿拉伯）
+- [ ] 等级 pill 按 6 档不同渐变（上上=warm rose / 上吉=peach / 吉=soft yellow / 平=neutral lavender / 渐顺=blue-purple / 慎行=muted mauve），不要刺眼红色
+- [ ] 签题居中 serif 20px 墨紫 `tracking-ritual3`，两侧 ✦ 装饰
+- [ ] 签文 4 行居中 serif 15px 墨紫 `tracking-ritual` `leading-[2.2]`，下方 lavender WatercolorDot 40% 模糊
+- [ ] 6 维度 tabs（综合/事业/财运/感情/人际/健康）11px serif，active 下划线 lavender 2px
+- [ ] 解读 sans 13px 墨紫 leading-[1.85]
+- [ ] 中部用 `<Divider>` 含 ✦
+
+差异 ≥80% 接近通过；截图归档到 `docs/superpowers/specs/visual-baseline/slip-result.png`。
+
+- [ ] **Step 5: Commit**
 
 ```bash
 git add app/chat/_components/SlipResultCard.tsx app/chat/_components/MessageList.tsx
-git commit -m "feat(chat): add SlipResultCard component"
+git commit -m "feat(chat): SlipResultCard 素笺仙气版"
 ```
 
 ---
@@ -2408,30 +2445,445 @@ git commit -m "feat(fortune): home page with daily fortune card"
 
 ---
 
-### Task D6: v0.dev 出首页视觉
+### Task D6: DailyFortuneCard 视觉实装（素笺仙气 §1 Home）
 
 **Files:**
-- Modify: `components/DailyFortuneCard.tsx`（替换静态版为 v0 设计）
+- Modify: `components/DailyFortuneCard.tsx`（替换 D5 的静态占位为完整视觉）
 
-- [ ] **Step 1: 在 v0.dev 生成设计**
+> **变更说明：** 不走 v0.dev 通用风格 prompt；直接按 `docs/superpowers/designs/prompts-all-pages.md` §1 Home 页布局规约，套 P1 Section S 建好的 token 和原子组件实装。v0.dev 仅作为辅助灵感工具，不做最终输出来源。
 
-输入 prompt：
-> "Mobile-first 首页：顶部头像+问候，中间一个大圆形运势分数（78/100），下方 7 维度进度条（事业/财运/感情/人际/健康/学业/综合），底部幸运属性 2x3 网格（色/方位/时辰/数字/花/随身物）。年轻治愈风，圆角、柔和阴影、淡紫淡粉渐变。shadcn/ui + Tailwind。"
+- [ ] **Step 1: 通读 §1 Home Page prompt 关键点**
 
-- [ ] **Step 2: 把 v0 生成的 JSX 粘到 `DailyFortuneCard.tsx`，接上 props**
+抽出本卡需要实装的：
+- HEADER 52px 含 ✦ logo / 当日干支 serif date / 32px avatar
+- HERO 大圆形分数仪表 180px，外环淡紫粉渐变 stroke 4px，居中数字 serif 52px 墨紫 + 标签 "综合运势"
+- 圆环上方一个 lavender WatercolorDot
+- 7 维度条（标签 letter-spaced 10px / 6px 高 progress 淡紫粉渐变 / 右侧 mono 数字 #8B7AA5）
+- 6 张幸运属性 pill 卡（2x3 网格，glass 玻璃面，每张左上角 ✦）
 
-把生成的代码里的 hardcode 数据替换为 `fortune.scores`, `fortune.readings`, `fortune.attributes`。
+- [ ] **Step 2: 实装组件**
 
-- [ ] **Step 3: 真机（Chrome DevTools iPhone 12 Pro）预览**
+```tsx
+"use client";
+import { GlassCard, Sparkle, WatercolorDot } from "@/components/su";
 
-确认在 390×844 下字号、间距合理，没溢出。
+interface Fortune {
+  overall: number;
+  scores: Record<string, number>;
+  oneLiner: string;
+  attributes: { color: string; direction: string; hour: string; number: string; flower: string; item: string };
+  ganZhiToday: string; // 例 "丙午年 · 三月初七 · 谷雨"
+  nickname: string;
+}
 
-- [ ] **Step 4: Commit**
+const DIMS = ["综合", "事业", "财运", "感情", "人际", "健康", "学业"] as const;
+
+export function DailyFortuneCard({ fortune }: { fortune: Fortune }) {
+  return (
+    <div className="px-5 pt-3 pb-6 space-y-6">
+      {/* Header content 由 AppHeader 提供，本组件不重复 */}
+
+      {/* HERO: 圆环分数 */}
+      <div className="text-center space-y-2">
+        <p className="text-[12px] text-ink-fade tracking-ritual font-serif">
+          清晨好，{fortune.nickname}
+        </p>
+        <p className="text-[15px] text-accent-plum font-serif tracking-ritual leading-relaxed max-w-xs mx-auto">
+          {fortune.oneLiner}
+        </p>
+        <div className="relative w-[180px] h-[180px] mx-auto mt-4">
+          <WatercolorDot color="lavender" size={32} className="absolute -top-2 left-1/2 -translate-x-1/2" />
+          <ScoreRing score={fortune.overall} />
+          <Sparkle size={10} variant="asterisk" className="absolute top-2 left-3" />
+          <Sparkle size={10} variant="asterisk" className="absolute bottom-3 right-4" />
+        </div>
+      </div>
+
+      {/* 7 维度条 */}
+      <GlassCard className="p-5 space-y-2">
+        {DIMS.map((d) => {
+          const v = fortune.scores[d] ?? 60;
+          return (
+            <div key={d} className="flex items-center gap-3">
+              <span className="text-[10px] text-ink-fade tracking-ritual w-8 font-sans">{d}</span>
+              <div className="flex-1 h-1.5 rounded-full bg-accent-lavender/15 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-accent-lavender to-wuxing-fire"
+                  style={{ width: `${v}%` }}
+                />
+              </div>
+              <span className="text-[11px] text-ink-mist num-mono w-7 text-right">{v}</span>
+            </div>
+          );
+        })}
+      </GlassCard>
+
+      {/* 幸运属性 2x3 */}
+      <div className="grid grid-cols-2 gap-2.5">
+        {[
+          { k: "幸运色", v: fortune.attributes.color },
+          { k: "幸运方位", v: fortune.attributes.direction },
+          { k: "幸运时辰", v: fortune.attributes.hour },
+          { k: "幸运数", v: fortune.attributes.number },
+          { k: "幸运花", v: fortune.attributes.flower },
+          { k: "随身物", v: fortune.attributes.item },
+        ].map((a) => (
+          <GlassCard key={a.k} className="p-3 relative">
+            <Sparkle size={9} className="absolute top-2 left-2" />
+            <p className="text-[10px] text-ink-fade tracking-ritual">{a.k}</p>
+            <p className="text-[14px] text-ink-plum font-serif tracking-ritual mt-1">{a.v}</p>
+          </GlassCard>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ScoreRing({ score }: { score: number }) {
+  const r = 78;
+  const c = 2 * Math.PI * r;
+  const offset = c - (score / 100) * c;
+  return (
+    <svg viewBox="0 0 180 180" className="w-full h-full">
+      <defs>
+        <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#C9A1D9" />
+          <stop offset="100%" stopColor="#F0B8C8" />
+        </linearGradient>
+      </defs>
+      <circle cx="90" cy="90" r={r} fill="rgba(255,255,255,0.5)" />
+      <circle cx="90" cy="90" r={r} fill="none" stroke="rgba(196,186,221,0.3)" strokeWidth="4" />
+      <circle
+        cx="90" cy="90" r={r} fill="none"
+        stroke="url(#ring)" strokeWidth="4" strokeLinecap="round"
+        strokeDasharray={c} strokeDashoffset={offset}
+        transform="rotate(-90 90 90)"
+      />
+      <text x="90" y="92" textAnchor="middle" dominantBaseline="middle"
+        className="font-serif fill-ink-plum" style={{ fontSize: 52, letterSpacing: "0.05em" }}>
+        {score}
+      </text>
+      <text x="90" y="118" textAnchor="middle" className="fill-ink-fade font-sans" style={{ fontSize: 10, letterSpacing: "0.4em" }}>
+        综合运势
+      </text>
+    </svg>
+  );
+}
+```
+
+- [ ] **Step 3: 把 D5 首页的占位 import 替换成本卡**
+
+- [ ] **Step 4: 真机（Chrome DevTools iPhone 12 Pro 390×844）预览**
+
+确认：
+- [ ] 圆环居中，分数 52px serif 不溢出
+- [ ] 7 维度条不挤；色阶柔和不刺眼
+- [ ] 6 卡片 2x3 等宽，间距统一
+
+- [ ] **Step 5: 视觉走查（对照 §1）**
+
+逐项核对设计文档 §1 BACKGROUND/COLOR/TYPOGRAPHY/SPACING/CORNERS 全部小项。如有 ≥30% 视觉偏差点，修后再走一遍。截图保存到 `docs/superpowers/specs/visual-baseline/home.png`。
+
+- [ ] **Step 6: Commit**
 
 ```bash
-git add components/DailyFortuneCard.tsx
-git commit -m "feat(fortune): v0.dev-designed DailyFortuneCard"
+git add components/DailyFortuneCard.tsx app/page.tsx
+git commit -m "feat(fortune): DailyFortuneCard 素笺仙气视觉实装"
 ```
+
+---
+
+### Task D7: `/fortune/[date]` FortuneDetail 详情页（素笺仙气 §11）
+
+**Files:**
+- Create: `app/fortune/[date]/page.tsx`
+- Create: `app/fortune/[date]/_components/FortuneDetailHero.tsx`
+- Create: `app/fortune/[date]/_components/DimensionTabs.tsx`
+- Create: `app/fortune/[date]/_components/AttributeGroup.tsx`
+
+> **背景：** spec 第 6.1 节明确 `/fortune/[date]` 单日详情在 V1.0 范围（周/月切换在 V1.1）。设计文档 §11 已出 prompt。本任务做单日详情：点击首页运势卡 → 跳到本页查看 7 维度长解读 + 属性扩展说明。
+
+- [ ] **Step 1: page.tsx — RSC 读 fortunes 表**
+
+```tsx
+import { notFound, redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/profile/current";
+import { FortuneDetailHero } from "./_components/FortuneDetailHero";
+import { DimensionTabs } from "./_components/DimensionTabs";
+import { AttributeGroup } from "./_components/AttributeGroup";
+import { AppHeader } from "@/components/layout/AppHeader";
+import Link from "next/link";
+
+export default async function FortuneDetailPage({
+  params,
+}: {
+  params: Promise<{ date: string }>;
+}) {
+  const { date } = await params;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) notFound();
+
+  const profile = await getCurrentProfile();
+  if (!profile) redirect("/onboarding");
+
+  const supabase = await createClient();
+  const { data: fortune } = await supabase
+    .from("fortunes")
+    .select("*")
+    .eq("profile_id", profile.id)
+    .eq("fortune_date", date)
+    .maybeSingle();
+
+  if (!fortune) {
+    // 当日未生成 → 触发生成 API（仅当 date === today 时才生成；过去日期返回 not found）
+    const today = new Date().toISOString().slice(0, 10);
+    if (date !== today) notFound();
+    // POST 触发生成
+    await fetch(new URL("/api/fortune/daily", process.env.NEXT_PUBLIC_SITE_URL!).toString(), { method: "POST" });
+    return redirect(`/fortune/${date}`);
+  }
+
+  const { date: prev, next } = neighbors(date);
+
+  return (
+    <>
+      <AppHeader
+        title={formatDateChinese(date)}
+        left={<Link href="/" className="text-ink-fade text-xl">←</Link>}
+      />
+      <div className="px-5 py-6 space-y-6">
+        <FortuneDetailHero fortune={fortune} />
+        <DimensionTabs scores={fortune.scores as any} readings={fortune.readings as any} />
+        <AttributeGroup attributes={fortune.attributes as any} />
+        <DateNav prev={prev} next={next} />
+      </div>
+    </>
+  );
+}
+
+function neighbors(date: string) {
+  const d = new Date(date);
+  const dPrev = new Date(d); dPrev.setDate(d.getDate() - 1);
+  const dNext = new Date(d); dNext.setDate(d.getDate() + 1);
+  return {
+    date: dPrev.toISOString().slice(0, 10),
+    next: dNext.toISOString().slice(0, 10),
+  };
+}
+
+function formatDateChinese(date: string) {
+  // V1.0 简化：直接用 yyyy-mm-dd；V1.1 用 lunar-javascript 算 "丙午年 · 三月初七 · 谷雨"
+  return date;
+}
+
+function DateNav({ prev, next }: { prev: string; next: string }) {
+  return (
+    <div className="flex justify-between items-center text-[13px] text-ink-fade tracking-ritual font-serif pt-4">
+      <Link href={`/fortune/${prev}`}>← 昨日</Link>
+      <Link href={`/fortune/${next}`}>明日 →</Link>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 2: FortuneDetailHero — 220px 大圆环 + AI 一句话**
+
+```tsx
+import { GlassCard, WatercolorDot, Sparkle } from "@/components/su";
+import type { Database } from "@/types/database";
+
+type Fortune = Database["public"]["Tables"]["fortunes"]["Row"];
+
+export function FortuneDetailHero({ fortune }: { fortune: Fortune }) {
+  return (
+    <section className="text-center space-y-3">
+      <div className="relative w-[220px] h-[220px] mx-auto">
+        <WatercolorDot color="lavender" size={40} className="absolute -top-3 left-1/2 -translate-x-1/2" />
+        <BigScoreRing score={fortune.score_overall ?? 60} />
+        <Sparkle size={14} variant="asterisk" className="absolute top-3 left-4" />
+        <Sparkle size={14} variant="asterisk" className="absolute bottom-4 right-5" />
+      </div>
+      <p className="text-[16px] text-accent-plum font-serif tracking-ritual leading-relaxed max-w-sm mx-auto">
+        {fortune.one_liner}
+      </p>
+    </section>
+  );
+}
+
+function BigScoreRing({ score }: { score: number }) {
+  const r = 96;
+  const c = 2 * Math.PI * r;
+  const offset = c - (score / 100) * c;
+  return (
+    <svg viewBox="0 0 220 220" className="w-full h-full">
+      <defs>
+        <linearGradient id="ring-big" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#C9A1D9" />
+          <stop offset="100%" stopColor="#F0B8C8" />
+        </linearGradient>
+      </defs>
+      <circle cx="110" cy="110" r={r} fill="rgba(255,255,255,0.5)" />
+      <circle cx="110" cy="110" r={r} fill="none" stroke="rgba(196,186,221,0.3)" strokeWidth="5" />
+      <circle cx="110" cy="110" r={r} fill="none"
+        stroke="url(#ring-big)" strokeWidth="5" strokeLinecap="round"
+        strokeDasharray={c} strokeDashoffset={offset}
+        transform="rotate(-90 110 110)" />
+      <text x="110" y="113" textAnchor="middle" dominantBaseline="middle"
+        className="font-serif fill-ink-plum" style={{ fontSize: 64 }}>
+        {score}
+      </text>
+      <text x="110" y="142" textAnchor="middle" className="fill-ink-fade font-sans" style={{ fontSize: 11, letterSpacing: "0.4em" }}>
+        综合运势
+      </text>
+    </svg>
+  );
+}
+```
+
+- [ ] **Step 3: DimensionTabs — 7 个维度切换 + 长解读**
+
+```tsx
+"use client";
+import { useState } from "react";
+import { cn } from "@/lib/utils/cn";
+import { GlassCard, Divider } from "@/components/su";
+
+const DIMS = ["综合", "事业", "财运", "感情", "人际", "健康", "学业"] as const;
+
+export function DimensionTabs({
+  scores,
+  readings,
+}: {
+  scores: Record<string, number>;
+  readings: Record<string, { text: string; do?: string[]; dont?: string[] }>;
+}) {
+  const [active, setActive] = useState<typeof DIMS[number]>("综合");
+  const r = readings[active] ?? { text: "（暂无解读）" };
+  return (
+    <GlassCard className="p-5 space-y-4">
+      <nav className="flex gap-3 overflow-x-auto pb-1">
+        {DIMS.map((d) => (
+          <button
+            key={d}
+            onClick={() => setActive(d)}
+            className={cn(
+              "text-[11px] tracking-ritual font-serif pb-1 transition-colors duration-suit shrink-0",
+              active === d ? "text-ink-plum border-b-2 border-accent-lavender" : "text-ink-fade",
+            )}
+          >
+            {d}
+          </button>
+        ))}
+      </nav>
+
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 text-[11px] text-ink-fade tracking-ritual">
+          <span>{active}分数</span>
+          <div className="flex-1 h-1 rounded-full bg-accent-lavender/15">
+            <div className="h-full rounded-full bg-gradient-to-r from-accent-lavender to-wuxing-fire"
+              style={{ width: `${scores[active] ?? 60}%` }} />
+          </div>
+          <span className="num-mono">{scores[active] ?? 60}</span>
+        </div>
+
+        <p className="text-[13px] text-ink-plum leading-[1.85] whitespace-pre-wrap font-sans">
+          {r.text}
+        </p>
+
+        {(r.do?.length || r.dont?.length) && (
+          <>
+            <Divider />
+            <div className="space-y-2">
+              <p className="text-[11px] text-ink-fade tracking-ritual font-serif">今日动作</p>
+              {r.do?.length && (
+                <div>
+                  <span className="text-[12px] font-serif text-accent-plum mr-2">宜</span>
+                  <span className="text-[13px] text-ink-mist">{r.do.join(" · ")}</span>
+                </div>
+              )}
+              {r.dont?.length && (
+                <div>
+                  <span className="text-[12px] font-serif text-accent-plum mr-2">不宜</span>
+                  <span className="text-[13px] text-ink-mist">{r.dont.join(" · ")}</span>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </GlassCard>
+  );
+}
+```
+
+- [ ] **Step 4: AttributeGroup — 6 属性 + 一句话解释**
+
+```tsx
+import { GlassCard, Sparkle } from "@/components/su";
+
+const ITEMS = [
+  { key: "color", label: "幸运色", explain: (v: string) => `今日五行属水，${v}属水之色，能助你心绪平和。` },
+  { key: "direction", label: "幸运方位", explain: (v: string) => `${v}方位与今日干支相合，可优先选择。` },
+  { key: "hour", label: "幸运时辰", explain: (v: string) => `日柱三合时辰，${v}前后做关键决定为佳。` },
+  { key: "number", label: "幸运数", explain: (v: string) => `日柱地支序，遇到 ${v} 是温柔的提示。` },
+  { key: "flower", label: "幸运花", explain: (v: string) => `${v}是今日五行的代表，案头一束便好。` },
+  { key: "item", label: "随身物", explain: (v: string) => `${v}贴身，可作今日的小护佑。` },
+];
+
+export function AttributeGroup({ attributes }: { attributes: Record<string, string> }) {
+  return (
+    <section className="space-y-2.5">
+      <h3 className="text-[12px] text-ink-fade tracking-ritual font-serif px-1">幸运属性 · 今日</h3>
+      {ITEMS.map((it) => {
+        const v = attributes[it.key];
+        if (!v) return null;
+        return (
+          <GlassCard key={it.key} className="p-3.5 relative">
+            <Sparkle size={9} className="absolute top-3 left-3" />
+            <div className="ml-5">
+              <p className="text-[10px] text-ink-fade tracking-ritual">{it.label}</p>
+              <p className="text-[15px] text-ink-plum font-serif tracking-ritual mt-0.5">{v}</p>
+              <p className="text-[11px] text-ink-mist mt-1.5 leading-relaxed">{it.explain(v)}</p>
+            </div>
+          </GlassCard>
+        );
+      })}
+    </section>
+  );
+}
+```
+
+- [ ] **Step 5: 在首页 DailyFortuneCard 加跳转链接**
+
+修改 `components/DailyFortuneCard.tsx` 把整个圆环包成 `<Link href={\`/fortune/${todayISO}\`}>`，方便用户点进详情。或在卡片底部加一个小字"看完整解读 →"。
+
+- [ ] **Step 6: 手测 + 视觉走查（§11）**
+
+```bash
+pnpm dev
+# 访问 /fortune/2026-04-26（或 today）
+```
+
+逐项核对：
+- [ ] 顶部日期导航（昨日 / 明日）
+- [ ] 220px 大圆环 + 一句话副标
+- [ ] 7 维度 tabs，active 下划线 lavender，inactive 灰
+- [ ] 长解读 sans 13px line-height 1.85；今日动作"宜/不宜"两段
+- [ ] 6 属性 GlassCard，每张一句解释
+- [ ] 背景承自 mist；BottomNav 不出现（可选 hideNav）
+
+截图归档到 `docs/superpowers/specs/visual-baseline/fortune-detail.png`。
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add app/fortune/ components/DailyFortuneCard.tsx
+git commit -m "feat(fortune): /fortune/[date] FortuneDetail 详情页"
+```
+
+**预估工时：** 4h（含视觉走查）
+
+> **注：** D7 的 prompt 输出结构（`readings.do/dont`）需要 `fortune.daily` prompt v2 输出更详细的 JSON。如 P2 D3 v1 prompt 没产出 do/dont，本任务可降级渲染（仅显示 text 段，hide 今日动作）；prompt 升级在 P3 或 V1.1 处理。
 
 ---
 
@@ -2537,7 +2989,21 @@ export async function POST(req: NextRequest) {
 
 从 `/chat` 输入"帮我看八字" → 流式出 6 段解读
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: 视觉走查（对照 §8 BaziChart）— 八字排盘卡**
+
+如果 P2 此处仅以纯文字流式展示 → V1.0 可接受（spec 没要求 BaziChart 视觉卡上线 V1.0 就强制展示）。**但若要做卡片**，按 §8 规约：
+
+- [ ] 4 柱（年/月/日/时）横向 4 等分，每柱：
+  - 上方小 label sans 10px ink-fade（年/月/日/时）
+  - 中间 serif 24px 干支大字（甲/子等），干支用墨紫，五行染色用 `wuxing-*` token 打底
+  - 下方小 label 显示十神 sans 11px ink-fade
+- [ ] 五行计数 mini bars 5 行（金/木/水/火/土），用 wuxing-* 色
+- [ ] 大运 row：横向 8 格 pill，每格 age + 干支 mono 数字
+- [ ] 容器 `<GlassCard rounded="card">`
+
+如果 V1.0 仅文字，本步骤跳过；BaziChart 视觉卡作为 V1.0.1 增项加入回补清单。
+
+- [ ] **Step 5: Commit**
 
 ```bash
 git add app/api/divination/bazi/route.ts app/chat/_components/ChatWindow.tsx
@@ -2791,11 +3257,23 @@ export function MeihuaInputCard({ onSubmit }: Props) {
 
 确认 2 个按钮可点，3 个占位显示灰色 + 小字说明。
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: 视觉走查（对照 §5 MeihuaInputCard）**
+
+- [ ] 容器换 `<GlassCard rounded="card">`，padding 16×14
+- [ ] Header row "选 择 起 卦 方 式" serif 13px 墨紫 `tracking-ritual`，右侧 `<Sparkle size={10} />`
+- [ ] 主按钮 56px 高 `rounded-[12px]`，淡紫粉渐变 over white；副 label "此刻之兆" / "一 / 二 / 三 个数" sans 10px ink-fade
+- [ ] 主按钮含小 icon（时间用 clock outline 1.5px 笔画 lavender；数字用 # hash 同色）
+- [ ] 3 个 V1.0.5 占位是 dashed border pill 10px 文字，下方 hint "V1.0.5 敬请期待 ✧"
+- [ ] 选数字起卦后展开：3 个 56px 方形 input，center-aligned serif 22px，`rounded-[12px]` lavender border
+- [ ] 提交按钮 `rounded-[12px]` 淡紫粉渐变 + serif 14px white `tracking-ritual` + 微 glow
+
+差异 ≥80% 通过；截图归档。
+
+- [ ] **Step 4: Commit**
 
 ```bash
 git add app/chat/_components/MeihuaInputCard.tsx
-git commit -m "feat(meihua): MeihuaInputCard with V1.0.5 placeholders"
+git commit -m "feat(meihua): MeihuaInputCard 素笺仙气版 + V1.0.5 占位"
 ```
 
 ---
@@ -2897,11 +3375,25 @@ export function MeihuaResultCard({ result }: { result: Result }) {
 
 iPhone 12 Pro 视口（390×844）：确认 4 宫格不挤，字号够大
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: 视觉走查（对照 §6 MeihuaResultCard 已定 mockup）**
+
+参考文件：`docs/superpowers/designs/meihua-result-card-20260424/a-refined-fairy.html`（**最终规格**）。
+
+逐项核对：
+- [ ] 4 宫格卦象 unicode 大字 ☰☱☲☳☴☵☶☷ 用 `text-accent-bagua`（雾紫灰）
+- [ ] 每格按上下卦五行染色（金白/木青/水蓝/火红/土黄 用 `wuxing-*` token）
+- [ ] 体/用 标签高亮（体 = ti_yong.ti 那一格，淡紫粉描边）
+- [ ] 动爻位用一个小 lavender 圆点标在对应宫格右上
+- [ ] 应期提示小字底部 sans 10px ink-fade `tracking-ritual`
+- [ ] 容器 `<GlassCard rounded="card">` + lavender hairline + shadow-glass
+
+把实装结果在浏览器开 `a-refined-fairy.html` 并排对照；像素级偏差 > 30% 修后再走。
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add app/chat/_components/MeihuaResultCard.tsx app/chat/_components/MessageList.tsx
-git commit -m "feat(meihua): MeihuaResultCard 4-grid with wuxing colors"
+git commit -m "feat(meihua): MeihuaResultCard 素笺仙气 4 宫格"
 ```
 
 ---
@@ -2963,7 +3455,7 @@ Commit 这一行更新。
 运行以下检查（结果填回本文档末尾表格）：
 
 1. **Spec 覆盖**：spec 的 M2/M4/M5/M6/M7 五个闭环各自对应本计划哪些 Section？
-   - M2 首页运势 → Section D
+   - M2 首页运势 → Section D（D1–D6 + **D7 `/fortune/[date]` 详情**）
    - M4 抽签 → Section A
    - M5 解梦 → Section B
    - M6 八字解读 → Section E
@@ -2983,6 +3475,11 @@ Commit 这一行更新。
 5. **V1.0.5 预留**：Task C7 的 3 个桩文件 + F3 的灰色占位 UI —— 两处对齐
 
 6. **W3 末硬 gate**：Task C12 明确定义验收标准、降级路径、文档产出
+
+7. **视觉系统覆盖**（2026-MM-DD 增补）：
+   - 沿用 P1 Section S 已建素笺仙气 token + 仙气原子 + AppShell
+   - A6（SlipResultCard）+ E2（BaziChart）+ F3（MeihuaInputCard）+ F4（MeihuaResultCard）+ D6（DailyFortuneCard）+ D7（FortuneDetail）任务末尾全部加视觉走查步骤
+   - 设计文档 14 单元在 P1 + P2 + P3 完整覆盖（详见 P1 顶部页面排期矩阵）
 
 ---
 

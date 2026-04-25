@@ -1,11 +1,16 @@
 # 轻运 AI · V1.0 MVP 设计方案
 
-> **日期**：2026-04-24（V1 初稿）/ 2026-04-24 修订（加入梅花易数档 4）
+> **日期**：2026-04-24（V1 初稿）
 > **作者**：edy + Claude（brainstorming skill）
-> **状态**：已确认，等待进入实现计划阶段
+> **状态**：已确认 + 三份实现计划已落（P1/P2/P3）
 > **源需求**：`/Users/edy/Downloads/轻运AI需求文档.docx`
 >
-> **本次修订摘要**：梅花易数从 V1.1 提前到 V1.0 + V1.0.5 分批上线。V1.0 含 2 种起卦方式（时间/数字）+ 档 4 完整解读（本/互/变/卦中卦 + 体用生克 + 应期推算 + 外应 AI 对话）；V1.0.5 补齐 3 种起卦方式（报数/文字/摇铜钱动画）。5 周 MVP 时间不延，W3 末设硬 gate。
+> **修订摘要（按时间倒序）**：
+> - **2026-04-26**：P1 骨架 + P3 上线 计划补"素笺仙气视觉系统"。新增 P1 Section S（tailwind token + 仙气原子 + AppShell）；P2 新增 Task D7 `/fortune/[date]` 详情页；P2 D6 改为按设计 §1 Home 规约直接实装；P3 N1 加 14 单元终态视觉走查 gate；P3 L1 加 loading.tsx + §13 "小恙"错误页。三份 plan 共加 ~1180 行，总工时 191h ≈ 24 工作日（5 周 MVP + V1.0.5 W6–W7）。
+> - **2026-04-26**：P1（骨架 W1–W2）+ P3（上线 W5 + V1.0.5）实现计划落盘。配合既有 P2（功能 W3–W4），三阶段总 85 task / 191h。
+> - **2026-04-24（夜）**：14 个全局页面/组件视觉 prompt 包落盘 `docs/superpowers/designs/prompts-all-pages.md`，定 "素笺仙气 Su Jian Xian Qi" 为 V1.0 全局设计语言。MeihuaResultCard 最终 mockup 落 `meihua-result-card-20260424/a-refined-fairy.html`。
+> - **2026-04-24**：梅花易数从 V1.1 提前到 V1.0 + V1.0.5 分批上线。V1.0 含 2 种起卦方式（时间/数字）+ 档 4 完整解读（本/互/变/卦中卦 + 体用生克 + 应期推算 + 外应 AI 对话）；V1.0.5 补齐 3 种起卦方式（报数/文字/摇铜钱动画）。5 周 MVP 时间不延，W3 末设硬 gate。
+> - **2026-04-24**：V1 初稿 — Next.js + Supabase + DeepSeek + lunar-javascript 1 人 5 周 Web MVP。
 
 ---
 
@@ -747,4 +752,25 @@ AI "好，先选起卦方式"
 
 ## 12. 下一步
 
-本 spec 确认后，进入 `writing-plans` 阶段：把 W1–W5 拆成可执行任务列表，标注依赖关系，估点到半天粒度。
+✅ **已完成**：三份实现计划 + 14 单元视觉 prompt 包
+
+| 阶段 | 文件 | 范围 | 工时 |
+|---|---|---|---|
+| P1 骨架 | `docs/superpowers/plans/2026-04-24-qingyun-ai-p1-skeleton.md` | W1–W2 · 38 task · Next.js + Supabase + 八字 + AI Gateway + onboarding + 对话基础 + 素笺仙气视觉系统 | 70.5h |
+| P2 功能 | `docs/superpowers/plans/2026-04-24-qingyun-ai-p2-features.md` | W3–W4 · 5 功能闭环 + 梅花 V1.0 + W3 gate + `/fortune/[date]` | ~74h |
+| P3 上线 + V1.0.5 | `docs/superpowers/plans/2026-04-24-qingyun-ai-p3-launch.md` | W5 上线 + 上线后 W6–W7 · 梅花对话流 + 外应 + 上线必备三件套 + 14 单元终态视觉 gate + V1.0.5 三种起卦 | 47h |
+| **总计** | | **85 task** | **~191h ≈ 24 工作日** |
+
+| 设计资产 | 文件 |
+|---|---|
+| 视觉 prompt 包（14 单元）| `docs/superpowers/designs/prompts-all-pages.md` |
+| MeihuaResultCard 最终 mockup | `docs/superpowers/designs/meihua-result-card-20260424/a-refined-fairy.html` |
+| 6 方向视觉对比存档 | `docs/superpowers/designs/meihua-result-card-20260424/comparison.html` |
+
+**待 user 输入项**（执行前需要 user 提供）：
+- 八字测试用例 ground truth：3 个权威 App 排盘结果（P1 Task C1）
+- Supabase 项目 + DeepSeek API key（P1 B1 + A4）
+- Vercel + GitHub 仓库（P1 A4）
+- 梅花 W3 gate 验收人（懂梅花的朋友 1 位）
+
+**执行入口**：选 subagent-driven（推荐）或 inline，从 P1 Section A → S → B → C/F 并行 → D → E → G → H 推进。

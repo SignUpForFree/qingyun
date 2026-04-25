@@ -1,0 +1,17 @@
+# macOS metadata
+.DS_Store
+**/.DS_Store
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 临时
+/tmp
+*.log
