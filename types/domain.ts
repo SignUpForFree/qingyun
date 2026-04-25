@@ -36,6 +36,9 @@ export interface BaziComputed {
 export type Gender = "male" | "female";
 export type CalendarType = "solar" | "lunar";
 
+/** 用户消息意图（spec §5.1 五分类） */
+export type Intent = "divination" | "dream" | "bazi" | "meihua" | "chat";
+
 export interface BuildChartInput {
   birthTime: Date;
   longitude: number;
