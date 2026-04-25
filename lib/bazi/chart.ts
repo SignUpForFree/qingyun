@@ -27,18 +27,40 @@ const { Solar, Lunar } = lunar;
  *   3. 用 lunar-javascript 根据真太阳时算四柱
  *   4. 五行计数 / 十神判定 / 大运 8 步
  */
+/**
+ * 八字采用 UTC+8 (北京标准时) 作为基准时区，**不考虑历史夏令时**。
+ * 1986-1991 年中国大陆实施过夏令时，但传统八字排盘使用真太阳时校正后的 UTC+8 时间，
+ * 不应受 DST 影响。这里直接用 UTC 偏移提取字段，绕过 JS Date 本地时区的 DST 表。
+ */
+const UTC8_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+interface UTC8Fields {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}
+
+function getUTC8Fields(t: Date): UTC8Fields {
+  const d = new Date(t.getTime() + UTC8_OFFSET_MS);
+  return {
+    year: d.getUTCFullYear(),
+    month: d.getUTCMonth() + 1,
+    day: d.getUTCDate(),
+    hour: d.getUTCHours(),
+    minute: d.getUTCMinutes(),
+    second: d.getUTCSeconds(),
+  };
+}
+
 export function buildChart(input: BuildChartInput): BaziComputed {
   const baseSolar = toBaseSolarTime(input);
   const trueTime = toSolarTrueTime(baseSolar, input.longitude);
+  const f = getUTC8Fields(trueTime);
 
-  const solar = Solar.fromYmdHms(
-    trueTime.getFullYear(),
-    trueTime.getMonth() + 1,
-    trueTime.getDate(),
-    trueTime.getHours(),
-    trueTime.getMinutes(),
-    trueTime.getSeconds(),
-  );
+  const solar = Solar.fromYmdHms(f.year, f.month, f.day, f.hour, f.minute, f.second);
   const lunarDate = solar.getLunar();
   const eightChar = lunarDate.getEightChar();
 
@@ -73,23 +95,14 @@ export function buildChart(input: BuildChartInput): BaziComputed {
 function toBaseSolarTime(input: BuildChartInput): Date {
   if (input.calendarType === "solar") return input.birthTime;
 
-  const lunarDate = Lunar.fromYmdHms(
-    input.birthTime.getFullYear(),
-    input.birthTime.getMonth() + 1,
-    input.birthTime.getDate(),
-    input.birthTime.getHours(),
-    input.birthTime.getMinutes(),
-    input.birthTime.getSeconds(),
-  );
+  // 农历输入：按 UTC+8 提取 birthTime 字段作为农历年月日时分（避免 DST/时区漂移），
+  // 转公历后重组为 UTC+8 Date（即 ISO 字符串带 +08:00）。
+  const lf = getUTC8Fields(input.birthTime);
+  const lunarDate = Lunar.fromYmdHms(lf.year, lf.month, lf.day, lf.hour, lf.minute, lf.second);
   const s = lunarDate.getSolar();
-  return new Date(
-    s.getYear(),
-    s.getMonth() - 1,
-    s.getDay(),
-    s.getHour(),
-    s.getMinute(),
-    0,
-  );
+  // 用 UTC ms 重建：UTC+8 的 yyyy-mm-dd hh:mm:ss → 对应 UTC ms
+  const utcMs = Date.UTC(s.getYear(), s.getMonth() - 1, s.getDay(), s.getHour(), s.getMinute(), 0);
+  return new Date(utcMs - UTC8_OFFSET_MS);
 }
 
 function parsePillar(gan: string, zhi: string) {
