@@ -6,6 +6,7 @@
 > **源需求**：`/Users/edy/Downloads/轻运AI需求文档.docx`
 >
 > **修订摘要（按时间倒序）**：
+> - **2026-04-26（深夜）**：P1 骨架按 user 反馈大改 — (1) 砍 docker，B 节走 Supabase Cloud 单一路径（A4 砍 Vercel + GitHub remote，部署完整推到 P3 P2）；(2) 八字 ground truth 推迟，C1/C5 改为 case 1 self-consistency baseline + case 2/3 `it.skip` 占位；(3) 加"执行顺序调整"章节，A→S→C→D→E（27h，零外部账号 / 零 docker）前置到 W1，B/F/G 推到 W2。.env.example 全占位，W1 D1-D5 不需要任何真实 key。Definition of Done 不变。
 > - **2026-04-26（晚）**：跨文档一致性审计完成（详见 `docs/superpowers/specs/2026-04-26-cross-doc-audit.md`）。修 1 CRIT（P2 G1 路径 5 验收降级）+ 7 INFO（feedback 表入 spec / prompts schema 改 unique(key,version) / BaziChart V1.0 文字版分级 / chat.general prompt 落表 / V1.0.5 工时上调到 26.5h / P1 A1 加 .gitignore merge / P2 注释勘误）。spec ↔ plan 严重不一致点 1 → 0。总工时 191h → 197h。
 > - **2026-04-26**：P1 骨架 + P3 上线 计划补"素笺仙气视觉系统"。新增 P1 Section S（tailwind token + 仙气原子 + AppShell）；P2 新增 Task D7 `/fortune/[date]` 详情页；P2 D6 改为按设计 §1 Home 规约直接实装；P3 N1 加 14 单元终态视觉走查 gate；P3 L1 加 loading.tsx + §13 "小恙"错误页。三份 plan 共加 ~1180 行，总工时 191h ≈ 24 工作日（5 周 MVP + V1.0.5 W6–W7）。
 > - **2026-04-26**：P1（骨架 W1–W2）+ P3（上线 W5 + V1.0.5）实现计划落盘。配合既有 P2（功能 W3–W4），三阶段总 85 task / 191h。
