@@ -53,6 +53,26 @@ curl http://localhost:3000/api/healthz
 - 覆盖率阈值（仅 `lib/**`）：lines / functions / statements ≥ 80%，branches ≥ 70%
 - E2E：`e2e/*.spec.ts`，Playwright + Chromium，自动起 dev server
 
-## 当前阶段（2026-04-26）
+## 当前阶段（2026-04-26 深夜）
 
-P1 W1 D1：A1-A4 已完成，Section S/C/D/E 进行中。详见 P1 计划。
+P1 W1 全部"零外部依赖"任务已完成（A/S/C/D/E + Section B 凭据无关骨架）：
+
+- ✅ Section A — Next.js 16 + Tailwind 4 + shadcn/ui + Vitest + Playwright + Prettier
+- ✅ Section S — 素笺仙气视觉系统（token + 仙气原子组件 + AppShell/Header/BottomNav）
+- ✅ Section C — 八字算法（真太阳时 + 干支五行十神 + 大运 8 步 + 47 单测全绿）
+- ✅ Section D — AI Gateway（DeepSeek provider + prompts + 限流 + chat()，全 mock）
+- ✅ Section E — 意图路由（5 分类 18 单测）
+- ⏸ Section B — migrations / supabase clients / middleware 骨架已就位，**等用户填 `.env.local`**
+- ⏸ Section F/G — onboarding + chat 页，等 B 完成后续
+
+**用户起床后**：照 [db/SETUP.md](./db/SETUP.md) 5 步操作（注册 Supabase / 填 .env.local / 装 CLI / link / db push）即可继续。
+
+**已通过验证**：
+
+```bash
+pnpm test          # 92 passed | 2 skipped
+pnpm typecheck     # 0 errors
+pnpm lint          # 0 errors
+pnpm build         # 0 errors
+pnpm dev           # http://localhost:3000 看到素笺仙气首页 + /chat /me /api/healthz
+```
