@@ -241,10 +241,18 @@ public/
 - Create: `/Users/edy/Desktop/workspace/occult/package.json`
 - Create: `/Users/edy/Desktop/workspace/occult/tsconfig.json`
 - Create: `/Users/edy/Desktop/workspace/occult/next.config.ts`
-- Create: `/Users/edy/Desktop/workspace/occult/.gitignore`
+- Modify: `/Users/edy/Desktop/workspace/occult/.gitignore`（已存在，从 commit `2d1a8ae` 来；本任务 next-app scaffold 后需 merge）
 - Create: `/Users/edy/Desktop/workspace/occult/app/layout.tsx`
 - Create: `/Users/edy/Desktop/workspace/occult/app/page.tsx`
 - Create: `/Users/edy/Desktop/workspace/occult/app/globals.css`
+
+- [ ] **Step 0: 备份现有 .gitignore（commit 2d1a8ae 已 commit 的手写版本）**
+
+```bash
+cp /Users/edy/Desktop/workspace/occult/.gitignore /tmp/qingyun-gitignore-backup
+```
+
+> **背景：** 仓库已有手写 `.gitignore`（屏蔽 `.DS_Store` + `.env*.local`）。`pnpm create next-app` 会写入 next-app 默认 `.gitignore`（屏蔽 `node_modules`/`.next`/`build` 等）。两者必须 merge — 不要让 next-app 覆盖丢失我们的手写规则，也不要丢 next-app 的必要规则。
 
 - [ ] **Step 1: 在仓库根用 pnpm 起 Next 项目**
 
@@ -295,7 +303,25 @@ export default function HomePage() {
 }
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Merge .gitignore（保留手写规则 + next-app 规则）**
+
+```bash
+# 1) 看 next-app 写了什么（应有 node_modules / .next / build / .env* 等）
+git diff .gitignore
+
+# 2) 把手写规则（.DS_Store / .env.local / 编辑器目录）追加到 next-app 版本末尾
+cat /tmp/qingyun-gitignore-backup >> /Users/edy/Desktop/workspace/occult/.gitignore
+
+# 3) 去重（next-app 默认已含 .env*.local，重复行人工删一下）
+# 用编辑器打开 .gitignore，把重复段去掉，保留两边的 union
+
+# 4) 验证
+grep -E "^\.DS_Store|^\.env\*\.local|^node_modules|^\.next" /Users/edy/Desktop/workspace/occult/.gitignore
+```
+
+Expected: 4 行都能 grep 到（手写的 `.DS_Store`/`.env.local` + next-app 的 `node_modules`/`.next` 都在）。
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add .

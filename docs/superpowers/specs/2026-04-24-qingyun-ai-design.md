@@ -6,6 +6,7 @@
 > **源需求**：`/Users/edy/Downloads/轻运AI需求文档.docx`
 >
 > **修订摘要（按时间倒序）**：
+> - **2026-04-26（晚）**：跨文档一致性审计完成（详见 `docs/superpowers/specs/2026-04-26-cross-doc-audit.md`）。修 1 CRIT（P2 G1 路径 5 验收降级）+ 7 INFO（feedback 表入 spec / prompts schema 改 unique(key,version) / BaziChart V1.0 文字版分级 / chat.general prompt 落表 / V1.0.5 工时上调到 26.5h / P1 A1 加 .gitignore merge / P2 注释勘误）。spec ↔ plan 严重不一致点 1 → 0。总工时 191h → 197h。
 > - **2026-04-26**：P1 骨架 + P3 上线 计划补"素笺仙气视觉系统"。新增 P1 Section S（tailwind token + 仙气原子 + AppShell）；P2 新增 Task D7 `/fortune/[date]` 详情页；P2 D6 改为按设计 §1 Home 规约直接实装；P3 N1 加 14 单元终态视觉走查 gate；P3 L1 加 loading.tsx + §13 "小恙"错误页。三份 plan 共加 ~1180 行，总工时 191h ≈ 24 工作日（5 周 MVP + V1.0.5 W6–W7）。
 > - **2026-04-26**：P1（骨架 W1–W2）+ P3（上线 W5 + V1.0.5）实现计划落盘。配合既有 P2（功能 W3–W4），三阶段总 85 task / 191h。
 > - **2026-04-24（夜）**：14 个全局页面/组件视觉 prompt 包落盘 `docs/superpowers/designs/prompts-all-pages.md`，定 "素笺仙气 Su Jian Xian Qi" 为 V1.0 全局设计语言。MeihuaResultCard 最终 mockup 落 `meihua-result-card-20260424/a-refined-fairy.html`。
@@ -239,12 +240,13 @@ created_at
 #### `prompts` — Prompt 版本管理（零发版调优）
 ```sql
 id              uuid PK
-key             text UNIQUE        -- 'fortune.daily', 'divination.qianwen', 'dream.parse' 等
-version         int
-system_prompt   text
-user_prompt_tpl text               -- 含 {placeholder}
-active          bool
+key             text not null      -- 'fortune.daily', 'divination.qianwen', 'dream.parse' 等
+version         int not null default 1
+system_prompt   text not null
+user_prompt_tpl text not null      -- 含 {placeholder}
+active          bool not null default true
 created_at
+unique (key, version)              -- 同 key 可有多版本，调优时 v1 active=false / v2 active=true
 ```
 
 ### 4.2 种子表（只读）
@@ -277,6 +279,22 @@ lines           jsonb              -- [{position:"初九",text:"..."},...] × 6 
 - **fallback D**：若开源包数据格式不满意，从公版古籍（朱熹《周易本义》，已过版权期）手工整理
 
 五行生克规则、体用关系表、应期时辰表等 **硬编码在代码里**（`lib/meihua/wuxing.ts` 等），不入库。
+
+### 4.2.bis 反馈表（P3 加，运营必备）
+
+#### `feedback` — 用户吐槽 / 反馈
+```sql
+id              uuid PK
+user_id         uuid FK → auth.users (on delete set null)  -- 匿名也可
+content         text not null check (char_length between 1 and 2000)
+contact         text                                        -- 联系方式（选填）
+page            text                                        -- 触发反馈的页面路径
+user_agent      text
+created_at
+```
+RLS：authenticated 可 insert（`user_id = auth.uid() or user_id is null`）；select 仅 service role。
+来源：P3 P1 落表 + `/me` 吐槽按钮 + `/api/feedback` 提交入口。
+运营：每周扫一次（spec 第 10 节"上线后 2 周必做"第 2 项）。
 
 ### 4.3 关键设计点
 
@@ -627,6 +645,12 @@ AI "好，先选起卦方式"
 - 摇签：Lottie（`lottie-react` + 免费摇签 JSON）
 - 摇铜钱（V1.0.5）：Lottie 3 枚铜钱翻转 × 6 次；V1.0 先不做
 - AI loading：shadcn `<Skeleton />` + 打字机效果
+
+**(5) 八字解读 UI 分级**
+- **V1.0**：八字 M6 输出走纯文字流式（在 `/chat` 对话气泡里渲染 6 段解读），**不做 BaziChart 卡片**
+- **V1.0.1**：补 BaziChart 卡（4 柱大字 + 五行计数 + 大运 row + 十神标签），按设计 §8 视觉
+- 依据：1 人 5 周节奏砍 V1.0 卡片，先把八字解读"能用"摆出来；卡片是"好看"层，可后置
+- 影响 task：P2 E2 在视觉走查步骤已注明文字版可接受
 
 ### 6.5 易忽略但必做的几块
 

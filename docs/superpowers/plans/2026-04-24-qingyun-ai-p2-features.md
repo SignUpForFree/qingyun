@@ -85,8 +85,8 @@ scripts/
 **修改：**
 ```
 app/
-├── page.tsx                                  -- 首页：加运势渲染（W4 Task 26）
-└── chat/[sessionId]/page.tsx                 -- 接入 SlipResultCard / MeihuaResultCard 渲染分支
+├── page.tsx                                  -- 首页：加运势渲染（Task D5/D6）
+└── chat/[sessionId]/page.tsx                 -- 接入 SlipResultCard / MeihuaResultCard 渲染分支（Task A6/A7 + F4）
 ```
 
 ---
@@ -2281,11 +2281,58 @@ ON CONFLICT (key, version) DO UPDATE SET system_prompt = EXCLUDED.system_prompt,
 
 Run: `psql $SUPABASE_DB_URL -f db/seed/prompts.sql`
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: 顺手 seed `chat.general` v1（spec §5.2 列出的 6 个核心 prompt 之一）**
+
+> **背景：** P1 G1 已把通用 chat 的 system prompt 硬编码在 `app/api/chat/route.ts`。spec §5.2 要求所有 prompt 落表便于零发版调优。本步把它移到 prompts 表，route 改为 `loadPrompt('chat.general')`。
+
+追加到 `db/seed/prompts.sql`：
+
+```sql
+INSERT INTO prompts (key, version, system_prompt, user_prompt_tpl, active) VALUES
+('chat.general', 1,
+'你是轻运 AI，一位温柔、年轻化的国学陪伴助手。
+
+风格:
+- 简短、治愈、像朋友聊天
+- 严禁"大凶/倒霉/厄运/不祥"等负面词
+- 不确定的事不强答，引导用户用更具体的占卜入口（抽签/解梦/八字/梅花）
+- 不超过 6 句话',
+'{userMessage}',
+true)
+ON CONFLICT (key, version) DO UPDATE SET
+  system_prompt = EXCLUDED.system_prompt,
+  user_prompt_tpl = EXCLUDED.user_prompt_tpl,
+  active = EXCLUDED.active;
+```
 
 ```bash
-git add db/seed/prompts.sql
-git commit -m "feat(ai): add fortune.daily prompt v1"
+psql $SUPABASE_DB_URL -f db/seed/prompts.sql
+psql $SUPABASE_DB_URL -c "SELECT key, version, active FROM prompts ORDER BY key;"
+```
+
+Expected: 看到 `chat.general | 1 | t` + `fortune.daily | 1 | t` 两行（其它 5 个 prompt 由本 Section + Section A/B/E/F 后续 seed）。
+
+- [ ] **Step 4: 改 `/api/chat/route.ts` 改用 loadPrompt**
+
+把 P1 G1 硬编码的 system prompt 替换为：
+
+```ts
+import { loadPrompt } from "@/lib/ai/prompts";
+// ...
+const tpl = await loadPrompt("chat.general");
+const stream = await chat({
+  systemPrompt: tpl.systemPrompt,
+  messages: [{ role: "user", content: text }],
+  stream: true,
+  meta: { conversationId: convId, userId: user.id },
+});
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add db/seed/prompts.sql app/api/chat/route.ts
+git commit -m "feat(ai): seed fortune.daily + chat.general prompt v1"
 ```
 
 ---
@@ -3413,7 +3460,12 @@ Expected: 0 failing，lib/ 下覆盖率 >= 80%
 - 路径2 解梦: `/chat` → "帮我解个梦" → 描述梦 → 看 AI 三视角解读 → 通过
 - 路径3 首页运势: `/` → 看运势卡 → 刷新（验证缓存命中） → 通过
 - 路径4 八字解读: `/chat` → "帮我看八字" → 看 6 段解读 → 通过
-- 路径5 梅花易数（若 gate 通过）: `/chat` → "我要起个梅花卦" → 选时间起卦 → 问问题 → 看 4 宫格卡 → 看解读 → 末尾轻问外应 → 回"打翻了水杯" → 看外应融合段 → 通过
+- 路径5 梅花易数（若 gate 通过，**P2 范围限定版本**）：
+  - 算法层：`pnpm tsx scripts/verify-meihua-cases.ts` 跑通 5 案例（C12 朋友验收已过）
+  - API 层：直接 curl `/api/divination/meihua` 起卦 → 返回 `{recordId, result}` JSON 含 4 宫格
+  - UI 层：在临时测试页或对话页插一条 `metadata.ui='meihua_result'` 的 message → MeihuaResultCard 4 宫格渲染正确（五行染色 + 体用高亮 + 应期底栏）
+  - Prompt 层：用 result 手动填进 `meihua.interpret` user template，curl `chat()` API 看流式输出 3 段是否合理
+  - **跳过**：完整对话流接线（自动追问 + 流式解读卡 + 末尾外应轻问 + 二次融合）— 这部分实现在 P3 I4/J1/J2，W5 才接通。完整 5 路径回归归到 **P3 N1**。
 
 - [ ] **Step 3: 检查 DB 状态**
 
