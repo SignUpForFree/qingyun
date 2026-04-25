@@ -27,6 +27,11 @@ declare module "lunar-javascript" {
   export interface Lunar {
     getEightChar(): EightChar;
     getSolar(): Solar;
+    getYear(): number;
+    getMonth(): number;
+    getDay(): number;
+    getHour(): number;
+    getMinute(): number;
   }
 
   export interface Solar {
@@ -40,6 +45,7 @@ declare module "lunar-javascript" {
   }
 
   export const Solar: {
+    fromYmd(year: number, month: number, day: number): Solar;
     fromYmdHms(
       year: number,
       month: number,
@@ -51,6 +57,7 @@ declare module "lunar-javascript" {
   };
 
   export const Lunar: {
+    fromYmd(year: number, month: number, day: number): Lunar;
     fromYmdHms(
       year: number,
       month: number,
