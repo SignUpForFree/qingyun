@@ -1,10 +1,22 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Geist } from "next/font/google";
+import { Noto_Serif_SC, Noto_Sans_SC } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
 
-const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
+const notoSerif = Noto_Serif_SC({
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+  variable: "--font-serif",
+  display: "swap",
+});
+
+const notoSans = Noto_Sans_SC({
+  subsets: ["latin"],
+  weight: ["300", "400", "500"],
+  variable: "--font-sans",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "轻运 AI",
@@ -17,8 +29,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" className={cn("h-full antialiased", "font-sans", geist.variable)}>
-      <body className="min-h-full flex flex-col">
+    <html
+      lang="zh-CN"
+      className={cn("h-full antialiased", notoSerif.variable, notoSans.variable)}
+    >
+      <body className="min-h-full flex flex-col font-sans">
         {children}
         <Toaster richColors position="top-center" />
       </body>

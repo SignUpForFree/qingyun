@@ -8,8 +8,9 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
+  --font-serif: var(--font-serif);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-serif);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -46,6 +47,47 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* ===== 素笺仙气 Su Jian Xian Qi 设计语言 ===== */
+  /* 主色板 — 墨紫 / 雾紫 */
+  --color-ink-plum: #4a3d5c;
+  --color-ink-mist: #574966;
+  --color-ink-fade: #8a7ea0;
+  --color-ink-ghost: #a69ab8;
+
+  /* 强调色 */
+  --color-accent-lavender: #c9a1d9;
+  --color-accent-plum: #8b5d8b;
+  --color-accent-bagua: #9b8ebf;
+
+  /* 五行仙气色 */
+  --color-wuxing-water: #a4b8e8;
+  --color-wuxing-metal: #e8d4e8;
+  --color-wuxing-wood: #bfd9c2;
+  --color-wuxing-fire: #f0b8c8;
+  --color-wuxing-earth: #e8c9a4;
+
+  /* 纸色 */
+  --color-paper-base: #faf5fb;
+  --color-paper-warm: #fefdfe;
+
+  /* 仪式感字距 */
+  --tracking-ritual: 0.15em;
+  --tracking-ritual2: 0.3em;
+  --tracking-ritual3: 0.55em;
+
+  /* 卡面圆角 */
+  --radius-chip: 8px;
+  --radius-card: 16px;
+  --radius-surface: 32px;
+
+  /* 仙气阴影 */
+  --shadow-glass: 0 8px 24px rgba(200, 170, 220, 0.15);
+  --shadow-pill: 0 2px 16px rgba(201, 161, 217, 0.3);
+  --shadow-float: 0 20px 60px rgba(200, 170, 220, 0.25);
+
+  /* 仙气过渡曲线 */
+  --ease-suit: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 :root {
@@ -121,10 +163,56 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html,
   body {
-    @apply bg-background text-foreground;
-  }
-  html {
     @apply font-sans;
+    color: var(--color-ink-plum);
+    background:
+      radial-gradient(ellipse 50% 40% at 0% 0%, #ffe8f0 0%, transparent 60%),
+      radial-gradient(ellipse 55% 45% at 100% 0%, #e8e4ff 0%, transparent 60%),
+      radial-gradient(ellipse 60% 50% at 50% 100%, #e4f0ff 0%, transparent 60%),
+      linear-gradient(180deg, #faf5fb 0%, #fefdfe 100%);
+    background-attachment: fixed;
+    min-height: 100dvh;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-serif), STSongti-SC, serif;
+    letter-spacing: var(--tracking-ritual);
+  }
+  .num-mono {
+    font-feature-settings: "tnum" 1;
+  }
+}
+
+@layer utilities {
+  .glass {
+    background-color: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+  .hairline {
+    border: 0.5px solid rgba(196, 186, 221, 0.4);
+  }
+  .tracking-ritual {
+    letter-spacing: var(--tracking-ritual);
+  }
+  .tracking-ritual2 {
+    letter-spacing: var(--tracking-ritual2);
+  }
+  .tracking-ritual3 {
+    letter-spacing: var(--tracking-ritual3);
+  }
+}
+
+@keyframes wcd {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.7;
   }
 }
