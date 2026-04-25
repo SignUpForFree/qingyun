@@ -43,7 +43,9 @@ export async function ensureBaziChart(profile: Profile): Promise<void> {
     calendarType: (profile.calendar_type ?? "solar") as CalendarType,
   });
 
-  const { error } = await admin.from("bazi_charts").insert({
+  // 占位 Database 类型尚未跑 supabase gen types，临时 cast 让 supabase-js 通过类型检查；
+  // W2 用户跑 ./scripts/gen-types.sh 后这里自动恢复正确推导
+  const insertRow = {
     profile_id: profile.id,
     pillars: chart.pillars,
     five_elements: chart.fiveElements,
@@ -53,7 +55,8 @@ export async function ensureBaziChart(profile: Profile): Promise<void> {
     luck_pillars: chart.luckPillars,
     solar_true_time: chart.solarTrueTime,
     raw: { computedAt: new Date().toISOString(), libVersion: "lunar-javascript" },
-  });
+  };
+  const { error } = await admin.from("bazi_charts").insert(insertRow as never);
 
   if (error) {
     throw new Error(`ensureBaziChart 写入失败: ${error.message}`);

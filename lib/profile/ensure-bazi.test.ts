@@ -5,9 +5,11 @@ type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
 vi.mock("server-only", () => ({}));
 
+type InsertResult = { error: { message: string } | null };
+
 const adminFns = {
   selectMaybeSingle: vi.fn<() => Promise<{ data: { id: string } | null }>>(),
-  insert: vi.fn<() => Promise<{ error: { message: string } | null }>>(),
+  insert: vi.fn<(row: unknown) => Promise<InsertResult>>(),
 };
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -18,7 +20,7 @@ vi.mock("@/lib/supabase/admin", () => ({
           maybeSingle: () => adminFns.selectMaybeSingle(),
         }),
       }),
-      insert: (row: unknown) => adminFns.insert(row as never),
+      insert: (row: unknown) => adminFns.insert(row),
     }),
   }),
 }));
@@ -61,7 +63,7 @@ describe("ensureBaziChart", () => {
     adminFns.insert.mockResolvedValue({ error: null });
     await ensureBaziChart(VALID_PROFILE);
     expect(adminFns.insert).toHaveBeenCalledTimes(1);
-    const row = adminFns.insert.mock.calls[0][0] as Record<string, unknown>;
+    const row = adminFns.insert.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(row.profile_id).toBe("p1");
     expect(row.day_master).toBe("辛"); // C4 baseline
   });
