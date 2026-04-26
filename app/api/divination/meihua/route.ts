@@ -15,6 +15,7 @@ import { interpretMeihua, type MeihuaResult } from "@/lib/meihua/interpret";
 import { loadPrompt, renderTemplate } from "@/lib/ai/prompts";
 import { chat } from "@/lib/ai/client";
 import { checkRateLimit } from "@/lib/ai/check-rate-limit";
+import { guardTexts } from "@/lib/safety/guard";
 
 /**
  * POST /api/divination/meihua — 起卦 + 推演（不调 AI，AI 解读由 PATCH/独立请求触发）
@@ -63,6 +64,9 @@ export async function POST(req: Request) {
     );
   }
   const { conversationId: incomingConvId, method, numbers, userQuestion } = parsed.data;
+
+  const safetyFail = guardTexts({ userQuestion });
+  if (safetyFail) return safetyFail;
 
   const userId = await ensureUserId();
 
@@ -289,6 +293,9 @@ export async function PATCH(req: Request) {
     );
   }
   const { messageId, waiying } = parsed.data;
+
+  const safetyFail = guardTexts({ waiying });
+  if (safetyFail) return safetyFail;
 
   const userId = await ensureUserId();
   const db = getDb();

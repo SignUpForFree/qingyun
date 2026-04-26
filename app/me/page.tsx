@@ -29,8 +29,8 @@ interface MenuItem {
 const MENU: readonly MenuItem[] = [
   { label: "编辑档案", href: "/onboarding?edit=1", note: "改完会替换默认档案" },
   { label: "历史记录", href: "/chat", note: "在对话页打开历史抽屉" },
-  { label: "吐槽反馈", href: "#", note: "P3 P1 实装", disabled: true },
-  { label: "关于轻运", href: "#", note: "占位", disabled: true },
+  { label: "吐槽反馈", href: "/feedback", note: "把哪不对劲告诉我们" },
+  { label: "关于轻运", href: "/about", note: "项目说明与数据声明" },
 ];
 
 export default async function MePage() {

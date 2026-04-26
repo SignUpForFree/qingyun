@@ -6,6 +6,7 @@ import { ensureUserId } from "@/lib/auth/session";
 import { classifyIntent } from "@/lib/ai/intent";
 import { checkRateLimit } from "@/lib/ai/check-rate-limit";
 import { chat } from "@/lib/ai/client";
+import { guardTexts } from "@/lib/safety/guard";
 import type { Intent } from "@/types/domain";
 
 /**
@@ -49,6 +50,9 @@ export async function POST(req: Request) {
     return jsonError("校验失败", 400);
   }
   const { conversationId: incomingConvId, text, intentHint } = parsed.data;
+
+  const safetyFail = guardTexts({ text });
+  if (safetyFail) return safetyFail;
 
   const userId = await ensureUserId();
   const db = getDb();

@@ -2,7 +2,9 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Menu, MessageSquare } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Menu, MessageSquare, X } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   Sheet,
@@ -35,10 +37,42 @@ interface HistoryDrawerProps {
 }
 
 export function HistoryDrawer({ currentId }: HistoryDrawerProps) {
+  const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [items, setItems] = React.useState<ConversationItem[] | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [deletingId, setDeletingId] = React.useState<string | null>(null);
+
+  const remove = React.useCallback(
+    async (id: string) => {
+      if (deletingId) return;
+      const target = items?.find((c) => c.id === id);
+      const ok = confirm(
+        `确定删除会话『${target?.title?.trim() || "未命名对话"}』？\n这将一并清掉里面的消息和占卜记录。`,
+      );
+      if (!ok) return;
+      setDeletingId(id);
+      try {
+        const res = await fetch(`/api/conversations/${id}`, { method: "DELETE" });
+        if (!res.ok) {
+          const body = await res.text().catch(() => "");
+          toast.error(`删除失败 (${res.status})${body ? "：" + body.slice(0, 80) : ""}`);
+          return;
+        }
+        setItems((prev) => prev?.filter((c) => c.id !== id) ?? null);
+        toast.success("已删除");
+        if (currentId === id) {
+          router.replace("/chat");
+        }
+      } catch (e) {
+        toast.error(`网络异常：${e instanceof Error ? e.message : "请稍后再试"}`);
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [items, currentId, deletingId, router],
+  );
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -110,28 +144,47 @@ export function HistoryDrawer({ currentId }: HistoryDrawerProps) {
             items?.map((c) => {
               const isCurrent = c.id === currentId;
               const ts = c.last_message_at ?? c.created_at;
+              const isDeleting = deletingId === c.id;
               return (
-                <Link
+                <div
                   key={c.id}
-                  href={`/chat/${c.id}`}
-                  onClick={() => setOpen(false)}
                   className={cn(
-                    "group flex items-start gap-2 rounded-[8px] px-3 py-2 transition-colors",
+                    "group relative flex items-start gap-2 rounded-[8px] px-3 py-2 transition-colors",
                     isCurrent
                       ? "bg-[var(--color-accent-lavender)]/30"
                       : "hover:bg-[var(--color-accent-lavender)]/10",
+                    isDeleting && "opacity-50",
                   )}
                 >
-                  <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-ink-fade)]" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm text-[var(--color-ink-plum)]">
-                      {c.title?.trim() || "(未命名对话)"}
-                    </p>
-                    <p className="text-[10px] text-[var(--color-ink-fade)]">
-                      {formatRelative(ts)}
-                    </p>
-                  </div>
-                </Link>
+                  <Link
+                    href={`/chat/${c.id}`}
+                    onClick={() => setOpen(false)}
+                    className="flex flex-1 min-w-0 items-start gap-2"
+                  >
+                    <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-ink-fade)]" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm text-[var(--color-ink-plum)]">
+                        {c.title?.trim() || "(未命名对话)"}
+                      </p>
+                      <p className="text-[10px] text-[var(--color-ink-fade)]">
+                        {formatRelative(ts)}
+                      </p>
+                    </div>
+                  </Link>
+                  <button
+                    type="button"
+                    aria-label="删除会话"
+                    disabled={isDeleting}
+                    onClick={() => void remove(c.id)}
+                    className={cn(
+                      "shrink-0 rounded-full p-1 opacity-0 transition-opacity",
+                      "text-[var(--color-ink-fade)] hover:bg-white/40 hover:text-[var(--color-ink-plum)]",
+                      "group-hover:opacity-100 focus-visible:opacity-100",
+                    )}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               );
             })}
         </div>

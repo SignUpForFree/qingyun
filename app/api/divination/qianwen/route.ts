@@ -12,6 +12,7 @@ import { ensureUserId } from "@/lib/auth/session";
 import { pickSlip } from "@/lib/divination/slips";
 import { parseJson, serializeJson } from "@/lib/db/json";
 import { checkRateLimit } from "@/lib/ai/check-rate-limit";
+import { guardTexts } from "@/lib/safety/guard";
 
 /**
  * POST /api/divination/qianwen — 抽签 + 落库
@@ -59,6 +60,9 @@ export async function POST(req: Request) {
     );
   }
   const { conversationId: incomingConvId, dimension, userQuestion } = parsed.data;
+
+  const safetyFail = guardTexts({ userQuestion });
+  if (safetyFail) return safetyFail;
 
   const userId = await ensureUserId();
 

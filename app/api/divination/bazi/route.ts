@@ -14,6 +14,7 @@ import { parseJson, serializeJson } from "@/lib/db/json";
 import { loadPrompt, renderTemplate } from "@/lib/ai/prompts";
 import { chat } from "@/lib/ai/client";
 import { checkRateLimit } from "@/lib/ai/check-rate-limit";
+import { guardTexts } from "@/lib/safety/guard";
 import type { BaziPillars, BaziTenGods, LuckPillar } from "@/types/domain";
 import type { Wuxing } from "@/lib/bazi/stems-branches";
 
@@ -65,6 +66,9 @@ export async function POST(req: Request) {
     );
   }
   const { conversationId: incomingConvId, focus, userQuestion } = parsed.data;
+
+  const safetyFail = guardTexts({ userQuestion });
+  if (safetyFail) return safetyFail;
 
   const userId = await ensureUserId();
 

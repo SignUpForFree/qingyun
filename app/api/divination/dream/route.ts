@@ -15,6 +15,7 @@ import {
 import { loadPrompt, renderTemplate } from "@/lib/ai/prompts";
 import { chat } from "@/lib/ai/client";
 import { checkRateLimit } from "@/lib/ai/check-rate-limit";
+import { guardTexts } from "@/lib/safety/guard";
 
 /**
  * POST /api/divination/dream — 解梦 + 落库
@@ -55,6 +56,9 @@ export async function POST(req: Request) {
     );
   }
   const { dreamText, emotion } = parsed.data;
+
+  const safetyFail = guardTexts({ dreamText });
+  if (safetyFail) return safetyFail;
 
   const userId = await ensureUserId();
 
