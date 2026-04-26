@@ -21,6 +21,8 @@ const PAGES = [
   { path: "/meihua-preview", name: "meihua-preview" },
   { path: "/fortune/2099-12-31", name: "fortune-detail-future" },
   { path: "/me", name: "me-no-profile" },
+  { path: "/feedback", name: "feedback" },
+  { path: "/about", name: "about" },
 ] as const;
 
 for (const page of PAGES) {
