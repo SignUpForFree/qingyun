@@ -20,10 +20,6 @@ vi.mock("next/headers", () => ({
     }),
 }));
 
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(),
-}));
-
 import {
   getCurrentProfileId,
   setCurrentProfileId,

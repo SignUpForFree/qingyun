@@ -14,6 +14,7 @@ import { castByNumbers, castByTime } from "@/lib/meihua/cast";
 import { interpretMeihua, type MeihuaResult } from "@/lib/meihua/interpret";
 import { loadPrompt, renderTemplate } from "@/lib/ai/prompts";
 import { chat } from "@/lib/ai/client";
+import { checkRateLimit } from "@/lib/ai/check-rate-limit";
 
 /**
  * POST /api/divination/meihua — 起卦 + 推演（不调 AI，AI 解读由 PATCH/独立请求触发）
@@ -64,6 +65,15 @@ export async function POST(req: Request) {
   const { conversationId: incomingConvId, method, numbers, userQuestion } = parsed.data;
 
   const userId = await ensureUserId();
+
+  const rate = await checkRateLimit(userId);
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { error: `每小时上限 ${rate.limit} 条，请稍后再试（已用 ${rate.used}）` },
+      { status: 429 },
+    );
+  }
+
   const db = getDb();
 
   // 1. 起卦 + 推演

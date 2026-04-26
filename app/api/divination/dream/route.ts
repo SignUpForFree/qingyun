@@ -14,6 +14,7 @@ import {
 } from "@/lib/divination/dream-parser";
 import { loadPrompt, renderTemplate } from "@/lib/ai/prompts";
 import { chat } from "@/lib/ai/client";
+import { checkRateLimit } from "@/lib/ai/check-rate-limit";
 
 /**
  * POST /api/divination/dream — 解梦 + 落库
@@ -56,6 +57,15 @@ export async function POST(req: Request) {
   const { dreamText, emotion } = parsed.data;
 
   const userId = await ensureUserId();
+
+  const rate = await checkRateLimit(userId);
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { error: `每小时上限 ${rate.limit} 条，请稍后再试（已用 ${rate.used}）` },
+      { status: 429 },
+    );
+  }
+
   const db = getDb();
 
   let conversationId: string;

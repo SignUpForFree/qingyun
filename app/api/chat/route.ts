@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { and, count, eq, gte } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { conversations, messages } from "@/lib/db/schema";
 import { ensureUserId } from "@/lib/auth/session";
 import { classifyIntent } from "@/lib/ai/intent";
-import { isWithinLimit, type CountUserMessagesDeps } from "@/lib/ai/rate-limit";
+import { checkRateLimit } from "@/lib/ai/check-rate-limit";
 import { chat } from "@/lib/ai/client";
 import type { Intent } from "@/types/domain";
 
@@ -54,23 +54,7 @@ export async function POST(req: Request) {
   const db = getDb();
 
   // 限流：按 user 维度统计 messages.role='user' 一小时内条数
-  const deps: CountUserMessagesDeps = {
-    countUserMessages: async (uid, sinceIso) => {
-      const r = await db
-        .select({ n: count() })
-        .from(messages)
-        .innerJoin(conversations, eq(conversations.id, messages.conversation_id))
-        .where(
-          and(
-            eq(conversations.user_id, uid),
-            eq(messages.role, "user"),
-            gte(messages.created_at, sinceIso),
-          ),
-        );
-      return r[0]?.n ?? 0;
-    },
-  };
-  const limit = await isWithinLimit(userId, deps);
+  const limit = await checkRateLimit(userId);
   if (!limit.allowed) {
     return jsonError(
       `每小时上限 ${limit.limit} 条，请稍后再试（已发 ${limit.used}）`,

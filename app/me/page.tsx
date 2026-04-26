@@ -166,7 +166,6 @@ function DisabledRow({ label, note }: { label: string; note: string }) {
 }
 
 async function safeGetProfile() {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return null;
   try {
     return await getCurrentProfile();
   } catch (e) {

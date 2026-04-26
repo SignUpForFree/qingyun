@@ -11,6 +11,7 @@ import {
 import { ensureUserId } from "@/lib/auth/session";
 import { pickSlip } from "@/lib/divination/slips";
 import { parseJson, serializeJson } from "@/lib/db/json";
+import { checkRateLimit } from "@/lib/ai/check-rate-limit";
 
 /**
  * POST /api/divination/qianwen — 抽签 + 落库
@@ -60,6 +61,16 @@ export async function POST(req: Request) {
   const { conversationId: incomingConvId, dimension, userQuestion } = parsed.data;
 
   const userId = await ensureUserId();
+
+  // 限流（与 /api/chat 共享每小时配额）
+  const rate = await checkRateLimit(userId);
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { error: `每小时上限 ${rate.limit} 条，请稍后再试（已用 ${rate.used}）` },
+      { status: 429 },
+    );
+  }
+
   const db = getDb();
 
   let conversationId: string;

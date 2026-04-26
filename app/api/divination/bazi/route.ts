@@ -13,6 +13,7 @@ import { ensureUserId } from "@/lib/auth/session";
 import { parseJson, serializeJson } from "@/lib/db/json";
 import { loadPrompt, renderTemplate } from "@/lib/ai/prompts";
 import { chat } from "@/lib/ai/client";
+import { checkRateLimit } from "@/lib/ai/check-rate-limit";
 import type { BaziPillars, BaziTenGods, LuckPillar } from "@/types/domain";
 import type { Wuxing } from "@/lib/bazi/stems-branches";
 
@@ -66,6 +67,15 @@ export async function POST(req: Request) {
   const { conversationId: incomingConvId, focus, userQuestion } = parsed.data;
 
   const userId = await ensureUserId();
+
+  const rate = await checkRateLimit(userId);
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { error: `每小时上限 ${rate.limit} 条，请稍后再试（已用 ${rate.used}）` },
+      { status: 429 },
+    );
+  }
+
   const db = getDb();
 
   // 1. 默认档案 + 命盘
