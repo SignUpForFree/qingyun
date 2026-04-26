@@ -9,6 +9,7 @@ import { DivinationLauncher } from "./DivinationLauncher";
 import { DreamLauncher } from "./DreamLauncher";
 import { BaziLauncher, type BaziFocus } from "./BaziLauncher";
 import { MeihuaInputCard, type MeihuaMethod } from "./MeihuaInputCard";
+import { MeihuaWaiyingForm } from "./MeihuaWaiyingForm";
 import { GlassCard, Sparkle } from "@/components/su";
 import type { DisplayMessage } from "./MessageBubble";
 import type { Intent } from "@/types/domain";
@@ -251,6 +252,58 @@ export function ChatWindow({
     [runStructured],
   );
 
+  // 跟踪用户主动『跳过外应』的 messageId 集合（前端持久化即可，不入库）
+  const [skippedWaiying, setSkippedWaiying] = React.useState<Set<string>>(
+    () => new Set(),
+  );
+
+  const runMeihuaWaiying = React.useCallback(
+    async (messageId: string, waiying: string) => {
+      if (structuredBusy || streaming !== null) return;
+      setStructuredBusy(true);
+
+      let res: Response;
+      try {
+        res = await fetch("/api/divination/meihua", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messageId, waiying }),
+        });
+      } catch (e) {
+        toast.error(`外应回填失败：${e instanceof Error ? e.message : "网络异常"}`);
+        setStructuredBusy(false);
+        return;
+      }
+
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => "");
+        toast.error(
+          `外应回填失败 (${res.status})${errBody ? "：" + errBody.slice(0, 80) : ""}`,
+        );
+        setStructuredBusy(false);
+        return;
+      }
+
+      let data: { assistantMessage?: DisplayMessage };
+      try {
+        data = (await res.json()) as { assistantMessage?: DisplayMessage };
+      } catch {
+        toast.error("外应回填返回格式异常");
+        setStructuredBusy(false);
+        return;
+      }
+
+      if (data.assistantMessage) {
+        const msg = data.assistantMessage;
+        setMessages((m) => [...m, msg]);
+      }
+      // 让原 meihua_reading 不再触发 form（视为已处理）
+      setSkippedWaiying((s) => new Set(s).add(messageId));
+      setStructuredBusy(false);
+    },
+    [structuredBusy, streaming],
+  );
+
   const [hasProfile, setHasProfile] = React.useState<boolean | null>(null);
   React.useEffect(() => {
     if (intentHint !== "bazi") return;
@@ -286,6 +339,26 @@ export function ChatWindow({
   const isBazi = intentHint === "bazi";
   const isMeihua = intentHint === "meihua";
 
+  // 检测是否有『等待外应』的 meihua_reading 消息
+  const pendingWaiyingMsgId = React.useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (!m || m.role !== "assistant") continue;
+      const meta = m.metadata;
+      if (!meta) continue;
+      try {
+        const parsed = JSON.parse(meta) as { ui?: string; waiying?: unknown };
+        if (parsed.ui !== "meihua_reading") continue;
+        // 最新一条 meihua_reading：waiying 为空且未被本地 skip → 待回填
+        if (parsed.waiying == null && !skippedWaiying.has(m.id)) return m.id;
+        return null; // 最新一条已有 waiying / 已 skip → 不弹
+      } catch {
+        continue;
+      }
+    }
+    return null;
+  }, [messages, skippedWaiying]);
+
   return (
     <div className="flex h-[calc(100dvh-4rem)] flex-col">
       <MessageList
@@ -304,7 +377,15 @@ export function ChatWindow({
           </div>
         }
       />
-      {isDivination ? (
+      {pendingWaiyingMsgId ? (
+        <MeihuaWaiyingForm
+          busy={structuredBusy}
+          onSubmit={(w) => runMeihuaWaiying(pendingWaiyingMsgId, w)}
+          onSkip={() =>
+            setSkippedWaiying((s) => new Set(s).add(pendingWaiyingMsgId))
+          }
+        />
+      ) : isDivination ? (
         <DivinationLauncher onDraw={runDivination} busy={structuredBusy} />
       ) : isDream ? (
         <DreamLauncher onSubmit={runDream} busy={structuredBusy} />
