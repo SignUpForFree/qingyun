@@ -1,8 +1,9 @@
 import { sql } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import { divinationSlips, prompts } from "./schema";
+import { divinationSlips, hexagrams, prompts } from "./schema";
 import { serializeJson } from "./json";
 import { SLIPS_SEED } from "@/db/seed/slips";
+import { HEXAGRAMS_SEED } from "@/db/seed/hexagrams";
 
 type Db = BetterSQLite3Database<Record<string, unknown>>;
 
@@ -32,6 +33,36 @@ export function ensureSeeded(db: Db) {
         image_url: null,
       })
       .onConflictDoNothing()
+      .run();
+  }
+
+  // ---- 64 卦 ----
+  for (const h of HEXAGRAMS_SEED) {
+    db.insert(hexagrams)
+      .values({
+        number: h.number,
+        name: h.name,
+        upper_trigram: h.upper_trigram as never,
+        lower_trigram: h.lower_trigram as never,
+        upper_wuxing: h.upper_wuxing as never,
+        lower_wuxing: h.lower_wuxing as never,
+        judgment: h.judgment,
+        image: h.image,
+        lines: h.lines,
+      })
+      .onConflictDoUpdate({
+        target: [hexagrams.number],
+        set: {
+          name: sql`excluded.name`,
+          upper_trigram: sql`excluded.upper_trigram`,
+          lower_trigram: sql`excluded.lower_trigram`,
+          upper_wuxing: sql`excluded.upper_wuxing`,
+          lower_wuxing: sql`excluded.lower_wuxing`,
+          judgment: sql`excluded.judgment`,
+          image: sql`excluded.image`,
+          lines: sql`excluded.lines`,
+        },
+      })
       .run();
   }
 
