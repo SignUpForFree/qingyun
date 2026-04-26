@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyIntent, INTENT_RULES } from "./intent";
+import { classifyIntent, INTENT_RULES, classifyByKeyword } from "./intent";
 
 describe("classifyIntent (规则层)", () => {
   describe("divination 抽签", () => {
@@ -79,5 +79,29 @@ describe("classifyIntent (规则层)", () => {
       expect(intents).toContain("bazi");
       expect(intents).toContain("meihua");
     });
+  });
+});
+
+describe("classifyByKeyword (B 策略关键词层 - 严格模式)", () => {
+  it("空 → null", () => {
+    expect(classifyByKeyword("")).toBeNull();
+  });
+  it("纯闲聊 → null（让 LLM 兜底）", () => {
+    expect(classifyByKeyword("你好啊")).toBeNull();
+  });
+  it("我要抽灵签 → divination", () => {
+    expect(classifyByKeyword("我要抽灵签")).toBe("divination");
+  });
+  it("我要测算 → meihua", () => {
+    expect(classifyByKeyword("我要测算")).toBe("meihua");
+  });
+  it("我要AI解梦 → dream", () => {
+    expect(classifyByKeyword("我要AI解梦")).toBe("dream");
+  });
+  it("我要八字解读 → bazi", () => {
+    expect(classifyByKeyword("我要八字解读")).toBe("bazi");
+  });
+  it("'帮我算一下事业' → null（模糊措辞让 LLM 兜底）", () => {
+    expect(classifyByKeyword("帮我算一下事业")).toBeNull();
   });
 });

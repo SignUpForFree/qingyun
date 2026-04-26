@@ -55,3 +55,30 @@ export function classifyIntent(text: string, opts?: { hint?: Intent }): Intent {
 }
 
 export const INTENT_RULES = RULES;
+
+/**
+ * 关键词层（B 策略 = 关键词 + LLM 兜底）
+ *
+ * 仅捕获显式高置信度模式：
+ * - "我要 X" 显式指令
+ * - 不会和 LLM 兜底测试用例冲突的强信号短句（八字 / 解X梦 / 抽X签 等）
+ *
+ * 模糊措辞（"我做了个梦"、"帮我算一下"、"我的命盘怎么样"）走 LLM，避免误分类。
+ */
+export function classifyByKeyword(text: string): Intent | null {
+  if (!text || text.trim().length === 0) return null;
+  const t = text.trim();
+
+  // 显式 "我要 X" 指令（最高优先级）
+  if (/^我要(抽签|抽灵签|抽支签|抽个签|求签)/.test(t)) return "divination";
+  if (/^我要(进行)?(数字)?(测算|起卦|算一卦)/.test(t)) return "meihua";
+  if (/^我要\s*(AI)?\s*解梦/i.test(t)) return "dream";
+  if (/^我要(进行)?\s*(AI)?\s*八字解读/i.test(t)) return "bazi";
+
+  // 强信号短句（短词同框）
+  if (/抽.{0,2}签|求签|灵签/.test(t)) return "divination";
+  if (/解.{0,2}梦|帮我解.{0,3}梦/.test(t)) return "dream";
+  if (/八字/.test(t)) return "bazi";
+
+  return null;
+}
