@@ -1,42 +1,86 @@
-"use client";
-
-import * as React from "react";
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
+import { and, asc, eq } from "drizzle-orm";
 import { AppHeader } from "@/components/layout";
 import { ChatWindow } from "../_components/ChatWindow";
 import { HistoryDrawer } from "../_components/HistoryDrawer";
+import type { DisplayMessage } from "../_components/MessageBubble";
+import { ensureUserId } from "@/lib/auth/session";
+import { getDb } from "@/lib/db/client";
+import { conversations, messages } from "@/lib/db/schema";
 import type { Intent } from "@/types/domain";
 
-const INTENT_VALUES: readonly Intent[] = ["chat", "divination", "dream", "bazi", "meihua"];
+const INTENT_VALUES: readonly Intent[] = [
+  "chat",
+  "divination",
+  "dream",
+  "bazi",
+  "meihua",
+];
 
-function isIntent(s: string | null): s is Intent {
-  return s !== null && (INTENT_VALUES as readonly string[]).includes(s);
+function isIntent(s: string | undefined): s is Intent {
+  return s !== undefined && (INTENT_VALUES as readonly string[]).includes(s);
+}
+
+interface PageProps {
+  params: Promise<{ sessionId: string }>;
+  searchParams: Promise<{ intent?: string; initial?: string }>;
 }
 
 /**
- * /chat/[sessionId] 单会话页
+ * /chat/[sessionId] RSC：服务端预拉历史消息
  *
- * P1 阶段：纯 client 版，不预拉历史消息（messages 由 client 通过 SSE 累积）。
- * Supabase 接入后（W2）升级为 RSC：
- *   - sessionId === "new" → 空消息列表
- *   - 其它 → server 端 select messages where conversation_id = sessionId
+ * - sessionId === 'new' → 空消息列表，沿用 intent / initial 参数
+ * - 其它 → 校验会话归属，按 created_at asc 拉 messages（含 metadata 用于卡片渲染）
+ *
+ * 不存在或非自己的会话 → 回到 /chat 列表
  */
-export default function ChatSessionPage() {
-  const params = useParams<{ sessionId: string }>();
-  const search = useSearchParams();
+export const dynamic = "force-dynamic";
 
-  const sessionId = params.sessionId;
+export default async function ChatSessionPage({ params, searchParams }: PageProps) {
+  const { sessionId } = await params;
+  const sp = await searchParams;
   const isNew = sessionId === "new";
-  const intentParam = search.get("intent");
-  const intentHint = isIntent(intentParam) ? intentParam : undefined;
-  const initial = search.get("initial") ?? undefined;
+  const intentHint = isIntent(sp.intent) ? sp.intent : undefined;
+  const initial = sp.initial;
 
-  const title = React.useMemo(() => {
-    if (isNew && intentHint) return intentLabel(intentHint);
-    if (isNew) return "新对话";
-    return "对话";
-  }, [isNew, intentHint]);
+  let initialMessages: DisplayMessage[] = [];
+  let resolvedConversationId: string | null = isNew ? null : sessionId;
+
+  if (!isNew) {
+    const userId = await ensureUserId();
+    const db = getDb();
+
+    const owned = await db
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(and(eq(conversations.id, sessionId), eq(conversations.user_id, userId)))
+      .limit(1);
+
+    if (!owned[0]) {
+      // 不归你 / 不存在 → 当作新会话处理（不暴露 404 细节）
+      resolvedConversationId = null;
+    } else {
+      const rows = await db
+        .select({
+          id: messages.id,
+          role: messages.role,
+          content: messages.content,
+          created_at: messages.created_at,
+          metadata: messages.metadata,
+        })
+        .from(messages)
+        .where(eq(messages.conversation_id, sessionId))
+        .orderBy(asc(messages.created_at));
+      initialMessages = rows;
+    }
+  }
+
+  const title =
+    isNew && intentHint
+      ? intentLabel(intentHint)
+      : isNew
+        ? "新对话"
+        : "对话";
 
   return (
     <>
@@ -46,8 +90,8 @@ export default function ChatSessionPage() {
         right={<BackLink />}
       />
       <ChatWindow
-        conversationId={isNew ? null : sessionId}
-        initialMessages={[]}
+        conversationId={resolvedConversationId}
+        initialMessages={initialMessages}
         intentHint={intentHint}
         autoSendText={initial}
       />

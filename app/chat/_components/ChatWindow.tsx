@@ -20,6 +20,8 @@ interface StructuredResponse {
   conversationId: string;
   userMessage: DisplayMessage;
   assistantMessage: DisplayMessage;
+  /** 梅花起卦 API 会带第三条 AI 解读消息（其它路由可省略） */
+  aiReadingMessage?: DisplayMessage | null;
 }
 
 interface ChatWindowProps {
@@ -187,7 +189,11 @@ export function ChatWindow({
         return;
       }
 
-      setMessages((m) => [...m, data.userMessage, data.assistantMessage]);
+      setMessages((m) => {
+        const next = [...m, data.userMessage, data.assistantMessage];
+        if (data.aiReadingMessage) next.push(data.aiReadingMessage);
+        return next;
+      });
       if (!convId && data.conversationId) {
         setConvId(data.conversationId);
         router.replace(`/chat/${data.conversationId}`);

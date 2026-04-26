@@ -153,7 +153,13 @@ export async function POST(req: Request) {
   });
 
   // 6. 调 AI 解读（meihua.interpret）— 非流式，落到第三条消息
-  let aiText: string | null = null;
+  let aiReadingMessage: {
+    id: string;
+    role: "assistant";
+    content: string;
+    created_at: string;
+    metadata: string | null;
+  } | null = null;
   try {
     const prompt = await loadPrompt("meihua.interpret");
 
@@ -203,9 +209,15 @@ export async function POST(req: Request) {
         metadata: serializeJson({ ui: "meihua_reading", waiying: null }),
       })
       .returning();
-    if (aiMsg) aiText = ai.text;
 
     if (aiMsg) {
+      aiReadingMessage = {
+        id: aiMsg.id,
+        role: "assistant",
+        content: aiMsg.content,
+        created_at: aiMsg.created_at,
+        metadata: aiMsg.metadata,
+      };
       await db
         .update(divinationRecords)
         .set({ ai_reading: ai.text })
@@ -236,7 +248,7 @@ export async function POST(req: Request) {
       created_at: insertedMsg.created_at,
       metadata: insertedMsg.metadata,
     },
-    aiReading: aiText,
+    aiReadingMessage,
   });
 }
 
