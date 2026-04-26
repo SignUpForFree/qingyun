@@ -40,13 +40,43 @@ export function clearPromptCache(): void {
 }
 
 /**
- * P1 占位：B5 之前不可用。
- * 调用方在 P2 D3 prompts seed 完成后通过 createAdmin().from('prompts') 实装。
+ * 从 prompts 表加载 active 的最新版本
+ *
+ * - 缓存命中直接返回
+ * - miss 则查 SQLite (lib/db/seed.ts 启动时已 idempotent 写入种子)
  */
 export async function loadPrompt(key: string): Promise<PromptRecord> {
   const hit = cache.get(key);
   if (hit) return hit;
-  throw new Error(
-    `loadPrompt 未实装（P1 占位）— B5 之后才可从 Supabase 取 prompt: ${key}。当前请用 setPromptForTest 注入。`,
-  );
+
+  const { getDb } = await import("@/lib/db/client");
+  const { prompts } = await import("@/lib/db/schema");
+  const { and, eq, desc } = await import("drizzle-orm");
+
+  const db = getDb();
+  const rows = await db
+    .select({
+      key: prompts.key,
+      version: prompts.version,
+      system_prompt: prompts.system_prompt,
+      user_prompt_tpl: prompts.user_prompt_tpl,
+    })
+    .from(prompts)
+    .where(and(eq(prompts.key, key), eq(prompts.active, true)))
+    .orderBy(desc(prompts.version))
+    .limit(1);
+
+  const row = rows[0];
+  if (!row) {
+    throw new Error(`prompts 表未找到 key=${key} 的 active 记录`);
+  }
+
+  const rec: PromptRecord = {
+    key: row.key,
+    version: row.version,
+    systemPrompt: row.system_prompt,
+    userPromptTpl: row.user_prompt_tpl,
+  };
+  cache.set(key, rec);
+  return rec;
 }

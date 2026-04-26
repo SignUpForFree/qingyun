@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+vi.mock("server-only", () => ({}));
+
 import {
   renderTemplate,
   setPromptForTest,
@@ -73,8 +76,10 @@ describe("缓存（setPromptForTest / getCachedPrompt / clearPromptCache）", ()
     expect(r.systemPrompt).toBe("sys");
   });
 
-  it("loadPrompt 未命中且无 supabase 时抛错（P1 占位行为）", async () => {
+  it("loadPrompt 未命中且 db 无记录时抛错", async () => {
     clearPromptCache();
-    await expect(loadPrompt("missing.key")).rejects.toThrow(/未实装/);
+    await expect(loadPrompt("definitely-not-existent-key")).rejects.toThrow(
+      /未找到|不存在|active 记录/,
+    );
   });
 });

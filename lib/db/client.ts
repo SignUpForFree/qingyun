@@ -5,6 +5,7 @@ import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import * as schema from "./schema";
+import { ensureSeeded } from "./seed";
 
 /**
  * SQLite 单例 client + 启动时自动 migrate
@@ -62,7 +63,14 @@ function create() {
 }
 
 export function getDb() {
-  if (!cached) cached = create();
+  if (!cached) {
+    cached = create();
+    try {
+      ensureSeeded(cached.db);
+    } catch (e) {
+      console.error("seed 失败 (可继续运行)", e);
+    }
+  }
   return cached.db;
 }
 
