@@ -36,22 +36,24 @@ cd occult
 # 第一次：拷模板
 cp .env.prod.example .env.prod
 
-# 编辑 env 填 ofoai 网关
+# 编辑 env 填 ofox.ai 网关
 nano .env.prod
 ```
 
 `.env.prod` 关键三行：
 
 ```env
-AI_GATEWAY_BASE_URL=https://api.ofoai.com/v1
-AI_GATEWAY_API_KEY=sk-你的-ofoai-key
-AI_GATEWAY_MODEL=deepseek-chat
+AI_GATEWAY_BASE_URL=https://api.ofox.ai/v1
+AI_GATEWAY_API_KEY=sk-of-你的-ofox-key
+AI_GATEWAY_MODEL=deepseek/deepseek-v4-pro
 ```
 
-> ofoai 聚合网关支持多种 model 名（claude-3-5-sonnet / gpt-4o / deepseek-chat / gemini-pro 等）。
-> 通常控制台会显示『模型列表』和『余额』。在 `AI_GATEWAY_MODEL` 填你想用的那个就行。
+> ofox.ai 用 `provider/model` 命名空间格式（如 `deepseek/deepseek-v4-pro`、
+> `deepseek/deepseek-v3.2`、`z-ai/glm-5.1`、`bailian/qwen3.6-plus`）。
+> 控制台 https://ofox.ai/zh/models 看完整列表；切模型只改 `AI_GATEWAY_MODEL` 一行。
 >
-> 走 OpenAI 兼容协议时 baseURL 一般是 `https://api.ofoai.com/v1`；以官方文档为准。
+> deepseek-v4-pro 价格参考：输入 $1.74/M、输出 $3.48/M、缓存读 $0.145/M，
+> 1M 上下文窗口、384K 输出。
 
 ```bash
 bash deploy.sh

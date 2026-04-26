@@ -5,16 +5,16 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
  *
  * 支持任意 OpenAI 兼容上游：
  *   - DeepSeek 官方 (https://api.deepseek.com)
- *   - ofoai / one-api / new-api / openrouter 等聚合网关
+ *   - ofox.ai / one-api / new-api / openrouter 等聚合网关
  *   - 自建 LiteLLM / openai-forward 代理
  *
  * 配置优先级（从高到低）：
  *   AI_GATEWAY_*  >  DEEPSEEK_*  >  默认值
  *
  * 切换聚合网关时只需在 .env.prod 改 3 行：
- *   AI_GATEWAY_BASE_URL=https://api.ofoai.com/v1
- *   AI_GATEWAY_API_KEY=sk-xxxxxxxx
- *   AI_GATEWAY_MODEL=deepseek-chat   # 或聚合网关支持的任意 model 名
+ *   AI_GATEWAY_BASE_URL=https://api.ofox.ai/v1
+ *   AI_GATEWAY_API_KEY=sk-of-xxxxxxxx
+ *   AI_GATEWAY_MODEL=deepseek/deepseek-v4-pro   # ofox 用 provider/model 命名空间
  */
 
 export const AI_MODEL =
