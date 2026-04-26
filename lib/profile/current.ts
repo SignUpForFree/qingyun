@@ -4,6 +4,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { profiles, type Profile } from "@/lib/db/schema";
 import { getCurrentUserId } from "@/lib/auth/session";
+import { shouldSecureCookie } from "@/lib/auth/cookie-flags";
 
 /**
  * 当前档案 cookie 名 — spec §6.4 多档案场景使用，
@@ -23,7 +24,7 @@ export async function setCurrentProfileId(profileId: string): Promise<void> {
   store.set(PROFILE_COOKIE_KEY, profileId, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldSecureCookie(),
     maxAge: ONE_YEAR_SECONDS,
     path: "/",
   });

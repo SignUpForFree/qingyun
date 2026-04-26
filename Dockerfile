@@ -55,15 +55,11 @@ ENV TZ=Asia/Shanghai
 RUN addgroup --system --gid 1001 nodejs \
  && adduser --system --uid 1001 nextjs
 
-# Next standalone 输出已含 minimal node_modules
+# Next standalone 输出已含 minimal node_modules（better-sqlite3 / bindings /
+# lunar-javascript 都被 Next trace 进 .next/standalone/node_modules/.pnpm/）
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-
-# better-sqlite3 native binding（standalone 没把 node_modules 完全拷过来时补一份）
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/bindings ./node_modules/bindings
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/file-uri-to-path ./node_modules/file-uri-to-path
 
 # drizzle migrations 文件（启动时 lib/db/client.ts 会调用）
 COPY --from=builder --chown=nextjs:nodejs /app/db/migrations-sqlite ./db/migrations-sqlite

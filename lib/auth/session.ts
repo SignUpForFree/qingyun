@@ -1,5 +1,6 @@
 import "server-only";
 import { cookies } from "next/headers";
+import { shouldSecureCookie } from "./cookie-flags";
 
 /**
  * 本地匿名 session — 替代 Supabase signInAnonymously
@@ -34,7 +35,7 @@ export async function setUserId(userId: string): Promise<void> {
   store.set(SESSION_COOKIE_KEY, userId, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldSecureCookie(),
     maxAge: ONE_YEAR_SECONDS,
     path: "/",
   });

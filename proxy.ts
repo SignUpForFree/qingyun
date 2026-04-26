@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE_KEY } from "@/lib/auth/session";
+import { shouldSecureCookie } from "@/lib/auth/cookie-flags";
 
 /**
  * Next 16 Proxy（旧名 middleware）— 全局请求拦截
@@ -23,7 +24,7 @@ export function proxy(request: NextRequest) {
       value: uid,
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      secure: shouldSecureCookie(),
       maxAge: ONE_YEAR_SECONDS,
       path: "/",
     });
