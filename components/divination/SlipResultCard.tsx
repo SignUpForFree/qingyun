@@ -1,6 +1,6 @@
 import { GlassCard, Sparkle, Divider } from "@/components/su";
 import { cn } from "@/lib/utils";
-import type { SlipLevel } from "@/db/seed/slips";
+import type { SlipLevel } from "@/db/seed/slips-v2";
 
 interface SlipResultCardProps {
   number: number;

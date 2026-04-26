@@ -3,7 +3,7 @@ import { Sparkle } from "@/components/su";
 import { SlipResultCard } from "@/components/divination/SlipResultCard";
 import { MeihuaResultCard } from "@/components/divination/MeihuaResultCard";
 import type { Message } from "@/lib/db/schema";
-import type { SlipLevel } from "@/db/seed/slips";
+import type { SlipLevel } from "@/db/seed/slips-v2";
 
 export type DisplayMessage = Pick<
   Message,

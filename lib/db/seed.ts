@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { divinationSlips, hexagrams, prompts } from "./schema";
 import { serializeJson } from "./json";
-import { SLIPS_SEED } from "@/db/seed/slips";
+import { SLIPS_V2 as SLIPS_SEED } from "@/db/seed/slips-v2";
 import { HEXAGRAMS_SEED } from "@/db/seed/hexagrams";
 
 type Db = BetterSQLite3Database<Record<string, unknown>>;

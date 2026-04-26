@@ -1,6 +1,6 @@
 import { AppHeader } from "@/components/layout";
 import { SlipResultCard } from "@/components/divination/SlipResultCard";
-import { SLIPS_SEED } from "@/db/seed/slips";
+import { SLIPS_V2 as SLIPS_SEED } from "@/db/seed/slips-v2";
 
 /**
  * Design lab：SlipResultCard 视觉预览（spec §6 抽签）
@@ -28,8 +28,8 @@ export default function SlipPreviewPage() {
               level={s.level}
               title={s.title}
               poem={s.poem}
-              reading={s.readings.综合}
-              dimension="综合"
+              reading={s.readings.综合运势}
+              dimension="综合运势"
             />
           </div>
         ))}
