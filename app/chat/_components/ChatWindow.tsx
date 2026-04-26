@@ -5,11 +5,18 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
+import { DivinationLauncher } from "./DivinationLauncher";
 import { GlassCard, Sparkle } from "@/components/su";
-import type { Message } from "@/lib/db/schema";
+import type { DisplayMessage } from "./MessageBubble";
 import type { Intent } from "@/types/domain";
 
-type DisplayMessage = Pick<Message, "id" | "role" | "content" | "created_at">;
+type SlipDimension = "综合" | "事业" | "财运" | "感情" | "人际" | "健康";
+
+interface QianwenResponse {
+  conversationId: string;
+  userMessage: DisplayMessage;
+  assistantMessage: DisplayMessage;
+}
 
 interface ChatWindowProps {
   conversationId: string | null;
@@ -134,6 +141,56 @@ export function ChatWindow({
 
   sendRef.current = send;
 
+  const [drawing, setDrawing] = React.useState(false);
+
+  const runDivination = React.useCallback(
+    async ({ dimension, question }: { dimension: SlipDimension; question: string }) => {
+      if (drawing || streaming !== null) return;
+      setDrawing(true);
+
+      let res: Response;
+      try {
+        res = await fetch("/api/divination/qianwen", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            conversationId: convId,
+            dimension,
+            userQuestion: question,
+          }),
+        });
+      } catch (e) {
+        toast.error(`抽签失败：${e instanceof Error ? e.message : "网络异常"}`);
+        setDrawing(false);
+        return;
+      }
+
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => "");
+        toast.error(`抽签失败 (${res.status})${errBody ? "：" + errBody.slice(0, 80) : ""}`);
+        setDrawing(false);
+        return;
+      }
+
+      let data: QianwenResponse;
+      try {
+        data = (await res.json()) as QianwenResponse;
+      } catch {
+        toast.error("抽签返回格式异常");
+        setDrawing(false);
+        return;
+      }
+
+      setMessages((m) => [...m, data.userMessage, data.assistantMessage]);
+      if (!convId && data.conversationId) {
+        setConvId(data.conversationId);
+        router.replace(`/chat/${data.conversationId}`);
+      }
+      setDrawing(false);
+    },
+    [convId, router, streaming, drawing],
+  );
+
   React.useEffect(() => {
     if (autoSendText && !autoSentRef.current) {
       autoSentRef.current = true;
@@ -145,6 +202,8 @@ export function ChatWindow({
   React.useEffect(() => {
     return () => abortRef.current?.abort();
   }, []);
+
+  const isDivination = intentHint === "divination";
 
   return (
     <div className="flex h-[calc(100dvh-4rem)] flex-col">
@@ -158,13 +217,17 @@ export function ChatWindow({
                 {emptyHint(intentHint)} <Sparkle size={10} />
               </p>
               <p className="text-xs text-[var(--color-ink-fade)]">
-                想问就问，没什么忌讳
+                {isDivination ? "选个维度 + 写下心事，再点抽签" : "想问就问，没什么忌讳"}
               </p>
             </GlassCard>
           </div>
         }
       />
-      <ChatInput onSend={send} busy={streaming !== null} />
+      {isDivination ? (
+        <DivinationLauncher onDraw={runDivination} busy={drawing} />
+      ) : (
+        <ChatInput onSend={send} busy={streaming !== null} />
+      )}
     </div>
   );
 }

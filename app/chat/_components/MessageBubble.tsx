@@ -1,11 +1,51 @@
 import { cn } from "@/lib/utils";
 import { Sparkle } from "@/components/su";
+import { SlipResultCard } from "@/components/divination/SlipResultCard";
 import type { Message } from "@/lib/db/schema";
+import type { SlipLevel } from "@/db/seed/slips";
+
+export type DisplayMessage = Pick<
+  Message,
+  "id" | "role" | "content" | "created_at"
+> & {
+  metadata?: string | null;
+};
 
 interface MessageBubbleProps {
-  message: Pick<Message, "id" | "role" | "content" | "created_at">;
+  message: DisplayMessage;
   streaming?: boolean;
   className?: string;
+}
+
+interface SlipResultMeta {
+  ui: "slip_result";
+  slipNumber: number;
+  level: SlipLevel;
+  title: string;
+  poem: string;
+  dimension: string;
+  reading: string;
+}
+
+function parseSlipMeta(meta: string | null | undefined): SlipResultMeta | null {
+  if (!meta) return null;
+  try {
+    const parsed = JSON.parse(meta) as { ui?: string };
+    if (parsed.ui !== "slip_result") return null;
+    const m = parsed as SlipResultMeta;
+    if (
+      typeof m.slipNumber !== "number" ||
+      typeof m.title !== "string" ||
+      typeof m.poem !== "string" ||
+      typeof m.dimension !== "string" ||
+      typeof m.reading !== "string"
+    ) {
+      return null;
+    }
+    return m;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -14,6 +54,7 @@ interface MessageBubbleProps {
  * - User: 右对齐 + 淡紫粉渐变 over glass + rounded-br-sm 切角
  * - Assistant: 左对齐 + glass + rounded-bl-sm 切角 + 头部 ✦ 身份标
  * - Streaming: 在尾部加细 lavender 竖线（不用 ▍ 粗块）
+ * - 结构化卡片：metadata.ui === 'slip_result' → 内嵌 SlipResultCard
  */
 export function MessageBubble({ message, streaming, className }: MessageBubbleProps) {
   const isUser = message.role === "user";
@@ -25,6 +66,24 @@ export function MessageBubble({ message, streaming, className }: MessageBubblePr
         <span className="rounded-full bg-white/40 px-3 py-1 text-xs text-[var(--color-ink-fade)]">
           {message.content}
         </span>
+      </div>
+    );
+  }
+
+  const slipMeta = !isUser ? parseSlipMeta(message.metadata) : null;
+  if (slipMeta) {
+    return (
+      <div className={cn("flex w-full justify-start", className)}>
+        <div className="w-full max-w-[92%]">
+          <SlipResultCard
+            number={slipMeta.slipNumber}
+            level={slipMeta.level}
+            title={slipMeta.title}
+            poem={slipMeta.poem}
+            reading={slipMeta.reading}
+            dimension={slipMeta.dimension}
+          />
+        </div>
       </div>
     );
   }

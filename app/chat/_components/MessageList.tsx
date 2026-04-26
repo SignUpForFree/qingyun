@@ -2,11 +2,10 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { MessageBubble } from "./MessageBubble";
-import type { Message } from "@/lib/db/schema";
+import { MessageBubble, type DisplayMessage } from "./MessageBubble";
 
 interface MessageListProps {
-  messages: Pick<Message, "id" | "role" | "content" | "created_at">[];
+  messages: DisplayMessage[];
   streamingText: string | null;
   className?: string;
   empty?: React.ReactNode;

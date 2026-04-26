@@ -29,7 +29,7 @@ import { parseJson, serializeJson } from "@/lib/db/json";
 export const runtime = "nodejs";
 
 const bodySchema = z.object({
-  conversationId: z.string().min(1),
+  conversationId: z.string().min(1).optional(),
   dimension: z.enum(["综合", "事业", "财运", "感情", "人际", "健康"]),
   userQuestion: z.string().min(1).max(500),
 });
@@ -57,19 +57,35 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  const { conversationId, dimension, userQuestion } = parsed.data;
+  const { conversationId: incomingConvId, dimension, userQuestion } = parsed.data;
 
   const userId = await ensureUserId();
   const db = getDb();
 
-  // 校验会话归属
-  const owned = await db
-    .select({ id: conversations.id })
-    .from(conversations)
-    .where(and(eq(conversations.id, conversationId), eq(conversations.user_id, userId)))
-    .limit(1);
-  if (!owned[0]) {
-    return NextResponse.json({ error: "会话不存在" }, { status: 404 });
+  let conversationId: string;
+
+  if (incomingConvId) {
+    const owned = await db
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(and(eq(conversations.id, incomingConvId), eq(conversations.user_id, userId)))
+      .limit(1);
+    if (!owned[0]) {
+      return NextResponse.json({ error: "会话不存在" }, { status: 404 });
+    }
+    conversationId = incomingConvId;
+  } else {
+    const [created] = await db
+      .insert(conversations)
+      .values({
+        user_id: userId,
+        title: `抽签 · ${dimension}`,
+      })
+      .returning({ id: conversations.id });
+    if (!created) {
+      return NextResponse.json({ error: "会话创建失败" }, { status: 500 });
+    }
+    conversationId = created.id;
   }
 
   // 抽签
@@ -92,7 +108,17 @@ export async function POST(req: Request) {
   const reading =
     readings[dimension] ?? readings["综合"] ?? "（暂无该维度解读，看综合即可）";
 
-  // 落 assistant message + divination_records
+  // 先落 user message（用户的提问），再落 assistant message（签卡）
+  const [userMsg] = await db
+    .insert(messages)
+    .values({
+      conversation_id: conversationId,
+      role: "user",
+      content: `[抽签 · ${dimension}] ${userQuestion}`,
+      intent: "divination",
+    })
+    .returning();
+
   const [insertedMsg] = await db
     .insert(messages)
     .values({
@@ -103,12 +129,16 @@ export async function POST(req: Request) {
       metadata: serializeJson({
         ui: "slip_result",
         slipNumber: slip.number,
+        level: slip.level,
+        title: slip.title,
+        poem: slip.poem,
         dimension,
+        reading,
       }),
     })
     .returning();
 
-  if (!insertedMsg) {
+  if (!userMsg || !insertedMsg) {
     return NextResponse.json({ error: "消息写入失败" }, { status: 500 });
   }
 
@@ -132,7 +162,20 @@ export async function POST(req: Request) {
     .where(eq(conversations.id, conversationId));
 
   return NextResponse.json({
-    messageId: insertedMsg.id,
+    conversationId,
+    userMessage: {
+      id: userMsg.id,
+      role: "user" as const,
+      content: userMsg.content,
+      created_at: userMsg.created_at,
+    },
+    assistantMessage: {
+      id: insertedMsg.id,
+      role: "assistant" as const,
+      content: insertedMsg.content,
+      created_at: insertedMsg.created_at,
+      metadata: insertedMsg.metadata,
+    },
     slip: {
       number: slip.number,
       level: slip.level,
