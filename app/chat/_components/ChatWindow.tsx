@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
+import { IntentChips } from "./IntentChips";
 import { GlassCard, Sparkle } from "@/components/su";
 import type { DisplayMessage } from "./MessageBubble";
 
@@ -403,6 +404,7 @@ export function ChatWindow({
           </div>
         }
       />
+      <IntentChips onPick={(t) => void send(t)} busy={streaming !== null || busy} />
       <ChatInput onSend={send} busy={streaming !== null || busy} />
     </div>
   );
