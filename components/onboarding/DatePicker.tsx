@@ -60,23 +60,38 @@ const MAX_DATE = new Date();
 export function DatePicker({ value, onChange, className, disabled }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
 
+  // 历法选择独立于 value 维护：未选日期时也允许切公历/农历
+  const [pickedCalendar, setPickedCalendar] = React.useState<CalendarType>(
+    value?.calendarType ?? "solar",
+  );
+
+  // 外部 value 历法变化时同步内部 state（编辑模式回填 / 切回 step 时）
+  React.useEffect(() => {
+    if (value && value.calendarType !== pickedCalendar) {
+      setPickedCalendar(value.calendarType);
+    }
+  }, [value, pickedCalendar]);
+
+  const calendarType: CalendarType = value?.calendarType ?? pickedCalendar;
+
   // 公历选中日期（即使用户选农历，calendar 内部也按公历显示对应日期）
   const solarSelected = React.useMemo(() => {
     if (!value) return undefined;
     return new Date(`${value.solarDate}T00:00:00+08:00`);
   }, [value]);
 
-  const calendarTypeLabel = value?.calendarType === "lunar" ? "农历" : "公历";
+  const calendarTypeLabel = calendarType === "lunar" ? "农历" : "公历";
   const dateLabel = value
     ? formatDateLabel(value)
     : "选择出生日期";
 
   const handleCalendarTypeSwitch = (newType: CalendarType) => {
+    if (newType === calendarType) return;
+    setPickedCalendar(newType);
+    // 未填日期：仅更新选择，等用户选日期时按当前历法解释
     if (!value) return;
-    if (newType === value.calendarType) return;
-
-    const next = convertCalendarType(value, newType);
-    onChange(next);
+    // 已填：按新历法重算 rawDate
+    onChange(convertCalendarType(value, newType));
   };
 
   const handleSolarPick = (picked: Date | undefined) => {
@@ -85,8 +100,6 @@ export function DatePicker({ value, onChange, className, disabled }: DatePickerP
     const month = picked.getMonth() + 1;
     const day = picked.getDate();
     const solarDate = toIsoDate(year, month, day);
-
-    const calendarType = value?.calendarType ?? "solar";
 
     if (calendarType === "lunar") {
       // 用户切到了农历模式选择 — Calendar 仍显示公历，但要把所选公历转为农历存入 rawDate
@@ -127,7 +140,7 @@ export function DatePicker({ value, onChange, className, disabled }: DatePickerP
           onClick={() => handleCalendarTypeSwitch("solar")}
           className={cn(
             "flex-1 rounded-[8px] px-3 py-2 text-sm transition-colors",
-            (value?.calendarType ?? "solar") === "solar"
+            calendarType === "solar"
               ? "bg-[var(--color-accent-lavender)]/30 text-[var(--color-ink-plum)]"
               : "text-[var(--color-ink-fade)] hover:bg-[var(--color-accent-lavender)]/10",
           )}
@@ -140,7 +153,7 @@ export function DatePicker({ value, onChange, className, disabled }: DatePickerP
           onClick={() => handleCalendarTypeSwitch("lunar")}
           className={cn(
             "flex-1 rounded-[8px] px-3 py-2 text-sm transition-colors",
-            value?.calendarType === "lunar"
+            calendarType === "lunar"
               ? "bg-[var(--color-accent-lavender)]/30 text-[var(--color-ink-plum)]"
               : "text-[var(--color-ink-fade)] hover:bg-[var(--color-accent-lavender)]/10",
           )}
@@ -160,7 +173,7 @@ export function DatePicker({ value, onChange, className, disabled }: DatePickerP
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">
           <div className="border-b px-3 py-2 text-xs text-[var(--color-ink-fade)]">
-            {value?.calendarType === "lunar" ? (
+            {calendarType === "lunar" ? (
               <>选择对应的<strong className="mx-1">公历</strong>日期，将自动换算为农历显示</>
             ) : (
               <>请选择出生的<strong className="mx-1">公历</strong>日期</>
@@ -183,12 +196,19 @@ export function DatePicker({ value, onChange, className, disabled }: DatePickerP
 
       {/* 时辰 */}
       <Select
-        value={value?.hour === null ? UNKNOWN_HOUR_VALUE : value?.hour?.toString() ?? ""}
+        value={hourSelectValue(value)}
         onValueChange={handleHourChange}
         disabled={disabled || !value}
       >
         <SelectTrigger className="w-full">
-          <SelectValue placeholder="选择时辰" />
+          {/* 不用 SelectValue，避免 SelectContent 关闭时显示 raw value（"3" / "unknown"）*/}
+          <span
+            className={cn(
+              !value && "text-[var(--color-ink-fade)]",
+            )}
+          >
+            {hourTriggerLabel(value)}
+          </span>
         </SelectTrigger>
         <SelectContent>
           {HOUR_OPTIONS.map((opt) => (
@@ -215,6 +235,30 @@ function toIsoDate(year: number, month: number, day: number): string {
   const m = String(month).padStart(2, "0");
   const d = String(day).padStart(2, "0");
   return `${year}-${m}-${d}`;
+}
+
+/**
+ * 任意 0-23 整数 → 对应时辰起始小时（HOUR_OPTIONS.hour）
+ * 0,23 → 0（子时）；1,2 → 1（丑）；3,4 → 3（寅）...
+ * 编辑模式下从 birth_time 反推出的 hour=8/10/12 也能正确归到时辰起始。
+ */
+function normalizeHourToBranch(hour: number): number {
+  if (hour === 23 || hour === 0) return 0;
+  // 1-2 → 1, 3-4 → 3, 5-6 → 5, ...
+  return hour - ((hour - 1) % 2);
+}
+
+function hourSelectValue(value: DatePickerValue | null): string {
+  if (!value) return "";
+  if (value.hour === null) return UNKNOWN_HOUR_VALUE;
+  return normalizeHourToBranch(value.hour).toString();
+}
+
+function hourTriggerLabel(value: DatePickerValue | null): string {
+  if (!value) return "选择时辰";
+  if (value.hour === null) return "不知道（按子时计算）";
+  const hour = normalizeHourToBranch(value.hour);
+  return HOUR_OPTIONS.find((o) => o.hour === hour)?.label ?? "选择时辰";
 }
 
 function convertCalendarType(prev: DatePickerValue, target: CalendarType): DatePickerValue {

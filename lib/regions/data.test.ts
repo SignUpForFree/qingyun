@@ -49,7 +49,12 @@ describe("findProvince / findCity", () => {
     expect(findProvince("北京")?.cities).toHaveLength(1);
   });
 
-  it("广东 5 个市", () => {
-    expect(findProvince("广东")?.cities).toHaveLength(5);
+  it("广东覆盖主要地级市（>= 10）", () => {
+    const cities = findProvince("广东")?.cities ?? [];
+    expect(cities.length).toBeGreaterThanOrEqual(10);
+    const names = cities.map((c) => c.name);
+    for (const must of ["广州", "深圳", "佛山", "东莞", "汕头"]) {
+      expect(names).toContain(must);
+    }
   });
 });

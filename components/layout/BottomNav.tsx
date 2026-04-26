@@ -16,8 +16,22 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + "/");
 }
 
+// 这些路径下隐藏底栏：
+//   - /chat /chat/*：底部 sticky 输入栏与底栏重叠，且需要更大对话区
+//   - /onboarding：多步建档专心填表
+//   - /fortune/*：单页详情滑屏
+//   - /feedback：表单页
+const HIDE_NAV_PREFIXES = ["/chat", "/onboarding", "/fortune", "/feedback"];
+
+function shouldHideNav(pathname: string) {
+  return HIDE_NAV_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(p + "/"),
+  );
+}
+
 export function BottomNav() {
   const pathname = usePathname();
+  if (shouldHideNav(pathname)) return null;
   return (
     <nav className="glass sticky bottom-0 z-30 flex h-14 border-t border-[var(--color-accent-lavender)]/30">
       {TABS.map((t) => {
