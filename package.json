@@ -28,6 +28,7 @@
     "@ai-sdk/openai-compatible": "^2.0.41",
     "@base-ui/react": "^1.4.1",
     "@hookform/resolvers": "^5.2.2",
+    "@napi-rs/canvas": "^0.1.100",
     "ai": "^6.0.168",
     "better-sqlite3": "^12.9.0",
     "class-variance-authority": "^0.7.1",
