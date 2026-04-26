@@ -292,6 +292,16 @@ export function ChatWindow({
             },
           ]);
         }
+      } else if (ui === "bazi_focus_picker") {
+        if (!convId) {
+          toast.error("会话尚未建立，请先与轻运打个招呼");
+          return;
+        }
+        void postSubAction("/api/divination/bazi", "八字", {
+          conversationId: convId,
+          focus: key,
+          userQuestion: `请帮我看看${key}方面`,
+        });
       } else if (ui === "meihua_method_picker") {
         // V1 仅留数字测算
         setMessages((m) => [
@@ -306,7 +316,7 @@ export function ChatWindow({
         ]);
       }
     },
-    [],
+    [convId, postSubAction],
   );
 
   const handleCardSubmit = React.useCallback(

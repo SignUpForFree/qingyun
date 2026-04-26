@@ -216,6 +216,7 @@ export function MessageBubble({
 
     case "dream_choice":
     case "slip_type_picker":
+    case "bazi_focus_picker":
     case "meihua_method_picker": {
       const options =
         ((meta?.options as Array<{ key: string; label: string; hint?: string }>) ?? []);

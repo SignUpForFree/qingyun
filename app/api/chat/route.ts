@@ -2,7 +2,7 @@ import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
 import type { ModelMessage } from "ai";
 import { getDb } from "@/lib/db/client";
-import { conversations, messages } from "@/lib/db/schema";
+import { conversations, messages, profiles } from "@/lib/db/schema";
 import { ensureUserId } from "@/lib/auth/session";
 import { classifyIntent } from "@/lib/ai/intent-classifier";
 import { checkRateLimit } from "@/lib/ai/check-rate-limit";
@@ -143,7 +143,7 @@ export async function POST(req: Request) {
             text,
           });
         } else {
-          const cardMeta = buildGuideCard(intent);
+          const cardMeta = await buildGuideCard(intent, userId);
           const [card] = await db
             .insert(messages)
             .values({
@@ -193,22 +193,21 @@ interface GuideCard {
   meta: { ui: string; [k: string]: unknown };
 }
 
-function buildGuideCard(intent: Intent): GuideCard {
+const FOCUS_OPTIONS = [
+  { key: "综合运势", label: "综合运势" },
+  { key: "事业学业", label: "事业学业" },
+  { key: "财运", label: "财运" },
+  { key: "感情姻缘", label: "感情姻缘" },
+  { key: "人际贵人", label: "人际贵人" },
+  { key: "平安健康", label: "平安健康" },
+];
+
+async function buildGuideCard(intent: Intent, userId: string): Promise<GuideCard> {
   switch (intent) {
     case "divination":
       return {
         contentText: "好的，您想求哪一类签？",
-        meta: {
-          ui: "slip_type_picker",
-          options: [
-            { key: "综合运势", label: "综合运势" },
-            { key: "事业学业", label: "事业学业" },
-            { key: "财运", label: "财运" },
-            { key: "感情姻缘", label: "感情姻缘" },
-            { key: "人际贵人", label: "人际贵人" },
-            { key: "平安健康", label: "平安健康" },
-          ],
-        },
+        meta: { ui: "slip_type_picker", options: FOCUS_OPTIONS },
       };
     case "dream":
       return {
@@ -221,19 +220,37 @@ function buildGuideCard(intent: Intent): GuideCard {
           ],
         },
       };
-    case "bazi":
+    case "bazi": {
+      const hasProfile = await userHasDefaultProfile(userId);
+      if (hasProfile) {
+        return {
+          contentText: "好的，您想从哪个角度看八字？",
+          meta: { ui: "bazi_focus_picker", options: FOCUS_OPTIONS },
+        };
+      }
       return {
         contentText: "请填写八字信息",
         meta: { ui: "bazi_quick_form" },
       };
+    }
     case "meihua":
       return {
-        contentText: "好的，请把您想测算的事情详细描述出来，越精准越好哦。",
-        meta: { ui: "meihua_intro" },
+        contentText: "好的，请输入 3 个数字（1-999），并描述您想测算的事情。",
+        meta: { ui: "meihua_number_input" },
       };
     default:
       return { contentText: "", meta: { ui: "text" } };
   }
+}
+
+async function userHasDefaultProfile(userId: string): Promise<boolean> {
+  const db = getDb();
+  const hit = await db
+    .select({ id: profiles.id })
+    .from(profiles)
+    .where(eq(profiles.user_id, userId))
+    .limit(1);
+  return Boolean(hit[0]);
 }
 
 async function streamChatReply(args: {

@@ -14,6 +14,8 @@ interface FortunePayload {
     number?: number;
     flower?: string;
     item?: string;
+    accessory?: string;
+    food?: string;
   };
 }
 
@@ -22,15 +24,21 @@ interface DailyFortuneCardProps {
   nickname?: string | null;
 }
 
-const DIM_ORDER = ["事业", "财运", "感情", "人际", "健康", "学业"] as const;
+const DIM_ORDER = [
+  "事业学业",
+  "财运",
+  "感情姻缘",
+  "人际贵人",
+  "平安健康",
+] as const;
 
 /**
  * 首页核心运势卡（spec §1 Home）
  *
- * - 顶部 ScoreRing 大圆环
+ * - 顶部 ScoreRing 大圆环（综合运势）
  * - one-liner 一句话
- * - 6 维度细分（不含综合）水平条
- * - 6 幸运属性 grid
+ * - 5 维度细分（不含综合）水平条 — 新 6 类去掉综合
+ * - 8 幸运属性 grid（色 / 方位 / 时辰 / 数字 / 花 / 物 / 配饰 / 食物）
  */
 export function DailyFortuneCard({ fortune, nickname }: DailyFortuneCardProps) {
   const greeting = pickGreeting();
@@ -79,7 +87,7 @@ function DimensionBars({ scores }: { scores: Record<string, number> }) {
         const v = scores[dim] ?? 60;
         return (
           <div key={dim} className="flex items-center gap-3">
-            <span className="w-8 shrink-0 text-[11px] tracking-ritual text-[var(--color-ink-mist)]">
+            <span className="w-14 shrink-0 text-[11px] tracking-ritual text-[var(--color-ink-mist)]">
               {dim}
             </span>
             <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--color-accent-lavender)]/15">
@@ -106,14 +114,16 @@ function AttributesGrid({ attrs }: { attrs: DailyFortuneCardProps["fortune"]["at
     { label: "幸运数", value: String(attrs.number ?? "—") },
     { label: "幸运花", value: attrs.flower ?? "—" },
     { label: "随身物", value: attrs.item ?? "—" },
+    { label: "配饰", value: attrs.accessory ?? "—" },
+    { label: "食物", value: attrs.food ?? "—" },
   ];
   return (
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-2 gap-3">
       {items.map((it) => (
         <div key={it.label} className="text-center">
           <p className="text-[10px] tracking-ritual text-[var(--color-ink-fade)]">{it.label}</p>
           <p
-            className="mt-1 font-[family-name:var(--font-serif)] text-sm text-[var(--color-ink-plum)]"
+            className="mt-1 font-[family-name:var(--font-serif)] text-[13px] leading-tight text-[var(--color-ink-plum)]"
             style={it.tone ? { textShadow: `0 0 8px ${it.tone}88` } : undefined}
           >
             {it.value}
