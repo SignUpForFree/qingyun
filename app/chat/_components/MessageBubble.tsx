@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { Sparkle } from "@/components/su";
 import { SlipResultCard } from "@/components/divination/SlipResultCard";
+import { MeihuaResultCard } from "@/components/divination/MeihuaResultCard";
 import type { Message } from "@/lib/db/schema";
 import type { SlipLevel } from "@/db/seed/slips";
 
@@ -48,6 +49,48 @@ function parseSlipMeta(meta: string | null | undefined): SlipResultMeta | null {
   }
 }
 
+interface MeihuaHexagramView {
+  number: number;
+  name: string;
+  upper: string;
+  lower: string;
+}
+
+interface MeihuaResultMeta {
+  ui: "meihua_result";
+  ben: MeihuaHexagramView;
+  hu: MeihuaHexagramView;
+  bian: MeihuaHexagramView;
+  guaZhongGua: MeihuaHexagramView;
+  dongYao: number;
+  tiYong: { ti: string; yong: string; relation: string };
+  yingQi: { speed: "fast" | "medium" | "slow"; timeHint: string; branchHour: string | null };
+  verdict: string;
+}
+
+function parseMeihuaMeta(meta: string | null | undefined): MeihuaResultMeta | null {
+  if (!meta) return null;
+  try {
+    const parsed = JSON.parse(meta) as { ui?: string };
+    if (parsed.ui !== "meihua_result") return null;
+    const m = parsed as MeihuaResultMeta;
+    if (
+      !m.ben?.name ||
+      !m.hu?.name ||
+      !m.bian?.name ||
+      !m.guaZhongGua?.name ||
+      typeof m.dongYao !== "number" ||
+      !m.tiYong?.relation ||
+      !m.yingQi?.timeHint
+    ) {
+      return null;
+    }
+    return m;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * 单条消息气泡（spec §4 Chat Session）
  *
@@ -82,6 +125,30 @@ export function MessageBubble({ message, streaming, className }: MessageBubblePr
             poem={slipMeta.poem}
             reading={slipMeta.reading}
             dimension={slipMeta.dimension}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  const meihuaMeta = !isUser ? parseMeihuaMeta(message.metadata) : null;
+  if (meihuaMeta) {
+    return (
+      <div className={cn("flex w-full justify-start", className)}>
+        <div className="w-full max-w-[92%]">
+          <MeihuaResultCard
+            ben={meihuaMeta.ben}
+            hu={meihuaMeta.hu}
+            bian={meihuaMeta.bian}
+            guaZhongGua={meihuaMeta.guaZhongGua}
+            dongYao={meihuaMeta.dongYao}
+            ti={meihuaMeta.tiYong.ti}
+            yong={meihuaMeta.tiYong.yong}
+            relation={meihuaMeta.tiYong.relation}
+            verdict={meihuaMeta.verdict}
+            speed={meihuaMeta.yingQi.speed}
+            timeHint={meihuaMeta.yingQi.timeHint}
+            branchHour={meihuaMeta.yingQi.branchHour}
           />
         </div>
       </div>

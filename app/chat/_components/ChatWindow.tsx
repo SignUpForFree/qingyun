@@ -8,6 +8,7 @@ import { ChatInput } from "./ChatInput";
 import { DivinationLauncher } from "./DivinationLauncher";
 import { DreamLauncher } from "./DreamLauncher";
 import { BaziLauncher, type BaziFocus } from "./BaziLauncher";
+import { MeihuaInputCard, type MeihuaMethod } from "./MeihuaInputCard";
 import { GlassCard, Sparkle } from "@/components/su";
 import type { DisplayMessage } from "./MessageBubble";
 import type { Intent } from "@/types/domain";
@@ -226,6 +227,24 @@ export function ChatWindow({
     [runStructured],
   );
 
+  const runMeihua = React.useCallback(
+    ({
+      method,
+      numbers,
+      userQuestion,
+    }: {
+      method: MeihuaMethod;
+      numbers?: number[];
+      userQuestion: string;
+    }) =>
+      runStructured({
+        url: "/api/divination/meihua",
+        body: { method, numbers, userQuestion },
+        label: "起卦",
+      }),
+    [runStructured],
+  );
+
   const [hasProfile, setHasProfile] = React.useState<boolean | null>(null);
   React.useEffect(() => {
     if (intentHint !== "bazi") return;
@@ -259,6 +278,7 @@ export function ChatWindow({
   const isDivination = intentHint === "divination";
   const isDream = intentHint === "dream";
   const isBazi = intentHint === "bazi";
+  const isMeihua = intentHint === "meihua";
 
   return (
     <div className="flex h-[calc(100dvh-4rem)] flex-col">
@@ -288,6 +308,8 @@ export function ChatWindow({
           busy={structuredBusy}
           hasProfile={hasProfile !== false}
         />
+      ) : isMeihua ? (
+        <MeihuaInputCard onSubmit={runMeihua} busy={structuredBusy} />
       ) : (
         <ChatInput onSend={send} busy={streaming !== null} />
       )}
@@ -304,7 +326,7 @@ function bottomHint(intent: Intent | undefined): string {
     case "bazi":
       return "想看哪一段？工作 / 感情 / 健康都可以";
     case "meihua":
-      return "起卦还在路上，先用对话页吧";
+      return "写下你的事，挑时间或数字起一卦";
     default:
       return "想问就问，没什么忌讳";
   }

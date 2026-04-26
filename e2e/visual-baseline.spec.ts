@@ -17,6 +17,8 @@ const PAGES = [
   { path: "/chat/new?intent=divination", name: "chat-divination-launcher" },
   { path: "/chat/new?intent=dream", name: "chat-dream-launcher" },
   { path: "/chat/new?intent=bazi", name: "chat-bazi-launcher" },
+  { path: "/chat/new?intent=meihua", name: "chat-meihua-launcher" },
+  { path: "/meihua-preview", name: "meihua-preview" },
   { path: "/fortune/2099-12-31", name: "fortune-detail-future" },
   { path: "/me", name: "me-no-profile" },
 ] as const;
