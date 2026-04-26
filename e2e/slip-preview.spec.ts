@@ -48,7 +48,7 @@ test("API 烟测 · 抽签全链路（建会话 → 抽签 → 验证返回）",
   const draw = await request.post("/api/divination/qianwen", {
     data: {
       conversationId: conv.id,
-      dimension: "事业",
+      dimension: "事业学业",
       userQuestion: "最近换工作合不合适",
     },
   });
@@ -59,13 +59,16 @@ test("API 烟测 · 抽签全链路（建会话 → 抽签 → 验证返回）",
   }
 
   const data = await draw.json();
-  if (typeof data.slip?.number !== "number") {
-    throw new Error("response 没有 slip.number");
+  const cardMeta = data.cardMessage?.metadata
+    ? JSON.parse(data.cardMessage.metadata)
+    : null;
+  if (typeof cardMeta?.slipNumber !== "number") {
+    throw new Error("cardMessage.metadata.slipNumber 缺失");
   }
-  if (data.slip.number < 1 || data.slip.number > 30) {
-    throw new Error(`签号超范围: ${data.slip.number}`);
+  if (cardMeta.slipNumber < 1 || cardMeta.slipNumber > 100) {
+    throw new Error(`签号超范围: ${cardMeta.slipNumber}`);
   }
-  if (typeof data.reading !== "string" || data.reading.length === 0) {
+  if (typeof cardMeta.reading !== "string" || cardMeta.reading.length === 0) {
     throw new Error("reading 缺失");
   }
 });
