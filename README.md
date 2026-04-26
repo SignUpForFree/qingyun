@@ -1,7 +1,9 @@
 # 轻运 AI
 
 > AI 占卜与每日运势 · 1 人 5 周 Web MVP
-> Next.js 16 + Supabase + DeepSeek + lunar-javascript
+> Next.js 16 + SQLite + Drizzle + DeepSeek + lunar-javascript
+>
+> **本地优先**：数据库走本地 SQLite（一个 `dev.db` 文件），不依赖 docker / 云服务。
 
 ## 启动
 
@@ -9,16 +11,30 @@
 # 1) 装依赖
 pnpm install
 
-# 2) 复制环境变量模板（W1 D1-D5 期间所有字段可留空）
+# 2) 复制环境变量模板（首次跑 .env.local 全部留空也能正常起 dev）
 cp .env.example .env.local
 
-# 3) 跑 dev server
+# 3) （首次）生成 schema migration —— 已有 db/migrations-sqlite/ 可跳过
+pnpm db:generate
+
+# 4) 跑 dev server （proxy.ts + lib/db/client.ts 自动 migrate, 自动建 dev.db）
 pnpm dev          # → http://localhost:3000
 
-# 4) 健康检查
+# 5) 健康检查
 curl http://localhost:3000/api/healthz
 # {"ok":true,"service":"qingyun-ai","time":"..."}
 ```
+
+## 数据库
+
+| 命令 | 用途 |
+|---|---|
+| `pnpm db:generate` | 改 `lib/db/schema.ts` 后跑这个生成新 SQL migration |
+| `pnpm db:migrate` | 手动应用 migration 到 `dev.db`（dev/prod 启动时也会自动跑） |
+| `pnpm db:studio` | 打开 Drizzle Studio Web UI 查表 |
+| `pnpm db:reset` | 删 `dev.db` 后重 migrate |
+
+匿名 user_id 由 `proxy.ts` 写到 cookie `qy_uid`，没有"账号"概念。所有 user 数据通过 `user_id` 字段过滤（service 层显式 where，不依赖 RLS）。
 
 ## 脚本
 
@@ -64,10 +80,10 @@ P1（骨架期 W1-W2）**全部代码已落地**，等用户配置 Supabase Clou
 | C1-C5 | ✅ | 真太阳时 + 干支五行十神 + buildChart + DST 修 + 47 单测 |
 | D1-D4 | ✅ | DeepSeek provider + prompts + rate-limit + chat() (全 mock) + 27 单测 |
 | E1 | ✅ | 意图路由 5 分类 + 18 单测 |
-| B1-B6 | ⚙ | 3 SQL migrations + supabase 三件套 + middleware **等用户填 .env.local** |
+| B1-B6 | ✅ | drizzle schema + migrations + auth/session shim + proxy.ts 自动匿名登录 |
 | F1-F5 | ✅ | profile 工具 + onboarding 3 步 wizard + DatePicker + RegionPicker + /api/profile |
 | G1-G5 | ✅ | /api/chat SSE + chat UI + HistoryDrawer + 升级首页 + /me |
-| H1-H4 | ⏸ | DoD 验收 — 等 supabase 接入后跑全链路 + `pnpm test:coverage` |
+| H1-H4 | ⏸ | DoD 验收 — 等 DEEPSEEK_API_KEY 接入后跑流式全链路 |
 
 **全仓状态**：
 
@@ -79,27 +95,17 @@ pnpm build         # 9 routes (/, /chat, /chat/[sessionId], /me, /onboarding,
                    #            /api/healthz, /api/profile, /api/chat, /api/conversations + middleware)
 ```
 
-## 用户起床后的 30 min
-
-照 [`db/SETUP.md`](./db/SETUP.md) 7 步：
-
-1. 注册 supabase.com（5 min · 免费 · 无需信用卡）
-2. 从 Settings → API 取 3 个 key 填到 `.env.local`
-3. `brew install supabase/tap/supabase`
-4. `supabase login` + `supabase link --project-ref <ref>`
-5. `supabase init`（生成 `supabase/migrations/`）
-6. 从 `db/migrations/*.sql` 拷贝 3 个 migration（带时间戳）→ `supabase db push`
-7. Dashboard → Authentication → 启用 Anonymous Sign-Ins
-
-完成后：
+## 全链路（无需任何外部凭据即可走通建档 + 入库）
 
 ```bash
-pnpm dev          # 访问 / 自动匿名登录
-                  # → 引导建档 → onboarding 3 步 → 提交 → /api/profile insert + 八字排盘
-                  # → 跳回 /  →  '进入对话' → /chat 招呼页 → 4 快捷入口 / 自由输入
-                  # → /chat/<id> 流式对话（SSE token by token）
-                  # → /me 显示档案 + 入口列表
+pnpm dev
 ```
+
+1. 访问 `/` → `proxy.ts` 自动写入 `qy_uid` cookie（匿名 user）
+2. `/onboarding` 3 步 → 提交 → `POST /api/profile` 写 `profiles` + `bazi_charts`
+3. `/me` 显示档案；`/chat` 4 快捷入口
+4. **填了 `DEEPSEEK_API_KEY`** 后 → `/chat/<id>` 流式 SSE 对话能跑通
+5. 没填 key 的话发消息会 toast `AI 暂时无响应 (500)`
 
 ## 还差什么
 

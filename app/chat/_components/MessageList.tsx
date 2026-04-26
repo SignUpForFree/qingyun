@@ -3,9 +3,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { MessageBubble } from "./MessageBubble";
-import type { Database } from "@/types/database";
-
-type Message = Database["public"]["Tables"]["messages"]["Row"];
+import type { Message } from "@/lib/db/schema";
 
 interface MessageListProps {
   messages: Pick<Message, "id" | "role" | "content" | "created_at">[];

@@ -1,10 +1,10 @@
 import "server-only";
-import { createAdmin } from "@/lib/supabase/admin";
+import { eq } from "drizzle-orm";
+import { getDb } from "@/lib/db/client";
+import { baziCharts, type Profile } from "@/lib/db/schema";
 import { buildChart } from "@/lib/bazi/chart";
-import type { Database } from "@/types/database";
+import { serializeJson } from "@/lib/db/json";
 import type { Gender, CalendarType } from "@/types/domain";
-
-type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
 /**
  * 确保 profile 对应的 bazi_charts 已写入
@@ -13,17 +13,17 @@ type Profile = Database["public"]["Tables"]["profiles"]["Row"];
  * - 缺字段 → 抛错（profile 必须含 birth_time / birth_longitude / gender）
  * - 否则用 buildChart 排盘后写入 bazi_charts
  *
- * 用 admin client 绕过 RLS（profile_id 关联校验已在调用方完成）
+ * SQLite 把 jsonb 列存为 text，写入前 JSON.stringify。
  */
 export async function ensureBaziChart(profile: Profile): Promise<void> {
-  const admin = createAdmin();
+  const db = getDb();
 
-  const { data: existing } = await admin
-    .from("bazi_charts")
-    .select("id")
-    .eq("profile_id", profile.id)
-    .maybeSingle();
-  if (existing) return;
+  const existing = await db
+    .select({ id: baziCharts.id })
+    .from(baziCharts)
+    .where(eq(baziCharts.profile_id, profile.id))
+    .limit(1);
+  if (existing[0]) return;
 
   if (!profile.birth_time) {
     throw new Error("ensureBaziChart: profile.birth_time 缺失");
@@ -43,22 +43,18 @@ export async function ensureBaziChart(profile: Profile): Promise<void> {
     calendarType: (profile.calendar_type ?? "solar") as CalendarType,
   });
 
-  // 占位 Database 类型尚未跑 supabase gen types，临时 cast 让 supabase-js 通过类型检查；
-  // W2 用户跑 ./scripts/gen-types.sh 后这里自动恢复正确推导
-  const insertRow = {
+  await db.insert(baziCharts).values({
     profile_id: profile.id,
-    pillars: chart.pillars,
-    five_elements: chart.fiveElements,
+    pillars: serializeJson(chart.pillars),
+    five_elements: serializeJson(chart.fiveElements),
     day_master: chart.dayMaster,
-    ten_gods: chart.tenGods,
+    ten_gods: serializeJson(chart.tenGods),
     favorable_gods: null,
-    luck_pillars: chart.luckPillars,
+    luck_pillars: serializeJson(chart.luckPillars),
     solar_true_time: chart.solarTrueTime,
-    raw: { computedAt: new Date().toISOString(), libVersion: "lunar-javascript" },
-  };
-  const { error } = await admin.from("bazi_charts").insert(insertRow as never);
-
-  if (error) {
-    throw new Error(`ensureBaziChart 写入失败: ${error.message}`);
-  }
+    raw: serializeJson({
+      computedAt: new Date().toISOString(),
+      libVersion: "lunar-javascript",
+    }),
+  });
 }

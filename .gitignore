@@ -54,3 +54,10 @@ next-env.d.ts
 # 临时
 /tmp
 *.log
+
+# 本地 SQLite (开发库, 不提交)
+/dev.db
+/dev.db-wal
+/dev.db-shm
+*.sqlite
+*.sqlite-journal

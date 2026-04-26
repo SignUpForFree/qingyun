@@ -1,9 +1,9 @@
 import "server-only";
 import { cookies } from "next/headers";
-import { createClient } from "@/lib/supabase/server";
-import type { Database } from "@/types/database";
-
-type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+import { and, desc, eq } from "drizzle-orm";
+import { getDb } from "@/lib/db/client";
+import { profiles, type Profile } from "@/lib/db/schema";
+import { getCurrentUserId } from "@/lib/auth/session";
 
 /**
  * 当前档案 cookie 名 — spec §6.4 多档案场景使用，
@@ -38,31 +38,28 @@ export async function clearCurrentProfileId(): Promise<void> {
  * 读当前用户的当前档案 — 优先 cookie 命中，缺失时退回 profiles.is_default 单 row
  */
 export async function getCurrentProfile(): Promise<Profile | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
 
+  const db = getDb();
   const id = await getCurrentProfileId();
+
   if (id) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", id)
-      .eq("user_id", user.id)
-      .maybeSingle();
-    if (data) return data;
+    const hit = await db
+      .select()
+      .from(profiles)
+      .where(and(eq(profiles.id, id), eq(profiles.user_id, userId)))
+      .limit(1);
+    if (hit[0]) return hit[0];
   }
 
-  // cookie 缺失或 cookie 指向的档案已删/不属于当前用户 → 退回默认档
-  const { data: fallback } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("is_default", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return fallback ?? null;
+  // cookie 缺失或 cookie 指向的档案不属于当前用户 → 退回默认档
+  const fallback = await db
+    .select()
+    .from(profiles)
+    .where(eq(profiles.user_id, userId))
+    .orderBy(desc(profiles.is_default), desc(profiles.created_at))
+    .limit(1);
+
+  return fallback[0] ?? null;
 }

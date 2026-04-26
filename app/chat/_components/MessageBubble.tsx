@@ -1,8 +1,6 @@
 import { cn } from "@/lib/utils";
 import { Sparkle } from "@/components/su";
-import type { Database } from "@/types/database";
-
-type Message = Database["public"]["Tables"]["messages"]["Row"];
+import type { Message } from "@/lib/db/schema";
 
 interface MessageBubbleProps {
   message: Pick<Message, "id" | "role" | "content" | "created_at">;

@@ -5,10 +5,9 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
-import type { Database } from "@/types/database";
+import type { Message } from "@/lib/db/schema";
 import type { Intent } from "@/types/domain";
 
-type Message = Database["public"]["Tables"]["messages"]["Row"];
 type DisplayMessage = Pick<Message, "id" | "role" | "content" | "created_at">;
 
 interface ChatWindowProps {

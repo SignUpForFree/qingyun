@@ -1,31 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Database } from "@/types/database";
-
-type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+import path from "node:path";
+import Database from "better-sqlite3";
+import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { eq } from "drizzle-orm";
+import * as schema from "@/lib/db/schema";
 
 vi.mock("server-only", () => ({}));
 
-type InsertResult = { error: { message: string } | null };
+let testDb: BetterSQLite3Database<typeof schema>;
+let testSqlite: Database.Database;
 
-const adminFns = {
-  selectMaybeSingle: vi.fn<() => Promise<{ data: { id: string } | null }>>(),
-  insert: vi.fn<(row: unknown) => Promise<InsertResult>>(),
-};
-
-vi.mock("@/lib/supabase/admin", () => ({
-  createAdmin: () => ({
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: () => adminFns.selectMaybeSingle(),
-        }),
-      }),
-      insert: (row: unknown) => adminFns.insert(row),
-    }),
-  }),
+vi.mock("@/lib/db/client", () => ({
+  getDb: () => testDb,
 }));
 
 import { ensureBaziChart } from "./ensure-bazi";
+import type { Profile } from "@/lib/db/schema";
 
 const VALID_PROFILE: Profile = {
   id: "p1",
@@ -46,52 +37,55 @@ const VALID_PROFILE: Profile = {
   updated_at: new Date().toISOString(),
 };
 
-describe("ensureBaziChart", () => {
-  beforeEach(() => {
-    adminFns.selectMaybeSingle.mockReset();
-    adminFns.insert.mockReset();
-  });
+beforeEach(async () => {
+  testSqlite = new Database(":memory:");
+  testSqlite.pragma("foreign_keys = OFF"); // 跳过 profile 表插入要求
+  testDb = drizzle(testSqlite, { schema });
+  migrate(testDb, { migrationsFolder: path.resolve(process.cwd(), "db/migrations-sqlite") });
+});
 
+describe("ensureBaziChart", () => {
   it("已有 bazi_charts → 早返回 (idempotent)", async () => {
-    adminFns.selectMaybeSingle.mockResolvedValue({ data: { id: "existing" } });
+    // 先插一条 bazi_charts
+    await testDb.insert(schema.baziCharts).values({
+      profile_id: "p1",
+      pillars: "{}",
+      five_elements: "{}",
+      day_master: "甲",
+      ten_gods: "{}",
+      solar_true_time: "2020-01-01T00:00:00+08:00",
+    });
     await ensureBaziChart(VALID_PROFILE);
-    expect(adminFns.insert).not.toHaveBeenCalled();
+    // 仍然只有 1 条
+    const all = await testDb.select().from(schema.baziCharts).where(eq(schema.baziCharts.profile_id, "p1"));
+    expect(all.length).toBe(1);
+    expect(all[0].day_master).toBe("甲"); // 没被覆盖
   });
 
   it("无 bazi_charts → 调 buildChart 后写入", async () => {
-    adminFns.selectMaybeSingle.mockResolvedValue({ data: null });
-    adminFns.insert.mockResolvedValue({ error: null });
     await ensureBaziChart(VALID_PROFILE);
-    expect(adminFns.insert).toHaveBeenCalledTimes(1);
-    const row = adminFns.insert.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(row.profile_id).toBe("p1");
-    expect(row.day_master).toBe("辛"); // C4 baseline
+    const all = await testDb.select().from(schema.baziCharts).where(eq(schema.baziCharts.profile_id, "p1"));
+    expect(all.length).toBe(1);
+    expect(all[0].day_master).toBe("辛"); // C4 baseline
+    const pillars = JSON.parse(all[0].pillars);
+    expect(pillars.year.gan).toBe("庚");
   });
 
   it("缺 birth_time 抛错", async () => {
-    adminFns.selectMaybeSingle.mockResolvedValue({ data: null });
     await expect(
       ensureBaziChart({ ...VALID_PROFILE, birth_time: null }),
     ).rejects.toThrow(/birth_time/);
   });
 
   it("缺 birth_longitude 抛错", async () => {
-    adminFns.selectMaybeSingle.mockResolvedValue({ data: null });
     await expect(
       ensureBaziChart({ ...VALID_PROFILE, birth_longitude: null }),
     ).rejects.toThrow(/birth_longitude/);
   });
 
   it("缺 gender 抛错", async () => {
-    adminFns.selectMaybeSingle.mockResolvedValue({ data: null });
     await expect(
       ensureBaziChart({ ...VALID_PROFILE, gender: null }),
     ).rejects.toThrow(/gender/);
-  });
-
-  it("supabase insert 错误时抛错", async () => {
-    adminFns.selectMaybeSingle.mockResolvedValue({ data: null });
-    adminFns.insert.mockResolvedValue({ error: { message: "constraint violation" } });
-    await expect(ensureBaziChart(VALID_PROFILE)).rejects.toThrow(/constraint violation/);
   });
 });
