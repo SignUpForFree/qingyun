@@ -7,6 +7,7 @@ import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
 import { DivinationLauncher } from "./DivinationLauncher";
 import { DreamLauncher } from "./DreamLauncher";
+import { BaziLauncher, type BaziFocus } from "./BaziLauncher";
 import { GlassCard, Sparkle } from "@/components/su";
 import type { DisplayMessage } from "./MessageBubble";
 import type { Intent } from "@/types/domain";
@@ -215,6 +216,34 @@ export function ChatWindow({
     [runStructured],
   );
 
+  const runBazi = React.useCallback(
+    ({ focus, userQuestion }: { focus: BaziFocus; userQuestion: string }) =>
+      runStructured({
+        url: "/api/divination/bazi",
+        body: { focus, userQuestion },
+        label: "八字解读",
+      }),
+    [runStructured],
+  );
+
+  const [hasProfile, setHasProfile] = React.useState<boolean | null>(null);
+  React.useEffect(() => {
+    if (intentHint !== "bazi") return;
+    if (hasProfile !== null) return;
+    let cancelled = false;
+    void fetch("/api/profile")
+      .then((r) => (r.ok ? r.json() : { profile: null }))
+      .then((data: { profile: unknown }) => {
+        if (!cancelled) setHasProfile(Boolean(data.profile));
+      })
+      .catch(() => {
+        if (!cancelled) setHasProfile(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [intentHint, hasProfile]);
+
   React.useEffect(() => {
     if (autoSendText && !autoSentRef.current) {
       autoSentRef.current = true;
@@ -229,6 +258,7 @@ export function ChatWindow({
 
   const isDivination = intentHint === "divination";
   const isDream = intentHint === "dream";
+  const isBazi = intentHint === "bazi";
 
   return (
     <div className="flex h-[calc(100dvh-4rem)] flex-col">
@@ -252,6 +282,12 @@ export function ChatWindow({
         <DivinationLauncher onDraw={runDivination} busy={structuredBusy} />
       ) : isDream ? (
         <DreamLauncher onSubmit={runDream} busy={structuredBusy} />
+      ) : isBazi ? (
+        <BaziLauncher
+          onSubmit={runBazi}
+          busy={structuredBusy}
+          hasProfile={hasProfile !== false}
+        />
       ) : (
         <ChatInput onSend={send} busy={streaming !== null} />
       )}
