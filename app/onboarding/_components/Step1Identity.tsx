@@ -12,9 +12,11 @@ type Step1Value = Pick<OnboardingForm, "nickname" | "gender">;
 interface Step1Props {
   initial: Partial<Step1Value>;
   onNext: (value: Step1Value) => void;
+  /** 编辑模式下顶部 desc 改为提示文案 */
+  editing?: boolean;
 }
 
-export function Step1Identity({ initial, onNext }: Step1Props) {
+export function Step1Identity({ initial, onNext, editing }: Step1Props) {
   const [nickname, setNickname] = React.useState(initial.nickname ?? "");
   const [gender, setGender] = React.useState<Step1Value["gender"] | undefined>(initial.gender);
 
@@ -24,8 +26,8 @@ export function Step1Identity({ initial, onNext }: Step1Props) {
     <StepShell
       step={1}
       total={3}
-      title="你是谁"
-      desc="先认识一下，简单两步"
+      title={editing ? "编辑档案" : "你是谁"}
+      desc={editing ? "改任意一项后到 Step 3 提交，会替换默认档案" : "先认识一下，简单两步"}
       nextDisabled={!valid}
       onNext={() => {
         if (!valid || !gender) return;

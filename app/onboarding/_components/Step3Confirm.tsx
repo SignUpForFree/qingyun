@@ -10,9 +10,10 @@ import type { OnboardingForm } from "./schema";
 interface Step3Props {
   form: OnboardingForm;
   onPrev: () => void;
+  editing?: boolean;
 }
 
-export function Step3Confirm({ form, onPrev }: Step3Props) {
+export function Step3Confirm({ form, onPrev, editing }: Step3Props) {
   const router = useRouter();
   const [submitting, setSubmitting] = React.useState(false);
 
@@ -29,8 +30,8 @@ export function Step3Confirm({ form, onPrev }: Step3Props) {
         toast.error(err?.error ?? `提交失败 (${res.status})`);
         return;
       }
-      toast.success("档案已建好 · 八字排盘已生成");
-      router.replace("/");
+      toast.success(editing ? "档案已更新 · 八字已重排" : "档案已建好 · 八字排盘已生成");
+      router.replace(editing ? "/me" : "/");
     } catch (e) {
       toast.error(`网络异常：${e instanceof Error ? e.message : "未知错误"}`);
     } finally {
@@ -57,9 +58,9 @@ export function Step3Confirm({ form, onPrev }: Step3Props) {
     <StepShell
       step={3}
       total={3}
-      title="确认信息"
-      desc="信息无误即可建档；八字会自动排盘"
-      nextLabel="提交并建档"
+      title={editing ? "确认更新" : "确认信息"}
+      desc={editing ? "改完就替换默认档案，八字会重排" : "信息无误即可建档；八字会自动排盘"}
+      nextLabel={editing ? "保存并重排" : "提交并建档"}
       onPrev={onPrev}
       onNext={submit}
       loading={submitting}

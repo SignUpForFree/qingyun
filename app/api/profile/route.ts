@@ -35,6 +35,12 @@ export async function POST(req: Request) {
   const f = parsed.data;
   const db = getDb();
 
+  // 把当前用户的旧 default 档案降级（保持历史可查，避免多 default 并存）
+  await db
+    .update(profiles)
+    .set({ is_default: false })
+    .where(and(eq(profiles.user_id, userId), eq(profiles.is_default, true)));
+
   const [profile] = await db
     .insert(profiles)
     .values({
@@ -81,5 +87,3 @@ export async function GET() {
   return NextResponse.json({ profile: result[0] ?? null });
 }
 
-// 让 and 在 import 里别报 unused（未来按需查询用）
-void and;

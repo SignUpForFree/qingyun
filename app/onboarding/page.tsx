@@ -1,61 +1,84 @@
-"use client";
-
-import * as React from "react";
-import { Step1Identity } from "./_components/Step1Identity";
-import { Step2BirthInfo } from "./_components/Step2BirthInfo";
-import { Step3Confirm } from "./_components/Step3Confirm";
-import { onboardingSchema, type OnboardingForm } from "./_components/schema";
+import { OnboardingClient } from "./_components/OnboardingClient";
+import type { OnboardingForm } from "./_components/schema";
+import { getCurrentProfile } from "@/lib/profile/current";
 
 /**
- * Onboarding 3 步 wizard 容器（spec §6.4.M1）
+ * Onboarding 入口（RSC）
  *
- * 设计：
- *   - 表单状态由本页 useState 管理（不用 zustand / react-hook-form 整体管），
- *     单步内部用本地 state，提交后 merge 到父态
- *   - Step3 提交前用 onboardingSchema 兜底校验，挡住任何 step 跳过
- *   - hideNav：onboarding 是全屏流程，不显示 BottomNav（root layout 默认显示，
- *     这里不能用 AppShell hideNav，但 onboarding 路由加 BottomNav 视觉影响小，
- *     待 F4 完成视觉走查时再决定是否 hide）
+ * - 创建模式（无现有 profile 或没传 ?edit=1）：空白表单
+ * - 编辑模式（已有 profile 且 ?edit=1）：从 profile 反推预填到表单
+ *   - 反推 ISO → year/month/day/hour
+ *   - 历法回到 solar/lunar 标志
+ *   - 省/市/区 + 经纬度
+ *
+ * 提交逻辑保持不变：POST /api/profile 内部已把旧 default 降级，再 insert
+ * 新 profile + setCurrentProfileId
  */
-export default function OnboardingPage() {
-  const [step, setStep] = React.useState<1 | 2 | 3>(1);
-  const [form, setForm] = React.useState<Partial<OnboardingForm>>({});
+export const dynamic = "force-dynamic";
 
-  if (step === 1) {
-    return (
-      <Step1Identity
-        initial={form}
-        onNext={(v) => {
-          setForm((prev) => ({ ...prev, ...v }));
-          setStep(2);
-        }}
-      />
-    );
+interface PageProps {
+  searchParams: Promise<{ edit?: string }>;
+}
+
+export default async function OnboardingPage({ searchParams }: PageProps) {
+  const sp = await searchParams;
+  const isEdit = sp.edit === "1";
+
+  let initial: Partial<OnboardingForm> | undefined;
+  if (isEdit) {
+    try {
+      const profile = await getCurrentProfile();
+      if (profile) initial = profileToFormDefaults(profile);
+    } catch (e) {
+      console.error("/onboarding 编辑模式取档案失败", e);
+    }
   }
 
-  if (step === 2) {
-    return (
-      <Step2BirthInfo
-        initial={form}
-        onPrev={() => setStep(1)}
-        onNext={(v) => {
-          setForm((prev) => ({ ...prev, ...v }));
-          setStep(3);
-        }}
-      />
-    );
-  }
+  return <OnboardingClient initial={initial} editing={isEdit && !!initial} />;
+}
 
-  // step === 3
-  const parsed = onboardingSchema.safeParse(form);
-  if (!parsed.success) {
-    // 防御：理论上 step 1/2 校验后到 3 应该全合法
-    return (
-      <div className="mx-auto max-w-md p-6 text-sm text-[var(--color-ink-fade)]">
-        信息不完整，请<button onClick={() => setStep(1)} className="text-[var(--color-accent-plum)] underline">重新填写</button>。
-      </div>
-    );
-  }
+interface ProfileLike {
+  nickname: string | null;
+  gender: "male" | "female" | null;
+  birth_time: string | null;
+  calendar_type: "solar" | "lunar" | null;
+  birth_province: string | null;
+  birth_city: string | null;
+  birth_district: string | null;
+  birth_longitude: number | null;
+  birth_latitude: number | null;
+}
 
-  return <Step3Confirm form={parsed.data} onPrev={() => setStep(2)} />;
+function profileToFormDefaults(p: ProfileLike): Partial<OnboardingForm> | undefined {
+  if (!p.birth_time) return undefined;
+  const d = new Date(p.birth_time);
+  if (Number.isNaN(d.getTime())) return undefined;
+
+  // 用 +08:00 偏移提取年月日时（同 lib/bazi/today UTC8 思路）
+  const shifted = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+  const year = shifted.getUTCFullYear();
+  const month = shifted.getUTCMonth() + 1;
+  const day = shifted.getUTCDate();
+  const hour = shifted.getUTCHours();
+
+  return {
+    nickname: p.nickname ?? "",
+    gender: p.gender ?? undefined,
+    birth: {
+      iso: p.birth_time,
+      calendarType: p.calendar_type ?? "solar",
+      hour,
+      rawDate: { year, month, day },
+    },
+    region:
+      p.birth_province && p.birth_city
+        ? {
+            province: p.birth_province,
+            city: p.birth_city,
+            district: p.birth_district ?? undefined,
+            longitude: p.birth_longitude ?? 0,
+            latitude: p.birth_latitude ?? 0,
+          }
+        : undefined,
+  };
 }
