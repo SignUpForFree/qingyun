@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
+import { GlassCard, Sparkle } from "@/components/su";
 import type { Message } from "@/lib/db/schema";
 import type { Intent } from "@/types/domain";
 
@@ -147,10 +148,40 @@ export function ChatWindow({
 
   return (
     <div className="flex h-[calc(100dvh-4rem)] flex-col">
-      <MessageList messages={messages} streamingText={streaming} />
+      <MessageList
+        messages={messages}
+        streamingText={streaming}
+        empty={
+          <div className="flex flex-1 items-center justify-center px-6">
+            <GlassCard className="max-w-sm space-y-2 p-5 text-center">
+              <p className="text-sm tracking-ritual2 text-[var(--color-ink-plum)]">
+                {emptyHint(intentHint)} <Sparkle size={10} />
+              </p>
+              <p className="text-xs text-[var(--color-ink-fade)]">
+                想问就问，没什么忌讳
+              </p>
+            </GlassCard>
+          </div>
+        }
+      />
       <ChatInput onSend={send} busy={streaming !== null} />
     </div>
   );
+}
+
+function emptyHint(intent: Intent | undefined): string {
+  switch (intent) {
+    case "divination":
+      return "心里默念一件事，再说『开始』";
+    case "dream":
+      return "把昨夜的梦讲给我听";
+    case "bazi":
+      return "想问命盘里哪一段？";
+    case "meihua":
+      return "为眼下哪件事起卦？";
+    default:
+      return "今天，想聊点什么";
+  }
 }
 
 interface SseFrame {
