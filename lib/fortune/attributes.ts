@@ -8,15 +8,14 @@ import {
 import type { DayPillar } from "@/lib/bazi/today";
 
 /**
- * 6 幸运属性（spec §5.3 简化版）
+ * 8 幸运属性（V1.0 文档 §运势 8 属性）
  *
  * - 幸运色：当日五行对应色（素笺仙气配色映射）
  * - 幸运方位：当日地支所属方位
  * - 幸运时辰：日柱地支三合时辰范围
  * - 幸运数：当日地支序数（1-12）
  * - 幸运花 / 事物：按当日五行查静态表
- *
- * 全部可硬替换：到位后 lib/fortune/attributes.ts 整文件重写。
+ * - 幸运配饰 / 食物：M4.2 新增，按当日五行查静态表
  */
 
 export interface Attributes {
@@ -26,6 +25,8 @@ export interface Attributes {
   number: number;
   flower: string;
   item: string;
+  accessory: string;
+  food: string;
 }
 
 const COLOR_BY_WUXING: Record<Wuxing, { name: string; hex: string }> = {
@@ -86,6 +87,22 @@ const ITEM_BY_WUXING: Record<Wuxing, string> = {
   土: "陶杯一只",
 };
 
+const ACCESSORY_BY_WUXING: Record<Wuxing, string> = {
+  金: "银饰 / 白玉",
+  木: "玉镯 / 木珠",
+  水: "黑曜石 / 珍珠",
+  火: "红玛瑙 / 红绳",
+  土: "黄水晶 / 陶饰",
+};
+
+const FOOD_BY_WUXING: Record<Wuxing, string> = {
+  金: "白色食物（杏仁、银耳、白萝卜）",
+  木: "绿叶蔬菜（菠菜、青菜、竹笋）",
+  水: "黑色食物（黑米、紫菜、黑豆）",
+  火: "红色食物（红枣、樱桃、红椒）",
+  土: "黄色食物（南瓜、玉米、黄豆）",
+};
+
 export function computeAttributes(day: DayPillar): Attributes {
   const dayWuxing = wuxingOf(day.gan);
   const luckyBranch = SAN_HE_BY_BRANCH[day.zhi];
@@ -104,5 +121,7 @@ export function computeAttributes(day: DayPillar): Attributes {
     number,
     flower: FLOWER_BY_WUXING[dayWuxing],
     item: ITEM_BY_WUXING[dayWuxing],
+    accessory: ACCESSORY_BY_WUXING[dayWuxing],
+    food: FOOD_BY_WUXING[dayWuxing],
   };
 }

@@ -31,4 +31,31 @@ describe("computeAttributes", () => {
     const a = computeAttributes({ date: "2026-04-26", gan: "甲", zhi: "亥" });
     expect(a.number).toBe(12);
   });
+
+  it("8 属性都返回非空值", () => {
+    const a = computeAttributes({ date: "2026-04-26", gan: "庚", zhi: "午" });
+    expect(a.color).toBeDefined();
+    expect(a.direction).toBeTruthy();
+    expect(a.hour).toBeDefined();
+    expect(a.number).toBeTypeOf("number");
+    expect(a.flower).toBeTruthy();
+    expect(a.item).toBeTruthy();
+    expect(a.accessory).toBeTruthy();
+    expect(a.food).toBeTruthy();
+  });
+
+  it("金日 accessory 含银 / 玉", () => {
+    const a = computeAttributes({ date: "x", gan: "庚", zhi: "午" });
+    expect(a.accessory).toMatch(/银|玉/);
+  });
+
+  it("木日 food 含绿 / 青 / 蔬", () => {
+    const a = computeAttributes({ date: "x", gan: "甲", zhi: "子" });
+    expect(a.food).toMatch(/绿|青|蔬/);
+  });
+
+  it("水日 accessory 含黑 / 珍珠", () => {
+    const a = computeAttributes({ date: "x", gan: "壬", zhi: "子" });
+    expect(a.accessory).toMatch(/黑|珍珠/);
+  });
 });
