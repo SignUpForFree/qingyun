@@ -15,48 +15,77 @@ import { loadPrompt, renderTemplate } from "@/lib/ai/prompts";
 import { chat } from "@/lib/ai/client";
 import { checkRateLimit } from "@/lib/ai/check-rate-limit";
 import { guardTexts } from "@/lib/safety/guard";
-import type { BaziPillars, BaziTenGods, LuckPillar } from "@/types/domain";
+import { buildChart } from "@/lib/bazi/chart";
+import type { BaziComputed, BaziPillars, BaziTenGods, LuckPillar } from "@/types/domain";
 import type { Wuxing } from "@/lib/bazi/stems-branches";
 
 /**
- * POST /api/divination/bazi — 八字解读
+ * POST /api/divination/bazi — 八字 sub-action（profileSnapshot 支持）
  *
- * 流程：
- *   1. 校验 body { focus, userQuestion, conversationId? }
- *   2. ensureUserId → 拉默认 profile + bazi_chart
- *      - 无 profile → 412 (请先建档)
- *      - 无 chart → 500 (建档时排盘失败需重排)
- *   3. 校验 / 自动创建 conversation
- *   4. 落 user message
- *   5. 渲染 bazi.interpret prompt + chat() 生成解读
- *   6. 落 assistant message + divination_records
- *   7. 返回结构化 response
+ * 请求 body：
+ *   { conversationId, focus(新 6 类), userQuestion, profileSnapshot? }
  *
- * V1.0 走非流式（spec §6.4 第 5 条 - V1.0 暂不做 BaziChart 卡片）
+ * profileSnapshot：在 chat 内填表用，无需先建档
+ *   { gender, birth_time, calendar_type?, birth_province, birth_city, birth_district?, longitude, latitude }
+ *
+ * 工作流：
+ *   1. 校验 + 限流 + 安全词
+ *   2. 校验会话归属
+ *   3. 若有 profileSnapshot → buildChart 当场算
+ *      若无 → 拉默认 profile + bazi_charts，无则返回 412 NO_PROFILE
+ *   4. 写 user message + assistant message(metadata.ui='bazi_result' + chart 元信息)
+ *   5. 写 divination_records + 更新 last_message_at
  */
 export const runtime = "nodejs";
+export const maxDuration = 90;
 
-const FOCUS_VALUES = [
-  "综合",
-  "事业",
+const FOCUS = [
+  "综合运势",
+  "事业学业",
   "财运",
-  "感情",
-  "人际",
-  "健康",
+  "感情姻缘",
+  "人际贵人",
+  "平安健康",
 ] as const;
 
-const bodySchema = z.object({
-  conversationId: z.string().min(1).optional(),
-  focus: z.enum(FOCUS_VALUES),
-  userQuestion: z.string().trim().min(1).max(500),
+const profileSnapshotSchema = z.object({
+  gender: z.enum(["male", "female"]),
+  birth_time: z.string().min(1),
+  calendar_type: z.enum(["solar", "lunar"]).default("solar"),
+  birth_province: z.string().min(1),
+  birth_city: z.string().min(1),
+  birth_district: z.string().nullish(),
+  longitude: z.number(),
+  latitude: z.number(),
 });
+
+const bodySchema = z.object({
+  conversationId: z.string().min(1),
+  focus: z.enum(FOCUS),
+  userQuestion: z.string().trim().min(1).max(500),
+  profileSnapshot: profileSnapshotSchema.nullish(),
+});
+
+type ProfileSnapshot = z.infer<typeof profileSnapshotSchema>;
+
+interface ChartViewModel {
+  pillars: BaziPillars;
+  fiveElements: Record<Wuxing, number>;
+  dayMaster: string;
+  tenGods: BaziTenGods;
+  luckPillars: LuckPillar[];
+  currentLuck: string;
+  birthLocation: string;
+  birthTime: string;
+  calendarType: "solar" | "lunar";
+}
 
 export async function POST(req: Request) {
   let raw: unknown;
   try {
     raw = await req.json();
   } catch {
-    return NextResponse.json({ error: "请求体不是合法 JSON" }, { status: 400 });
+    return jsonError("请求体不是合法 JSON", 400);
   }
   const parsed = bodySchema.safeParse(raw);
   if (!parsed.success) {
@@ -65,74 +94,47 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  const { conversationId: incomingConvId, focus, userQuestion } = parsed.data;
+  const { conversationId, focus, userQuestion, profileSnapshot } = parsed.data;
 
   const safetyFail = guardTexts({ userQuestion });
   if (safetyFail) return safetyFail;
 
   const userId = await ensureUserId();
-
   const rate = await checkRateLimit(userId);
   if (!rate.allowed) {
-    return NextResponse.json(
-      { error: `每小时上限 ${rate.limit} 条，请稍后再试（已用 ${rate.used}）` },
-      { status: 429 },
+    return jsonError(
+      `每小时上限 ${rate.limit} 条，请稍后再试（已用 ${rate.used}）`,
+      429,
     );
   }
 
   const db = getDb();
 
-  // 1. 默认档案 + 命盘
-  const profileRow = await db
-    .select()
-    .from(profiles)
-    .where(and(eq(profiles.user_id, userId), eq(profiles.is_default, true)))
+  const owned = await db
+    .select({ id: conversations.id })
+    .from(conversations)
+    .where(
+      and(eq(conversations.id, conversationId), eq(conversations.user_id, userId)),
+    )
     .limit(1);
-  const profile = profileRow[0];
-  if (!profile) {
-    return NextResponse.json(
-      { error: "请先在 /onboarding 建档", code: "NO_PROFILE" },
-      { status: 412 },
-    );
-  }
+  if (!owned[0]) return jsonError("会话不存在", 404);
 
-  const chartRow = await db
-    .select()
-    .from(baziCharts)
-    .where(eq(baziCharts.profile_id, profile.id))
-    .limit(1);
-  const chart = chartRow[0];
-  if (!chart) {
-    return NextResponse.json(
-      { error: "档案存在但命盘未排，请重新建档", code: "NO_CHART" },
-      { status: 500 },
-    );
-  }
-
-  // 2. 会话
-  let conversationId: string;
-  if (incomingConvId) {
-    const owned = await db
-      .select({ id: conversations.id })
-      .from(conversations)
-      .where(and(eq(conversations.id, incomingConvId), eq(conversations.user_id, userId)))
-      .limit(1);
-    if (!owned[0]) {
-      return NextResponse.json({ error: "会话不存在" }, { status: 404 });
+  let chartView: ChartViewModel;
+  try {
+    chartView = profileSnapshot
+      ? computeFromSnapshot(profileSnapshot)
+      : await loadFromDefaultProfile(userId);
+  } catch (e) {
+    if (e instanceof BaziError) {
+      return NextResponse.json(
+        { error: e.message, code: e.code },
+        { status: e.status },
+      );
     }
-    conversationId = incomingConvId;
-  } else {
-    const [created] = await db
-      .insert(conversations)
-      .values({ user_id: userId, title: `八字 · ${focus}` })
-      .returning({ id: conversations.id });
-    if (!created) {
-      return NextResponse.json({ error: "会话创建失败" }, { status: 500 });
-    }
-    conversationId = created.id;
+    console.error("bazi chart 加载失败", e);
+    return jsonError("命盘加载失败", 500);
   }
 
-  // 3. 落用户原话
   const [userMsg] = await db
     .insert(messages)
     .values({
@@ -142,80 +144,72 @@ export async function POST(req: Request) {
       intent: "bazi",
     })
     .returning();
-  if (!userMsg) {
-    return NextResponse.json({ error: "用户消息写入失败" }, { status: 500 });
-  }
+  if (!userMsg) return jsonError("用户消息写入失败", 500);
 
-  // 4. 渲染 prompt
-  const pillars = parseJson<BaziPillars>(chart.pillars, {} as BaziPillars);
-  const fiveElements = parseJson<Record<Wuxing, number>>(
-    chart.five_elements,
-    {} as Record<Wuxing, number>,
-  );
-  const tenGods = parseJson<BaziTenGods>(chart.ten_gods, {} as BaziTenGods);
-  const luckPillars = parseJson<LuckPillar[]>(chart.luck_pillars ?? "[]", []);
-  const currentLuck = pickCurrentLuck(luckPillars, profile.birth_time);
-
-  let prompt;
+  let aiText = "（解读暂时不可用，请稍后再试）";
+  let tokens = 0;
   try {
-    prompt = await loadPrompt("bazi.interpret");
+    const prompt = await loadPrompt("bazi.interpret");
+    const userText = renderTemplate(prompt.userPromptTpl, {
+      birthTime: chartView.birthTime,
+      calendarType: chartView.calendarType,
+      birthLocation: chartView.birthLocation,
+      pillars: formatPillars(chartView.pillars),
+      dayMaster: chartView.dayMaster,
+      fiveElements: formatFiveElements(chartView.fiveElements),
+      tenGods: formatTenGods(chartView.tenGods),
+      currentLuck: chartView.currentLuck,
+      focus,
+      userQuestion,
+    });
+    const ai = await chat({
+      systemPrompt: prompt.systemPrompt,
+      messages: [{ role: "user", content: userText }],
+      stream: false,
+      meta: { conversationId, userId },
+    });
+    aiText = ai.text;
+    tokens = ai.tokensUsed;
   } catch (e) {
-    return NextResponse.json(
-      { error: `bazi.interpret prompt 未种入: ${e instanceof Error ? e.message : String(e)}` },
-      { status: 500 },
-    );
+    console.error("bazi AI 解读失败", e);
   }
 
-  const userText = renderTemplate(prompt.userPromptTpl, {
-    birthTime: profile.birth_time ?? "未知",
-    calendarType: profile.calendar_type ?? "solar",
-    birthLocation: formatBirthLocation(profile),
-    pillars: formatPillars(pillars),
-    dayMaster: chart.day_master,
-    fiveElements: formatFiveElements(fiveElements),
-    tenGods: formatTenGods(tenGods),
-    currentLuck,
-    focus,
-    userQuestion,
-  });
-
-  // 5. AI
-  const ai = await chat({
-    systemPrompt: prompt.systemPrompt,
-    messages: [{ role: "user", content: userText }],
-    stream: false,
-    meta: { conversationId, userId },
-  });
-
-  // 6. 落 assistant + divination_records
-  const [insertedMsg] = await db
+  const [resultMsg] = await db
     .insert(messages)
     .values({
       conversation_id: conversationId,
       role: "assistant",
-      content: ai.text,
+      content: aiText,
       intent: "bazi",
-      tokens_used: ai.tokensUsed,
-      metadata: serializeJson({ ui: "bazi_result", focus }),
+      tokens_used: tokens,
+      metadata: serializeJson({
+        ui: "bazi_result",
+        focus,
+        chart: {
+          pillars: chartView.pillars,
+          fiveElements: chartView.fiveElements,
+          dayMaster: chartView.dayMaster,
+          tenGods: chartView.tenGods,
+          currentLuck: chartView.currentLuck,
+        },
+      }),
     })
     .returning();
-  if (!insertedMsg) {
-    return NextResponse.json({ error: "解读消息写入失败" }, { status: 500 });
-  }
+  if (!resultMsg) return jsonError("解读消息写入失败", 500);
 
   await db.insert(divinationRecords).values({
-    message_id: insertedMsg.id,
+    message_id: resultMsg.id,
     type: "bazi",
-    input: serializeJson({ focus, userQuestion, profileId: profile.id }),
+    input: serializeJson({ focus, userQuestion, snapshot: profileSnapshot ?? null }),
     result: serializeJson({
-      pillars,
-      fiveElements,
-      tenGods,
-      currentLuck,
-      reading: ai.text,
-      tokensUsed: ai.tokensUsed,
+      pillars: chartView.pillars,
+      fiveElements: chartView.fiveElements,
+      tenGods: chartView.tenGods,
+      currentLuck: chartView.currentLuck,
+      reading: aiText,
+      tokensUsed: tokens,
     }),
-    ai_reading: ai.text,
+    ai_reading: aiText,
   });
 
   await db
@@ -231,23 +225,98 @@ export async function POST(req: Request) {
       content: userMsg.content,
       created_at: userMsg.created_at,
     },
-    assistantMessage: {
-      id: insertedMsg.id,
+    resultMessage: {
+      id: resultMsg.id,
       role: "assistant" as const,
-      content: insertedMsg.content,
-      created_at: insertedMsg.created_at,
-      metadata: insertedMsg.metadata,
+      content: resultMsg.content,
+      created_at: resultMsg.created_at,
+      metadata: resultMsg.metadata,
     },
   });
 }
 
-// ---------- 格式化 helpers ----------
+class BaziError extends Error {
+  constructor(
+    public readonly code: string,
+    message: string,
+    public readonly status: number = 400,
+  ) {
+    super(message);
+  }
+}
 
-function formatBirthLocation(p: typeof profiles.$inferSelect): string {
-  const parts = [p.birth_province, p.birth_city, p.birth_district].filter(
-    (x): x is string => typeof x === "string" && x.length > 0,
+function computeFromSnapshot(s: ProfileSnapshot): ChartViewModel {
+  const birthDate = new Date(s.birth_time);
+  if (Number.isNaN(birthDate.getTime())) {
+    throw new BaziError("BAD_BIRTH_TIME", "出生时间不合法", 400);
+  }
+  const computed: BaziComputed = buildChart({
+    birthTime: birthDate,
+    longitude: s.longitude,
+    latitude: s.latitude,
+    gender: s.gender,
+    calendarType: s.calendar_type,
+  });
+  const birthLocation = [s.birth_province, s.birth_city, s.birth_district]
+    .filter((x): x is string => typeof x === "string" && x.length > 0)
+    .join(" ");
+  return {
+    pillars: computed.pillars,
+    fiveElements: computed.fiveElements,
+    dayMaster: computed.dayMaster,
+    tenGods: computed.tenGods,
+    luckPillars: computed.luckPillars,
+    currentLuck: pickCurrentLuck(computed.luckPillars, s.birth_time),
+    birthLocation: birthLocation || "未知",
+    birthTime: s.birth_time,
+    calendarType: s.calendar_type,
+  };
+}
+
+async function loadFromDefaultProfile(userId: string): Promise<ChartViewModel> {
+  const db = getDb();
+  const profileRow = await db
+    .select()
+    .from(profiles)
+    .where(and(eq(profiles.user_id, userId), eq(profiles.is_default, true)))
+    .limit(1);
+  const profile = profileRow[0];
+  if (!profile) {
+    throw new BaziError("NO_PROFILE", "请先在档案页填写八字信息", 412);
+  }
+
+  const chartRow = await db
+    .select()
+    .from(baziCharts)
+    .where(eq(baziCharts.profile_id, profile.id))
+    .limit(1);
+  const chart = chartRow[0];
+  if (!chart) {
+    throw new BaziError("NO_CHART", "档案存在但命盘未排，请重新建档", 500);
+  }
+
+  const pillars = parseJson<BaziPillars>(chart.pillars, {} as BaziPillars);
+  const fiveElements = parseJson<Record<Wuxing, number>>(
+    chart.five_elements,
+    {} as Record<Wuxing, number>,
   );
-  return parts.length ? parts.join(" ") : "未知";
+  const tenGods = parseJson<BaziTenGods>(chart.ten_gods, {} as BaziTenGods);
+  const luckPillars = parseJson<LuckPillar[]>(chart.luck_pillars ?? "[]", []);
+  const birthLocation = [profile.birth_province, profile.birth_city, profile.birth_district]
+    .filter((x): x is string => typeof x === "string" && x.length > 0)
+    .join(" ");
+
+  return {
+    pillars,
+    fiveElements,
+    dayMaster: chart.day_master,
+    tenGods,
+    luckPillars,
+    currentLuck: pickCurrentLuck(luckPillars, profile.birth_time),
+    birthLocation: birthLocation || "未知",
+    birthTime: profile.birth_time ?? "未知",
+    calendarType: profile.calendar_type ?? "solar",
+  };
 }
 
 function formatPillars(p: BaziPillars): string {
@@ -262,9 +331,7 @@ function formatPillars(p: BaziPillars): string {
 
 function formatFiveElements(fe: Record<Wuxing, number>): string {
   const order: Wuxing[] = ["金", "木", "水", "火", "土"];
-  return order
-    .map((w) => `${w} ${fe[w] ?? 0}`)
-    .join("，");
+  return order.map((w) => `${w} ${fe[w] ?? 0}`).join("，");
 }
 
 function formatTenGods(t: BaziTenGods): string {
@@ -286,7 +353,9 @@ function pickCurrentLuck(luck: LuckPillar[], birthTimeIso: string | null): strin
     if (lp.age <= ageNow) current = lp;
     else break;
   }
-  return current
-    ? `${current.gan}${current.zhi}（约 ${current.age} 岁起步）`
-    : "（未起大运）";
+  return current ? `${current.gan}${current.zhi}（约 ${current.age} 岁起步）` : "（未起大运）";
+}
+
+function jsonError(msg: string, status: number) {
+  return NextResponse.json({ error: msg }, { status });
 }
