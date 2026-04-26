@@ -109,6 +109,10 @@ export const conversations = sqliteTable(
     title: text("title"),
     last_message_at: text("last_message_at").default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
     created_at: tsNow("created_at"),
+    // M1.1 (2026-04-26)：multi-turn memory + 意图分流
+    summary: text("summary"),
+    summary_msg_count: integer("summary_msg_count").notNull().default(0),
+    last_intent: text("last_intent"),
   },
   (t) => [index("conversations_user_recent_idx").on(t.user_id, t.last_message_at)],
 );
