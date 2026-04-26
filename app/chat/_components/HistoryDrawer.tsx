@@ -114,6 +114,14 @@ export function HistoryDrawer({ currentId }: HistoryDrawerProps) {
           </SheetDescription>
         </SheetHeader>
 
+        <Link
+          href="/chat"
+          onClick={() => setOpen(false)}
+          className="mt-3 inline-flex items-center justify-center gap-1 rounded-full border border-[var(--color-accent-lavender)]/40 bg-white/40 px-3 py-1.5 text-xs tracking-ritual2 text-[var(--color-ink-plum)] hover:bg-[var(--color-accent-lavender)]/20"
+        >
+          + 创 建 新 对 话
+        </Link>
+
         <div className="mt-4 flex flex-col gap-2 overflow-y-auto">
           {loading && (
             <>
@@ -157,7 +165,7 @@ export function HistoryDrawer({ currentId }: HistoryDrawerProps) {
                   )}
                 >
                   <Link
-                    href={`/chat/${c.id}`}
+                    href={`/chat?cid=${c.id}`}
                     onClick={() => setOpen(false)}
                     className="flex flex-1 min-w-0 items-start gap-2"
                   >

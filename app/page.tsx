@@ -12,6 +12,7 @@ import { computeAttributes } from "@/lib/fortune/attributes";
 import { pickOneLiner } from "@/lib/fortune/one-liner";
 import { parseJson, serializeJson } from "@/lib/db/json";
 import { DailyFortuneCard } from "@/components/fortune/DailyFortuneCard";
+import { HomeQuickEntries } from "@/components/home/HomeQuickEntries";
 import type { Wuxing } from "@/lib/bazi/stems-branches";
 
 /**
@@ -38,13 +39,16 @@ export default async function HomePage() {
           <WatercolorDot color="blue" size={140} className="absolute bottom-[18%] left-[35%]" />
         </div>
 
-        <div className="relative z-10 w-full max-w-md">
+        <div className="relative z-10 w-full max-w-md space-y-4">
           {!profile ? (
             <GlassCard className="space-y-4 p-7 text-center">
               <OnboardingPrompt />
             </GlassCard>
           ) : fortuneData ? (
-            <DailyFortuneCard fortune={fortuneData} nickname={profile.nickname} />
+            <>
+              <DailyFortuneCard fortune={fortuneData} nickname={profile.nickname} />
+              <HomeQuickEntries />
+            </>
           ) : (
             <GlassCard className="space-y-3 p-6 text-center">
               <p className="text-sm tracking-ritual2 text-[var(--color-ink-plum)]">

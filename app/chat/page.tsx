@@ -1,43 +1,70 @@
-"use client";
-
-import { useRouter } from "next/navigation";
+import { and, asc, eq } from "drizzle-orm";
 import { AppHeader } from "@/components/layout";
-import { GlassCard, Sparkle, Divider } from "@/components/su";
-import { QuickActions } from "./_components/QuickActions";
-import { ChatInput } from "./_components/ChatInput";
+import { ChatWindow } from "./_components/ChatWindow";
 import { HistoryDrawer } from "./_components/HistoryDrawer";
+import { ensureUserId } from "@/lib/auth/session";
+import { getDb } from "@/lib/db/client";
+import { conversations, messages } from "@/lib/db/schema";
+import type { DisplayMessage } from "./_components/MessageBubble";
 
 /**
- * /chat 招呼页（spec §3 Chat Welcome）
+ * /chat 单一聊天路由（V1.0 文档 §4.2 路由合并）
  *
- * - 顶 AppHeader "对话"
- * - GlassCard 招呼语 + 4 快捷入口 QuickActions
- * - 底部 ChatInput pill, 提交后跳到 /chat/new?initial=...
+ * - /chat               → 新对话
+ * - /chat?cid=xxx       → 继续指定会话（验证归属，不归属者降级到新对话）
+ * - /chat?initial=xxx   → 自动发送首条消息（来自首页 4 入口卡 / 旧 /chat/new 链接）
+ * - /chat?cid=xxx&initial=yyy → 兼有
+ *
+ * 老路由 /chat/[sessionId] 同步保留（仅做透传），逐步淘汰。
  */
-export default function ChatHomePage() {
-  const router = useRouter();
+export const dynamic = "force-dynamic";
+
+interface PageProps {
+  searchParams: Promise<{ cid?: string; initial?: string }>;
+}
+
+export default async function ChatPage({ searchParams }: PageProps) {
+  const sp = await searchParams;
+  const cid = sp.cid && sp.cid.length > 0 ? sp.cid : null;
+  const initial = sp.initial;
+
+  let initialMessages: DisplayMessage[] = [];
+  let resolvedConvId: string | null = null;
+
+  if (cid) {
+    const userId = await ensureUserId();
+    const db = getDb();
+    const owned = await db
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(and(eq(conversations.id, cid), eq(conversations.user_id, userId)))
+      .limit(1);
+    if (owned[0]) {
+      resolvedConvId = cid;
+      initialMessages = await db
+        .select({
+          id: messages.id,
+          role: messages.role,
+          content: messages.content,
+          created_at: messages.created_at,
+          metadata: messages.metadata,
+        })
+        .from(messages)
+        .where(eq(messages.conversation_id, cid))
+        .orderBy(asc(messages.created_at));
+    }
+  }
+
   return (
     <>
-      <AppHeader title="对话" left={<HistoryDrawer />} />
-      <div className="flex flex-1 flex-col gap-5 p-4">
-        <GlassCard className="space-y-2 p-5 text-center">
-          <h2 className="text-lg tracking-ritual2">
-            今天，想聊点什么 <Sparkle size={12} />
-          </h2>
-          <p className="text-xs text-[var(--color-ink-fade)]">
-            可以问命盘、解个梦、抽支签，也可以只是闲聊
-          </p>
-        </GlassCard>
-
-        <Divider />
-
-        <QuickActions />
-      </div>
-
-      <ChatInput
-        onSend={(text) => {
-          router.push(`/chat/new?initial=${encodeURIComponent(text)}`);
-        }}
+      <AppHeader
+        title={resolvedConvId ? "对话" : "AI 问答"}
+        left={<HistoryDrawer currentId={resolvedConvId ?? undefined} />}
+      />
+      <ChatWindow
+        conversationId={resolvedConvId}
+        initialMessages={initialMessages}
+        autoSendText={initial}
       />
     </>
   );
