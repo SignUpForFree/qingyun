@@ -1,0 +1,27 @@
+services:
+  qingyun:
+    build: .
+    container_name: qingyun-ai
+    restart: unless-stopped
+    ports:
+      # 默认 3000；nginx / caddy 反代时建议改为 127.0.0.1:3000:3000
+      - "3000:3000"
+    volumes:
+      # SQLite + WAL 文件持久化（容器重建不丢档案/对话历史）
+      - ./data:/app/data
+    env_file:
+      - .env.prod
+    environment:
+      # SQLite 数据库走 volume 持久化
+      - DATABASE_URL=file:/app/data/qingyun.db
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      - TZ=Asia/Shanghai
+      - NEXT_TELEMETRY_DISABLED=1
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s

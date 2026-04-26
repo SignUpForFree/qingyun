@@ -1,5 +1,5 @@
 import { streamText, type ModelMessage } from "ai";
-import { getDeepseek, DEEPSEEK_MODEL } from "./deepseek-config";
+import { AI_MODEL, getGateway } from "./gateway";
 
 type StreamTextRet = ReturnType<typeof streamText>;
 
@@ -42,9 +42,9 @@ export async function chat(input: ChatInput): Promise<ChatNonStreamResult | Stre
   const timer = setTimeout(() => ac.abort(), DEFAULT_TIMEOUT_MS);
 
   try {
-    const deepseek = getDeepseek();
+    const gateway = getGateway();
     const result = streamText({
-      model: deepseek(DEEPSEEK_MODEL),
+      model: gateway(AI_MODEL),
       messages: fullMessages,
       temperature: input.temperature ?? DEFAULT_TEMPERATURE,
       abortSignal: ac.signal,

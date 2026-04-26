@@ -1,23 +1,10 @@
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-
-export const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL ?? "deepseek-chat";
-
-const DEEPSEEK_BASE_URL = process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com";
-
 /**
- * DeepSeek provider 工厂。
+ * @deprecated 请使用 lib/ai/gateway.ts；本文件保留只是为了避免老 import 断链。
  *
- * 从环境变量读取 DEEPSEEK_API_KEY；P1 单测全 mock，不需要真实 key；
- * 部署到 Vercel 时由平台环境变量提供。
+ * 旧代码做 `import { getDeepseek, DEEPSEEK_MODEL }` 仍可用，
+ * 但等同于通用 Gateway，会继承 AI_GATEWAY_* 配置（如有）。
  */
-export function getDeepseek() {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!apiKey) {
-    throw new Error("DEEPSEEK_API_KEY 未配置 — 请填到 .env.local（W2 起需要）");
-  }
-  return createOpenAICompatible({
-    name: "deepseek",
-    baseURL: DEEPSEEK_BASE_URL,
-    apiKey,
-  });
-}
+import { AI_MODEL, getGateway } from "./gateway";
+
+export const DEEPSEEK_MODEL = AI_MODEL;
+export const getDeepseek = getGateway;

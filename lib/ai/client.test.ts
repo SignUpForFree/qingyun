@@ -7,9 +7,9 @@ vi.mock("ai", () => ({
   streamText: (args: unknown) => streamTextMock(args),
 }));
 
-vi.mock("./deepseek-config", () => ({
-  getDeepseek: () => () => "mock-model-instance",
-  DEEPSEEK_MODEL: "deepseek-chat",
+vi.mock("./gateway", () => ({
+  getGateway: () => () => "mock-model-instance",
+  AI_MODEL: "deepseek-chat",
 }));
 
 import { chat, __TEST__ } from "./client";
