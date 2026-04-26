@@ -2,13 +2,21 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { MessageBubble, type DisplayMessage } from "./MessageBubble";
+import {
+  MessageBubble,
+  type DisplayMessage,
+  type CardPickCallback,
+  type CardSubmitCallback,
+} from "./MessageBubble";
 
 interface MessageListProps {
   messages: DisplayMessage[];
   streamingText: string | null;
   className?: string;
   empty?: React.ReactNode;
+  onCardPick?: CardPickCallback;
+  onCardSubmit?: CardSubmitCallback;
+  busy?: boolean;
 }
 
 /**
@@ -16,9 +24,18 @@ interface MessageListProps {
  *
  * - messages 已存的消息
  * - streamingText 当前流式 chunk 的累积文本（null = 不显示流式气泡）
- * - empty 空态自定义内容（招呼页用 QuickActions 等）
+ * - empty 空态自定义内容
+ * - onCardPick / onCardSubmit / busy 透传给 MessageBubble，让卡片回调走 ChatWindow
  */
-export function MessageList({ messages, streamingText, className, empty }: MessageListProps) {
+export function MessageList({
+  messages,
+  streamingText,
+  className,
+  empty,
+  onCardPick,
+  onCardSubmit,
+  busy,
+}: MessageListProps) {
   const endRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
@@ -34,7 +51,13 @@ export function MessageList({ messages, streamingText, className, empty }: Messa
       ) : (
         <>
           {messages.map((m) => (
-            <MessageBubble key={m.id} message={m} />
+            <MessageBubble
+              key={m.id}
+              message={m}
+              onCardPick={onCardPick}
+              onCardSubmit={onCardSubmit}
+              busy={busy}
+            />
           ))}
           {streamingText !== null && (
             <MessageBubble

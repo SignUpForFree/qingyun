@@ -5,59 +5,77 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
-import { DivinationLauncher } from "./DivinationLauncher";
-import { DreamLauncher } from "./DreamLauncher";
-import { BaziLauncher, type BaziFocus } from "./BaziLauncher";
-import { MeihuaInputCard, type MeihuaMethod } from "./MeihuaInputCard";
-import { MeihuaWaiyingForm } from "./MeihuaWaiyingForm";
 import { GlassCard, Sparkle } from "@/components/su";
 import type { DisplayMessage } from "./MessageBubble";
-import type { Intent } from "@/types/domain";
-import type { DreamEmotion } from "@/lib/divination/dream-parser";
-
-type SlipDimension = "综合" | "事业" | "财运" | "感情" | "人际" | "健康";
-
-interface StructuredResponse {
-  conversationId: string;
-  userMessage: DisplayMessage;
-  assistantMessage: DisplayMessage;
-  /** 梅花起卦 API 会带第三条 AI 解读消息（其它路由可省略） */
-  aiReadingMessage?: DisplayMessage | null;
-}
 
 interface ChatWindowProps {
   conversationId: string | null;
   initialMessages: DisplayMessage[];
-  intentHint?: Intent;
   /** 从 /chat?initial=xxx 跳过来时自动发送的首条消息 */
   autoSendText?: string;
 }
 
+interface SubActionResponse {
+  conversationId: string;
+  userMessage: DisplayMessage;
+  // 抽签返回 cardMessage / 八字 dream / meihua 返回 resultMessage / qianwen 还有 aiReadingMessage
+  cardMessage?: DisplayMessage;
+  resultMessage?: DisplayMessage;
+  aiReadingMessage?: DisplayMessage | null;
+}
+
 /**
- * 客户端聊天主体
+ * 客户端聊天主体（V1.0 文档对齐版）
  *
- * - 持有消息列表 + 流式 chunk
- * - send(text) → POST /api/chat (SSE)，逐字累加 streaming，结束后并入 messages
- * - 第一次发消息时 SSE 返回 meta event 携带 conversationId，replace 路由到 /chat/<id>
- * - autoSendText 仅在首挂载时发一次（autoSentRef 防重复）
+ * - 4 launcher 已删，永远 ChatInput 在底
+ * - /api/chat SSE 事件：meta / token / card / done / error
+ *   - card → 把后端写好的引导卡 message 直接 append（含 metadata.ui）
+ * - 卡片回调：
+ *   - onCardPick(slip_type_picker, key) → 本地插入 slip_question_input 表单
+ *   - onCardPick(dream_choice, "fast") → 本地插入"请描述梦境"text + 切到等待用户输入
+ *   - onCardPick(dream_choice, "precise") → 本地插入 dream_precise_form
+ *   - onCardPick(meihua_method_picker, "number") → 本地插入 meihua_number_input
+ *   - onCardSubmit(slip_question_input) → POST /api/divination/qianwen
+ *   - onCardSubmit(dream_precise_form) → POST /api/divination/dream mode=precise
+ *   - onCardSubmit(bazi_quick_form) → POST /api/divination/bazi (含 profileSnapshot)
+ *   - onCardSubmit(meihua_number_input) → POST /api/divination/meihua
  */
 export function ChatWindow({
   conversationId: initialConvId,
   initialMessages,
-  intentHint,
   autoSendText,
 }: ChatWindowProps) {
   const router = useRouter();
   const [convId, setConvId] = React.useState<string | null>(initialConvId);
   const [messages, setMessages] = React.useState<DisplayMessage[]>(initialMessages);
   const [streaming, setStreaming] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
   const abortRef = React.useRef<AbortController | null>(null);
   const autoSentRef = React.useRef(false);
   const sendRef = React.useRef<(t: string) => Promise<void>>(() => Promise.resolve());
 
+  /** 临时本地 state：等待用户接 slip_type_picker 选完后把 dimension 暂存；表单提交时用 */
+  const slipDimRef = React.useRef<string | null>(null);
+  /** dream fast 模式下，下一条用户消息会作为 dreamText 走 dream API */
+  const dreamFastWaitingRef = React.useRef(false);
+  /** meihua intro 后下一步等用户输入数字+问题 */
+  // (本版直接用 meihua_number_input form 解决，无需此 ref)
+
   const send = React.useCallback(
     async (text: string) => {
-      if (streaming !== null) return; // 正在流式时禁止再发
+      if (streaming !== null || busy) return;
+
+      // dream fast：下一条用户消息直接走 /api/divination/dream
+      if (dreamFastWaitingRef.current && convId) {
+        dreamFastWaitingRef.current = false;
+        await postSubAction("/api/divination/dream", "解梦", {
+          conversationId: convId,
+          mode: "fast",
+          payload: { dreamText: text },
+        });
+        return;
+      }
+
       abortRef.current?.abort();
       abortRef.current = new AbortController();
 
@@ -75,7 +93,7 @@ export function ChatWindow({
         res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ conversationId: convId, text, intentHint }),
+          body: JSON.stringify({ conversationId: convId, text }),
           signal: abortRef.current.signal,
         });
       } catch (e) {
@@ -97,6 +115,24 @@ export function ChatWindow({
       let assistantText = "";
       let finalConvId: string | null = convId;
 
+      let rafId: number | null = null;
+      const flushStreaming = () => {
+        rafId = null;
+        setStreaming(assistantText);
+      };
+      const scheduleFlush = () => {
+        if (rafId !== null) return;
+        rafId = requestAnimationFrame(flushStreaming);
+      };
+      const cancelPendingFlush = () => {
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
+      };
+
+      const cardMessages: DisplayMessage[] = [];
+
       try {
         for (;;) {
           const { done, value } = await reader.read();
@@ -113,13 +149,24 @@ export function ChatWindow({
                 finalConvId = data.conversationId;
                 if (!convId) {
                   setConvId(data.conversationId);
-                  router.replace(`/chat/${data.conversationId}`);
+                  router.replace(`/chat?cid=${data.conversationId}`);
                 }
               }
             } else if (parsed.event === "token") {
               const chunk = typeof parsed.data === "string" ? parsed.data : "";
               assistantText += chunk;
-              setStreaming(assistantText);
+              scheduleFlush();
+            } else if (parsed.event === "card") {
+              const data = parsed.data as DisplayMessage & { metadata: string | null };
+              if (data?.id) {
+                cardMessages.push({
+                  id: data.id,
+                  role: "assistant",
+                  content: data.content,
+                  created_at: new Date().toISOString(),
+                  metadata: data.metadata,
+                });
+              }
             } else if (parsed.event === "error") {
               toast.error(typeof parsed.data === "string" ? parsed.data : "AI 出错");
             }
@@ -129,198 +176,200 @@ export function ChatWindow({
         if ((e as Error).name !== "AbortError") {
           toast.error("流式中断，请重新发送");
         }
-      }
-
-      setMessages((m) => [
-        ...m,
-        {
-          id: `tmp-asst-${Date.now()}`,
-          role: "assistant",
-          content: assistantText || "(无内容)",
-          created_at: new Date().toISOString(),
-        },
-      ]);
-      setStreaming(null);
-      void finalConvId; // ESLint useless 但保留语义
-    },
-    [convId, router, streaming, intentHint],
-  );
-
-  sendRef.current = send;
-
-  const [structuredBusy, setStructuredBusy] = React.useState(false);
-
-  const runStructured = React.useCallback(
-    async (opts: {
-      url: string;
-      body: Record<string, unknown>;
-      label: string;
-    }): Promise<void> => {
-      if (structuredBusy || streaming !== null) return;
-      setStructuredBusy(true);
-
-      let res: Response;
-      try {
-        res = await fetch(opts.url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ conversationId: convId, ...opts.body }),
-        });
-      } catch (e) {
-        toast.error(`${opts.label}失败：${e instanceof Error ? e.message : "网络异常"}`);
-        setStructuredBusy(false);
-        return;
-      }
-
-      if (!res.ok) {
-        const errBody = await res.text().catch(() => "");
-        toast.error(
-          `${opts.label}失败 (${res.status})${errBody ? "：" + errBody.slice(0, 80) : ""}`,
-        );
-        setStructuredBusy(false);
-        return;
-      }
-
-      let data: StructuredResponse;
-      try {
-        data = (await res.json()) as StructuredResponse;
-      } catch {
-        toast.error(`${opts.label}返回格式异常`);
-        setStructuredBusy(false);
-        return;
+      } finally {
+        cancelPendingFlush();
       }
 
       setMessages((m) => {
-        const next = [...m, data.userMessage, data.assistantMessage];
+        const next = [...m];
+        if (assistantText) {
+          next.push({
+            id: `tmp-asst-${Date.now()}`,
+            role: "assistant",
+            content: assistantText,
+            created_at: new Date().toISOString(),
+          });
+        }
+        for (const cm of cardMessages) next.push(cm);
+        return next;
+      });
+      setStreaming(null);
+      void finalConvId;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [convId, router, streaming, busy],
+  );
+  sendRef.current = send;
+
+  const postSubAction = React.useCallback(
+    async (
+      url: string,
+      label: string,
+      body: Record<string, unknown>,
+    ): Promise<void> => {
+      if (streaming !== null || busy) return;
+      setBusy(true);
+      let res: Response;
+      try {
+        res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      } catch (e) {
+        toast.error(`${label}失败：${e instanceof Error ? e.message : "网络异常"}`);
+        setBusy(false);
+        return;
+      }
+      if (!res.ok) {
+        const t = await res.text().catch(() => "");
+        toast.error(`${label}失败 (${res.status})${t ? "：" + t.slice(0, 80) : ""}`);
+        setBusy(false);
+        return;
+      }
+      let data: SubActionResponse;
+      try {
+        data = (await res.json()) as SubActionResponse;
+      } catch {
+        toast.error(`${label}返回格式异常`);
+        setBusy(false);
+        return;
+      }
+      setMessages((m) => {
+        const next = [...m, data.userMessage];
+        if (data.cardMessage) next.push(data.cardMessage);
+        if (data.resultMessage) next.push(data.resultMessage);
         if (data.aiReadingMessage) next.push(data.aiReadingMessage);
         return next;
       });
       if (!convId && data.conversationId) {
         setConvId(data.conversationId);
-        router.replace(`/chat/${data.conversationId}`);
+        router.replace(`/chat?cid=${data.conversationId}`);
       }
-      setStructuredBusy(false);
+      setBusy(false);
     },
-    [convId, router, streaming, structuredBusy],
+    [convId, router, streaming, busy],
   );
 
-  const runDivination = React.useCallback(
-    ({ dimension, question }: { dimension: SlipDimension; question: string }) =>
-      runStructured({
-        url: "/api/divination/qianwen",
-        body: { dimension, userQuestion: question },
-        label: "抽签",
-      }),
-    [runStructured],
+  const handleCardPick = React.useCallback(
+    (msgId: string, ui: string, key: string) => {
+      void msgId;
+      if (ui === "slip_type_picker") {
+        slipDimRef.current = key;
+        setMessages((m) => [
+          ...m,
+          {
+            id: `local-slip-q-${Date.now()}`,
+            role: "assistant",
+            content: `好的，关于「${key}」，请把你心里默念的事写下来，越具体越准。`,
+            created_at: new Date().toISOString(),
+            metadata: JSON.stringify({ ui: "slip_question_input" }),
+          },
+        ]);
+      } else if (ui === "dream_choice") {
+        if (key === "fast") {
+          dreamFastWaitingRef.current = true;
+          setMessages((m) => [
+            ...m,
+            {
+              id: `local-dream-fast-${Date.now()}`,
+              role: "assistant",
+              content: "好的，请把梦境内容讲给我（10-2000 字）。",
+              created_at: new Date().toISOString(),
+              metadata: JSON.stringify({ ui: "text" }),
+            },
+          ]);
+        } else if (key === "precise") {
+          setMessages((m) => [
+            ...m,
+            {
+              id: `local-dream-precise-${Date.now()}`,
+              role: "assistant",
+              content: "请按下面 4 个维度填写",
+              created_at: new Date().toISOString(),
+              metadata: JSON.stringify({ ui: "dream_precise_form" }),
+            },
+          ]);
+        }
+      } else if (ui === "meihua_method_picker") {
+        // V1 仅留数字测算
+        setMessages((m) => [
+          ...m,
+          {
+            id: `local-meihua-num-${Date.now()}`,
+            role: "assistant",
+            content: "请给我 1-3 个 1-9 的数字",
+            created_at: new Date().toISOString(),
+            metadata: JSON.stringify({ ui: "meihua_number_input" }),
+          },
+        ]);
+      }
+    },
+    [],
   );
 
-  const runDream = React.useCallback(
-    ({ dreamText, emotion }: { dreamText: string; emotion?: DreamEmotion }) =>
-      runStructured({
-        url: "/api/divination/dream",
-        body: { dreamText, emotion },
-        label: "解梦",
-      }),
-    [runStructured],
-  );
-
-  const runBazi = React.useCallback(
-    ({ focus, userQuestion }: { focus: BaziFocus; userQuestion: string }) =>
-      runStructured({
-        url: "/api/divination/bazi",
-        body: { focus, userQuestion },
-        label: "八字解读",
-      }),
-    [runStructured],
-  );
-
-  const runMeihua = React.useCallback(
-    ({
-      method,
-      numbers,
-      userQuestion,
-    }: {
-      method: MeihuaMethod;
-      numbers?: number[];
-      userQuestion: string;
-    }) =>
-      runStructured({
-        url: "/api/divination/meihua",
-        body: { method, numbers, userQuestion },
-        label: "起卦",
-      }),
-    [runStructured],
-  );
-
-  // 跟踪用户主动『跳过外应』的 messageId 集合（前端持久化即可，不入库）
-  const [skippedWaiying, setSkippedWaiying] = React.useState<Set<string>>(
-    () => new Set(),
-  );
-
-  const runMeihuaWaiying = React.useCallback(
-    async (messageId: string, waiying: string) => {
-      if (structuredBusy || streaming !== null) return;
-      setStructuredBusy(true);
-
-      let res: Response;
-      try {
-        res = await fetch("/api/divination/meihua", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messageId, waiying }),
+  const handleCardSubmit = React.useCallback(
+    async (msgId: string, ui: string, values: Record<string, string>) => {
+      void msgId;
+      if (!convId) {
+        toast.error("会话尚未建立，请先与轻运打个招呼");
+        return;
+      }
+      if (ui === "slip_question_input") {
+        const dim = slipDimRef.current;
+        if (!dim) return;
+        await postSubAction("/api/divination/qianwen", "抽签", {
+          conversationId: convId,
+          dimension: dim,
+          userQuestion: values.userQuestion ?? "",
         });
-      } catch (e) {
-        toast.error(`外应回填失败：${e instanceof Error ? e.message : "网络异常"}`);
-        setStructuredBusy(false);
-        return;
+      } else if (ui === "dream_precise_form") {
+        await postSubAction("/api/divination/dream", "解梦", {
+          conversationId: convId,
+          mode: "precise",
+          payload: {
+            core: values.core ?? "",
+            emotion: values.emotion ?? "",
+            reality: values.reality || undefined,
+            special: values.special || undefined,
+          },
+        });
+      } else if (ui === "bazi_quick_form") {
+        const place = (values.birth_place ?? "").split(/\s+/).filter(Boolean);
+        await postSubAction("/api/divination/bazi", "八字", {
+          conversationId: convId,
+          focus: "综合运势",
+          userQuestion: "请帮我看看",
+          profileSnapshot: {
+            gender: values.gender,
+            birth_time: values.birth_time,
+            calendar_type: "solar",
+            birth_province: place[0] ?? "",
+            birth_city: place[1] ?? place[0] ?? "",
+            birth_district: place[2] ?? null,
+            longitude: 0,
+            latitude: 0,
+          },
+        });
+      } else if (ui === "meihua_number_input") {
+        const numbers = (values.numbers ?? "")
+          .split(/[,，\s]+/)
+          .map((s) => Number(s))
+          .filter((n) => Number.isInteger(n) && n >= 1 && n <= 9)
+          .slice(0, 3);
+        if (numbers.length === 0) {
+          toast.error("数字不合法，请填 1-3 个 1-9 的整数");
+          return;
+        }
+        await postSubAction("/api/divination/meihua", "测算", {
+          conversationId: convId,
+          numbers,
+          userQuestion: values.userQuestion ?? "",
+        });
       }
-
-      if (!res.ok) {
-        const errBody = await res.text().catch(() => "");
-        toast.error(
-          `外应回填失败 (${res.status})${errBody ? "：" + errBody.slice(0, 80) : ""}`,
-        );
-        setStructuredBusy(false);
-        return;
-      }
-
-      let data: { assistantMessage?: DisplayMessage };
-      try {
-        data = (await res.json()) as { assistantMessage?: DisplayMessage };
-      } catch {
-        toast.error("外应回填返回格式异常");
-        setStructuredBusy(false);
-        return;
-      }
-
-      if (data.assistantMessage) {
-        const msg = data.assistantMessage;
-        setMessages((m) => [...m, msg]);
-      }
-      // 让原 meihua_reading 不再触发 form（视为已处理）
-      setSkippedWaiying((s) => new Set(s).add(messageId));
-      setStructuredBusy(false);
     },
-    [structuredBusy, streaming],
+    [convId, postSubAction],
   );
-
-  const [hasProfile, setHasProfile] = React.useState<boolean | null>(null);
-  React.useEffect(() => {
-    if (intentHint !== "bazi") return;
-    if (hasProfile !== null) return;
-    let cancelled = false;
-    void fetch("/api/profile")
-      .then((r) => (r.ok ? r.json() : { profile: null }))
-      .then((data: { profile: unknown }) => {
-        if (!cancelled) setHasProfile(Boolean(data.profile));
-      })
-      .catch(() => {
-        if (!cancelled) setHasProfile(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [intentHint, hasProfile]);
 
   React.useEffect(() => {
     if (autoSendText && !autoSentRef.current) {
@@ -329,109 +378,34 @@ export function ChatWindow({
     }
   }, [autoSendText]);
 
-  // 卸载时打断进行中的请求
   React.useEffect(() => {
     return () => abortRef.current?.abort();
   }, []);
 
-  const isDivination = intentHint === "divination";
-  const isDream = intentHint === "dream";
-  const isBazi = intentHint === "bazi";
-  const isMeihua = intentHint === "meihua";
-
-  // 检测是否有『等待外应』的 meihua_reading 消息
-  const pendingWaiyingMsgId = React.useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const m = messages[i];
-      if (!m || m.role !== "assistant") continue;
-      const meta = m.metadata;
-      if (!meta) continue;
-      try {
-        const parsed = JSON.parse(meta) as { ui?: string; waiying?: unknown };
-        if (parsed.ui !== "meihua_reading") continue;
-        // 最新一条 meihua_reading：waiying 为空且未被本地 skip → 待回填
-        if (parsed.waiying == null && !skippedWaiying.has(m.id)) return m.id;
-        return null; // 最新一条已有 waiying / 已 skip → 不弹
-      } catch {
-        continue;
-      }
-    }
-    return null;
-  }, [messages, skippedWaiying]);
-
   return (
-    <div className="flex h-[calc(100dvh-4rem)] flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <MessageList
         messages={messages}
         streamingText={streaming}
+        onCardPick={handleCardPick}
+        onCardSubmit={handleCardSubmit}
+        busy={busy}
         empty={
           <div className="flex flex-1 items-center justify-center px-6">
             <GlassCard className="max-w-sm space-y-2 p-5 text-center">
               <p className="text-sm tracking-ritual2 text-[var(--color-ink-plum)]">
-                {emptyHint(intentHint)} <Sparkle size={10} />
+                想问就问，我陪你慢慢理 <Sparkle size={10} />
               </p>
               <p className="text-xs text-[var(--color-ink-fade)]">
-                {bottomHint(intentHint)}
+                抽签 / 解梦 / 八字 / 测算 都直接打字告诉我
               </p>
             </GlassCard>
           </div>
         }
       />
-      {pendingWaiyingMsgId ? (
-        <MeihuaWaiyingForm
-          busy={structuredBusy}
-          onSubmit={(w) => runMeihuaWaiying(pendingWaiyingMsgId, w)}
-          onSkip={() =>
-            setSkippedWaiying((s) => new Set(s).add(pendingWaiyingMsgId))
-          }
-        />
-      ) : isDivination ? (
-        <DivinationLauncher onDraw={runDivination} busy={structuredBusy} />
-      ) : isDream ? (
-        <DreamLauncher onSubmit={runDream} busy={structuredBusy} />
-      ) : isBazi ? (
-        <BaziLauncher
-          onSubmit={runBazi}
-          busy={structuredBusy}
-          hasProfile={hasProfile !== false}
-        />
-      ) : isMeihua ? (
-        <MeihuaInputCard onSubmit={runMeihua} busy={structuredBusy} />
-      ) : (
-        <ChatInput onSend={send} busy={streaming !== null} />
-      )}
+      <ChatInput onSend={send} busy={streaming !== null || busy} />
     </div>
   );
-}
-
-function bottomHint(intent: Intent | undefined): string {
-  switch (intent) {
-    case "divination":
-      return "选个维度 + 写下心事，再点抽签";
-    case "dream":
-      return "梦境描述越具体，解读越贴";
-    case "bazi":
-      return "想看哪一段？工作 / 感情 / 健康都可以";
-    case "meihua":
-      return "写下你的事，挑时间或数字起一卦";
-    default:
-      return "想问就问，没什么忌讳";
-  }
-}
-
-function emptyHint(intent: Intent | undefined): string {
-  switch (intent) {
-    case "divination":
-      return "心里默念一件事，再说『开始』";
-    case "dream":
-      return "把昨夜的梦讲给我听";
-    case "bazi":
-      return "想问命盘里哪一段？";
-    case "meihua":
-      return "为眼下哪件事起卦？";
-    default:
-      return "今天，想聊点什么";
-  }
 }
 
 interface SseFrame {

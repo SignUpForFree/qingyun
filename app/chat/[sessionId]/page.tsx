@@ -92,7 +92,6 @@ export default async function ChatSessionPage({ params, searchParams }: PageProp
       <ChatWindow
         conversationId={resolvedConversationId}
         initialMessages={initialMessages}
-        intentHint={intentHint}
         autoSendText={initial}
       />
     </>

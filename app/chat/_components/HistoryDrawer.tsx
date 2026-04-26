@@ -177,9 +177,10 @@ export function HistoryDrawer({ currentId }: HistoryDrawerProps) {
                     disabled={isDeleting}
                     onClick={() => void remove(c.id)}
                     className={cn(
-                      "shrink-0 rounded-full p-1 opacity-0 transition-opacity",
+                      "shrink-0 rounded-full p-1 transition-opacity",
                       "text-[var(--color-ink-fade)] hover:bg-white/40 hover:text-[var(--color-ink-plum)]",
-                      "group-hover:opacity-100 focus-visible:opacity-100",
+                      // 移动端无 hover：用半透明常显，desktop hover 变实
+                      "opacity-60 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100",
                     )}
                   >
                     <X className="h-3.5 w-3.5" />
