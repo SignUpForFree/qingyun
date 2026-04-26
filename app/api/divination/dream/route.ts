@@ -1,161 +1,169 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import {
-  conversations,
-  divinationRecords,
-  messages,
-} from "@/lib/db/schema";
+import { conversations, divinationRecords, messages } from "@/lib/db/schema";
 import { ensureUserId } from "@/lib/auth/session";
-import { serializeJson } from "@/lib/db/json";
-import {
-  buildEmotionHint,
-  dreamInputSchema,
-} from "@/lib/divination/dream-parser";
-import { loadPrompt, renderTemplate } from "@/lib/ai/prompts";
 import { chat } from "@/lib/ai/client";
+import { loadPrompt, renderTemplate } from "@/lib/ai/prompts";
+import { serializeJson } from "@/lib/db/json";
 import { checkRateLimit } from "@/lib/ai/check-rate-limit";
 import { guardTexts } from "@/lib/safety/guard";
 
 /**
- * POST /api/divination/dream — 解梦 + 落库
+ * POST /api/divination/dream — 解梦 sub-action
  *
- * 流程：
- *   1. 校验 body { dreamText, emotion?, conversationId? }
- *   2. ensureUserId + 校验 / 自动创建 conversation
- *   3. 落 user message（梦境原文）
- *   4. loadPrompt('dream.parse') + renderTemplate → chat() 生成 4 段解读
- *   5. 落 assistant message（intent='dream'，metadata={ ui:'dream_result', emotion }）
- *   6. 写 divination_records (type='dream')
- *   7. 返回 { conversationId, userMessage, assistantMessage }
+ * 接 dream_choice 卡的提交：
+ *   - fast：用户在快速 form 输入 dreamText（+ 可选 emotion）
+ *   - precise：用户在精准 form 输入 4 字段（core / emotion / reality / special）
  *
- * 走非流式（一次性返回）：解梦输出长但用户体验上一次性给出比逐字流更稳；
- * P2 后端有空再升级为 SSE。
+ * 工作流：写 user message → 调 AI → 写 assistant message(metadata.ui='dream_result')
+ *        → 写 divination_records (type='dream') → 更新 last_message_at
  */
 export const runtime = "nodejs";
+export const maxDuration = 90;
+
+const fastSchema = z.object({
+  dreamText: z.string().min(10).max(2000),
+  emotion: z.enum(["平静", "害怕", "焦虑", "喜悦", "疑惑"]).nullish(),
+});
+
+const preciseSchema = z.object({
+  core: z.string().min(5).max(500),
+  emotion: z.string().min(2).max(200),
+  reality: z.string().max(200).nullish(),
+  special: z.string().max(200).nullish(),
+});
+
+const bodySchema = z.discriminatedUnion("mode", [
+  z.object({
+    conversationId: z.string().min(1),
+    mode: z.literal("fast"),
+    payload: fastSchema,
+  }),
+  z.object({
+    conversationId: z.string().min(1),
+    mode: z.literal("precise"),
+    payload: preciseSchema,
+  }),
+]);
 
 export async function POST(req: Request) {
   let raw: unknown;
   try {
     raw = await req.json();
   } catch {
-    return NextResponse.json({ error: "请求体不是合法 JSON" }, { status: 400 });
+    return jsonError("请求体不是合法 JSON", 400);
   }
 
-  const bodyShape = raw as { conversationId?: unknown };
-  const incomingConvId =
-    typeof bodyShape?.conversationId === "string" && bodyShape.conversationId.length > 0
-      ? bodyShape.conversationId
-      : undefined;
-
-  const parsed = dreamInputSchema.safeParse(raw);
+  const parsed = bodySchema.safeParse(raw);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "校验失败", issues: parsed.error.issues },
       { status: 400 },
     );
   }
-  const { dreamText, emotion } = parsed.data;
+  const { conversationId, mode, payload } = parsed.data;
 
-  const safetyFail = guardTexts({ dreamText });
+  const safetyText =
+    mode === "fast"
+      ? payload.dreamText
+      : `${payload.core}\n${payload.emotion}\n${payload.reality ?? ""}\n${payload.special ?? ""}`;
+  const safetyFail = guardTexts({ dream: safetyText });
   if (safetyFail) return safetyFail;
 
   const userId = await ensureUserId();
-
   const rate = await checkRateLimit(userId);
   if (!rate.allowed) {
-    return NextResponse.json(
-      { error: `每小时上限 ${rate.limit} 条，请稍后再试（已用 ${rate.used}）` },
-      { status: 429 },
+    return jsonError(
+      `每小时上限 ${rate.limit} 条，请稍后再试（已用 ${rate.used}）`,
+      429,
     );
   }
 
   const db = getDb();
+  const owned = await db
+    .select({ id: conversations.id })
+    .from(conversations)
+    .where(
+      and(eq(conversations.id, conversationId), eq(conversations.user_id, userId)),
+    )
+    .limit(1);
+  if (!owned[0]) return jsonError("会话不存在", 404);
 
-  let conversationId: string;
-  if (incomingConvId) {
-    const owned = await db
-      .select({ id: conversations.id })
-      .from(conversations)
-      .where(and(eq(conversations.id, incomingConvId), eq(conversations.user_id, userId)))
-      .limit(1);
-    if (!owned[0]) {
-      return NextResponse.json({ error: "会话不存在" }, { status: 404 });
-    }
-    conversationId = incomingConvId;
-  } else {
-    const [created] = await db
-      .insert(conversations)
-      .values({
-        user_id: userId,
-        title: emotion ? `解梦 · ${emotion}` : "解梦",
-      })
-      .returning({ id: conversations.id });
-    if (!created) {
-      return NextResponse.json({ error: "会话创建失败" }, { status: 500 });
-    }
-    conversationId = created.id;
-  }
+  const userText =
+    mode === "fast"
+      ? `[解梦 · 快速${payload.emotion ? " · " + payload.emotion : ""}] ${payload.dreamText}`
+      : [
+          "[解梦 · 精准]",
+          `核心场景：${payload.core}`,
+          `情绪感受：${payload.emotion}`,
+          payload.reality ? `现实关联：${payload.reality}` : null,
+          payload.special ? `特殊细节：${payload.special}` : null,
+        ]
+          .filter(Boolean)
+          .join("\n");
 
-  // 落用户原话
   const [userMsg] = await db
     .insert(messages)
     .values({
       conversation_id: conversationId,
       role: "user",
-      content: emotion ? `[解梦 · ${emotion}] ${dreamText}` : `[解梦] ${dreamText}`,
+      content: userText,
       intent: "dream",
     })
     .returning();
-  if (!userMsg) {
-    return NextResponse.json({ error: "用户消息写入失败" }, { status: 500 });
-  }
+  if (!userMsg) return jsonError("用户消息写入失败", 500);
 
-  // AI 解读
-  let prompt;
+  let aiText = "（解读暂时不可用，请稍后再试）";
+  let tokens = 0;
   try {
-    prompt = await loadPrompt("dream.parse");
+    const prompt = await loadPrompt("dream.parse");
+    const dreamFullText =
+      mode === "fast"
+        ? payload.dreamText
+        : [
+            `核心场景：${payload.core}`,
+            payload.reality ? `现实关联：${payload.reality}` : null,
+            payload.special ? `特殊细节：${payload.special}` : null,
+          ]
+            .filter(Boolean)
+            .join("\n");
+    const tpl = renderTemplate(prompt.userPromptTpl, {
+      dreamText: dreamFullText,
+      emotionHint: `情绪：${mode === "fast" ? (payload.emotion ?? "未明确") : payload.emotion}`,
+    });
+    const ai = await chat({
+      systemPrompt: prompt.systemPrompt,
+      messages: [{ role: "user", content: tpl }],
+      stream: false,
+      meta: { conversationId, userId },
+    });
+    aiText = ai.text;
+    tokens = ai.tokensUsed;
   } catch (e) {
-    return NextResponse.json(
-      { error: `dream.parse prompt 未种入: ${e instanceof Error ? e.message : String(e)}` },
-      { status: 500 },
-    );
+    console.error("dream AI 解读失败", e);
   }
 
-  const userText = renderTemplate(prompt.userPromptTpl, {
-    dreamText,
-    emotionHint: buildEmotionHint(emotion),
-  });
-
-  const ai = await chat({
-    systemPrompt: prompt.systemPrompt,
-    messages: [{ role: "user", content: userText }],
-    stream: false,
-    meta: { conversationId, userId },
-  });
-
-  // 落 assistant
-  const [insertedMsg] = await db
+  const [resultMsg] = await db
     .insert(messages)
     .values({
       conversation_id: conversationId,
       role: "assistant",
-      content: ai.text,
+      content: aiText,
       intent: "dream",
-      tokens_used: ai.tokensUsed,
-      metadata: serializeJson({ ui: "dream_result", emotion: emotion ?? null }),
+      tokens_used: tokens,
+      metadata: serializeJson({ ui: "dream_result", mode }),
     })
     .returning();
-  if (!insertedMsg) {
-    return NextResponse.json({ error: "解读消息写入失败" }, { status: 500 });
-  }
+  if (!resultMsg) return jsonError("解读消息写入失败", 500);
 
   await db.insert(divinationRecords).values({
-    message_id: insertedMsg.id,
+    message_id: resultMsg.id,
     type: "dream",
-    input: serializeJson({ dreamText, emotion: emotion ?? null }),
-    result: serializeJson({ reading: ai.text, tokensUsed: ai.tokensUsed }),
-    ai_reading: ai.text,
+    input: serializeJson({ mode, payload }),
+    result: serializeJson({ text: aiText }),
+    ai_reading: aiText,
   });
 
   await db
@@ -171,12 +179,16 @@ export async function POST(req: Request) {
       content: userMsg.content,
       created_at: userMsg.created_at,
     },
-    assistantMessage: {
-      id: insertedMsg.id,
+    resultMessage: {
+      id: resultMsg.id,
       role: "assistant" as const,
-      content: insertedMsg.content,
-      created_at: insertedMsg.created_at,
-      metadata: insertedMsg.metadata,
+      content: resultMsg.content,
+      created_at: resultMsg.created_at,
+      metadata: resultMsg.metadata,
     },
   });
+}
+
+function jsonError(msg: string, status: number) {
+  return NextResponse.json({ error: msg }, { status });
 }
