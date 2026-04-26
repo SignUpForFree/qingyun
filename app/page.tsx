@@ -1,39 +1,64 @@
 import Link from "next/link";
+import { eq } from "drizzle-orm";
 import { AppHeader } from "@/components/layout";
 import { GlassCard, Sparkle, WatercolorDot, Divider } from "@/components/su";
 import { Button } from "@/components/ui/button";
 import { getCurrentProfile } from "@/lib/profile/current";
+import { getDb } from "@/lib/db/client";
+import { baziCharts, fortunes } from "@/lib/db/schema";
+import { getDayPillar } from "@/lib/bazi/today";
+import { computeDailyScores } from "@/lib/fortune/scorer";
+import { computeAttributes } from "@/lib/fortune/attributes";
+import { pickOneLiner } from "@/lib/fortune/one-liner";
+import { parseJson, serializeJson } from "@/lib/db/json";
+import { DailyFortuneCard } from "@/components/fortune/DailyFortuneCard";
+import type { Wuxing } from "@/lib/bazi/stems-branches";
 
 /**
- * 首页（spec §1 — P1 占位版）
+ * 首页（spec §1）
  *
- * - 未登录 / 无档案 → 引导建档
- * - 已建档 → 简短问候 + "进入对话" CTA
+ * - 未建档 → 引导建档
+ * - 已建档 → 今日运势 DailyFortuneCard（含 ScoreRing + 6 维度条 + 6 幸运属性）
  *
- * P2 D5/D6 会替换为 DailyFortuneCard：大圆环总分 + 7 维度条 + 6 幸运属性
+ * 运势计算入口同 /api/fortune/today，但服务端直接跑避免一次额外 RTT
  */
-export const dynamic = "force-dynamic"; // 依赖 cookies + supabase user, 不可静态
+export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const profile = await safeGetProfile();
+  const fortuneData = profile ? await loadOrComputeFortune(profile.id) : null;
 
   return (
     <>
       <AppHeader title="轻运 AI" />
-      <div className="relative flex flex-1 flex-col items-center justify-center gap-5 overflow-hidden p-6 text-center">
+      <div className="relative flex flex-1 flex-col items-center justify-center gap-5 overflow-hidden p-4 pb-20">
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <WatercolorDot color="lavender" size={140} className="absolute left-[8%] top-[14%]" />
           <WatercolorDot color="pink" size={120} className="absolute right-[10%] top-[20%]" />
           <WatercolorDot color="blue" size={140} className="absolute bottom-[18%] left-[35%]" />
         </div>
 
-        <GlassCard className="relative z-10 w-full max-w-md space-y-4 p-7">
-          {profile ? (
-            <ProfileGreeting nickname={profile.nickname ?? "你"} />
+        <div className="relative z-10 w-full max-w-md">
+          {!profile ? (
+            <GlassCard className="space-y-4 p-7 text-center">
+              <OnboardingPrompt />
+            </GlassCard>
+          ) : fortuneData ? (
+            <DailyFortuneCard fortune={fortuneData} nickname={profile.nickname} />
           ) : (
-            <OnboardingPrompt />
+            <GlassCard className="space-y-3 p-6 text-center">
+              <p className="text-sm tracking-ritual2 text-[var(--color-ink-plum)]">
+                八字还没排好 <Sparkle size={10} />
+              </p>
+              <p className="text-xs text-[var(--color-ink-fade)]">
+                试着刷新一下，或重新建档
+              </p>
+              <Link href="/onboarding">
+                <Button variant="outline">重新建档</Button>
+              </Link>
+            </GlassCard>
           )}
-        </GlassCard>
+        </div>
       </div>
     </>
   );
@@ -63,48 +88,85 @@ function OnboardingPrompt() {
   );
 }
 
-function ProfileGreeting({ nickname }: { nickname: string }) {
-  const greeting = pickGreeting();
-  return (
-    <>
-      <h1 className="text-[22px] tracking-ritual2 text-[var(--color-ink-plum)]">
-        {greeting}，{nickname} <Sparkle size={12} />
-      </h1>
-      <p className="text-sm text-[var(--color-ink-fade)]">
-        今天想问点什么？或者只是聊聊
-      </p>
-      <Divider />
-      <Link href="/chat" className="block">
-        <Button className="h-12 w-full bg-gradient-to-r from-[#F0B8C8] to-[#C9A1D9] font-[family-name:var(--font-serif)] text-[15px] tracking-ritual text-white shadow-pill hover:opacity-90">
-          进入对话
-        </Button>
-      </Link>
-      <p className="text-xs leading-relaxed text-[var(--color-ink-fade)]">
-        每日运势卡 · P2 第 4 周接入
-      </p>
-    </>
-  );
-}
-
-function pickGreeting(): string {
-  const h = new Date().getHours();
-  if (h < 6) return "夜深了";
-  if (h < 11) return "早上好";
-  if (h < 14) return "中午好";
-  if (h < 18) return "下午好";
-  if (h < 22) return "傍晚好";
-  return "夜里好";
-}
-
-/**
- * .env.local 缺失或 Supabase 未接入时退化为 null（不让首页崩）
- */
 async function safeGetProfile() {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return null;
   try {
     return await getCurrentProfile();
   } catch (e) {
-    console.error("getCurrentProfile 失败（首页降级为未建档态）", e);
+    console.error("getCurrentProfile 失败", e);
     return null;
   }
+}
+
+async function loadOrComputeFortune(profileId: string) {
+  try {
+    const db = getDb();
+    const dayPillar = getDayPillar();
+
+    const cached = await db
+      .select()
+      .from(fortunes)
+      .where(eq(fortunes.profile_id, profileId))
+      .limit(50);
+    const todayHit = cached.find((f) => f.fortune_date === dayPillar.date);
+    if (todayHit) return hydrate(todayHit);
+
+    const chartRow = await db
+      .select()
+      .from(baziCharts)
+      .where(eq(baziCharts.profile_id, profileId))
+      .limit(1);
+    const chart = chartRow[0];
+    if (!chart) return null;
+
+    const fiveElements = parseJson<Record<Wuxing, number>>(chart.five_elements, {
+      金: 0,
+      木: 0,
+      水: 0,
+      火: 0,
+      土: 0,
+    });
+    const scores = computeDailyScores(
+      { dayMaster: chart.day_master, fiveElements },
+      dayPillar,
+    );
+    const attributes = computeAttributes(dayPillar);
+    const oneLiner = pickOneLiner(scores);
+
+    const [inserted] = await db
+      .insert(fortunes)
+      .values({
+        profile_id: profileId,
+        fortune_date: dayPillar.date,
+        score_overall: scores.overall,
+        scores: serializeJson(scores.scores),
+        one_liner: oneLiner,
+        readings: serializeJson({ meta: scores.meta }),
+        attributes: serializeJson(attributes),
+        model: "static-fallback",
+        tokens_used: 0,
+      })
+      .returning();
+
+    return hydrate(inserted!);
+  } catch (e) {
+    console.error("loadOrComputeFortune 失败", e);
+    return null;
+  }
+}
+
+function hydrate(row: {
+  id: string;
+  fortune_date: string;
+  score_overall: number | null;
+  scores: string | null;
+  one_liner: string | null;
+  attributes: string | null;
+}) {
+  return {
+    date: row.fortune_date,
+    overall: row.score_overall ?? 0,
+    scores: parseJson<Record<string, number>>(row.scores, {}),
+    oneLiner: row.one_liner,
+    attributes: parseJson(row.attributes, {}),
+  };
 }

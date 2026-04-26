@@ -56,3 +56,34 @@ test("交互冒烟 · onboarding 表单可填", async ({ page }) => {
   const nextBtn = page.getByRole("button", { name: "下一步", exact: true });
   await expect(nextBtn).toBeEnabled();
 });
+
+test("视觉基线 · home-with-fortune · iPhone 14（已建档 + 运势卡）", async ({ browser }) => {
+  const ctx = await browser.newContext({ ...devices["iPhone 14"] });
+  const p = await ctx.newPage();
+  // 先访问 / 拿匿名 cookie
+  await p.goto("/");
+  // POST /api/profile 建档
+  const res = await p.request.post("/api/profile", {
+    data: {
+      nickname: "小白",
+      gender: "male",
+      birth: {
+        iso: "1990-06-15T14:30:00+08:00",
+        calendarType: "solar",
+        hour: 14,
+        rawDate: { year: 1990, month: 6, day: 15 },
+      },
+      region: { province: "浙江", city: "杭州", longitude: 120.1551, latitude: 30.2741 },
+    },
+  });
+  expect(res.ok()).toBe(true);
+  // 重新进首页, 这次会有 DailyFortuneCard
+  await p.goto("/");
+  await p.waitForLoadState("networkidle");
+  await p.waitForTimeout(1200); // 等 ScoreRing 700ms 动画结束
+  await p.screenshot({
+    path: "test-results/visual-baseline/home-with-fortune-iphone14.png",
+    fullPage: true,
+  });
+  await ctx.close();
+});
