@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#FFE8F0"/>
+      <stop offset="55%" stop-color="#E8E4FF"/>
+      <stop offset="100%" stop-color="#E4F0FF"/>
+    </radialGradient>
+    <linearGradient id="ink" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4A3D5C"/>
+      <stop offset="100%" stop-color="#7A5C8E"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" ry="96" fill="url(#bg)"/>
+  <text x="256" y="312"
+        text-anchor="middle"
+        font-family="Noto Serif SC, serif"
+        font-size="280"
+        fill="url(#ink)"
+        font-weight="500">轻</text>
+  <circle cx="380" cy="140" r="6" fill="#C9A1D9"/>
+  <circle cx="370" cy="120" r="3" fill="#F0B8C8"/>
+  <circle cx="392" cy="118" r="3" fill="#A4B8E8"/>
+</svg>
