@@ -15,6 +15,7 @@ const PAGES = [
   { path: "/chat", name: "chat-welcome" },
   { path: "/chat/new", name: "chat-session-new" },
   { path: "/chat/new?intent=divination", name: "chat-divination-launcher" },
+  { path: "/chat/new?intent=dream", name: "chat-dream-launcher" },
   { path: "/me", name: "me-no-profile" },
 ] as const;
 

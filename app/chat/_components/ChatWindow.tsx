@@ -6,13 +6,15 @@ import { toast } from "sonner";
 import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
 import { DivinationLauncher } from "./DivinationLauncher";
+import { DreamLauncher } from "./DreamLauncher";
 import { GlassCard, Sparkle } from "@/components/su";
 import type { DisplayMessage } from "./MessageBubble";
 import type { Intent } from "@/types/domain";
+import type { DreamEmotion } from "@/lib/divination/dream-parser";
 
 type SlipDimension = "综合" | "事业" | "财运" | "感情" | "人际" | "健康";
 
-interface QianwenResponse {
+interface StructuredResponse {
   conversationId: string;
   userMessage: DisplayMessage;
   assistantMessage: DisplayMessage;
@@ -141,43 +143,45 @@ export function ChatWindow({
 
   sendRef.current = send;
 
-  const [drawing, setDrawing] = React.useState(false);
+  const [structuredBusy, setStructuredBusy] = React.useState(false);
 
-  const runDivination = React.useCallback(
-    async ({ dimension, question }: { dimension: SlipDimension; question: string }) => {
-      if (drawing || streaming !== null) return;
-      setDrawing(true);
+  const runStructured = React.useCallback(
+    async (opts: {
+      url: string;
+      body: Record<string, unknown>;
+      label: string;
+    }): Promise<void> => {
+      if (structuredBusy || streaming !== null) return;
+      setStructuredBusy(true);
 
       let res: Response;
       try {
-        res = await fetch("/api/divination/qianwen", {
+        res = await fetch(opts.url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            conversationId: convId,
-            dimension,
-            userQuestion: question,
-          }),
+          body: JSON.stringify({ conversationId: convId, ...opts.body }),
         });
       } catch (e) {
-        toast.error(`抽签失败：${e instanceof Error ? e.message : "网络异常"}`);
-        setDrawing(false);
+        toast.error(`${opts.label}失败：${e instanceof Error ? e.message : "网络异常"}`);
+        setStructuredBusy(false);
         return;
       }
 
       if (!res.ok) {
         const errBody = await res.text().catch(() => "");
-        toast.error(`抽签失败 (${res.status})${errBody ? "：" + errBody.slice(0, 80) : ""}`);
-        setDrawing(false);
+        toast.error(
+          `${opts.label}失败 (${res.status})${errBody ? "：" + errBody.slice(0, 80) : ""}`,
+        );
+        setStructuredBusy(false);
         return;
       }
 
-      let data: QianwenResponse;
+      let data: StructuredResponse;
       try {
-        data = (await res.json()) as QianwenResponse;
+        data = (await res.json()) as StructuredResponse;
       } catch {
-        toast.error("抽签返回格式异常");
-        setDrawing(false);
+        toast.error(`${opts.label}返回格式异常`);
+        setStructuredBusy(false);
         return;
       }
 
@@ -186,9 +190,29 @@ export function ChatWindow({
         setConvId(data.conversationId);
         router.replace(`/chat/${data.conversationId}`);
       }
-      setDrawing(false);
+      setStructuredBusy(false);
     },
-    [convId, router, streaming, drawing],
+    [convId, router, streaming, structuredBusy],
+  );
+
+  const runDivination = React.useCallback(
+    ({ dimension, question }: { dimension: SlipDimension; question: string }) =>
+      runStructured({
+        url: "/api/divination/qianwen",
+        body: { dimension, userQuestion: question },
+        label: "抽签",
+      }),
+    [runStructured],
+  );
+
+  const runDream = React.useCallback(
+    ({ dreamText, emotion }: { dreamText: string; emotion?: DreamEmotion }) =>
+      runStructured({
+        url: "/api/divination/dream",
+        body: { dreamText, emotion },
+        label: "解梦",
+      }),
+    [runStructured],
   );
 
   React.useEffect(() => {
@@ -204,6 +228,7 @@ export function ChatWindow({
   }, []);
 
   const isDivination = intentHint === "divination";
+  const isDream = intentHint === "dream";
 
   return (
     <div className="flex h-[calc(100dvh-4rem)] flex-col">
@@ -217,19 +242,36 @@ export function ChatWindow({
                 {emptyHint(intentHint)} <Sparkle size={10} />
               </p>
               <p className="text-xs text-[var(--color-ink-fade)]">
-                {isDivination ? "选个维度 + 写下心事，再点抽签" : "想问就问，没什么忌讳"}
+                {bottomHint(intentHint)}
               </p>
             </GlassCard>
           </div>
         }
       />
       {isDivination ? (
-        <DivinationLauncher onDraw={runDivination} busy={drawing} />
+        <DivinationLauncher onDraw={runDivination} busy={structuredBusy} />
+      ) : isDream ? (
+        <DreamLauncher onSubmit={runDream} busy={structuredBusy} />
       ) : (
         <ChatInput onSend={send} busy={streaming !== null} />
       )}
     </div>
   );
+}
+
+function bottomHint(intent: Intent | undefined): string {
+  switch (intent) {
+    case "divination":
+      return "选个维度 + 写下心事，再点抽签";
+    case "dream":
+      return "梦境描述越具体，解读越贴";
+    case "bazi":
+      return "想看哪一段？工作 / 感情 / 健康都可以";
+    case "meihua":
+      return "起卦还在路上，先用对话页吧";
+    default:
+      return "想问就问，没什么忌讳";
+  }
 }
 
 function emptyHint(intent: Intent | undefined): string {
