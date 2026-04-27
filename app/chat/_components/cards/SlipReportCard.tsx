@@ -78,7 +78,7 @@ export function SlipReportCard({
           {LEVEL_LABEL[level]}
         </span>
         <h3
-          className="font-[family-name:var(--font-serif)] text-[22px] tracking-ritual text-[#7d2f2f]"
+          className="font-[family-name:var(--font-calligraphy),var(--font-serif)] text-[22px] tracking-ritual text-[#7d2f2f]"
           data-testid="report-title"
         >
           第 {slipNumber} 签 · {title}

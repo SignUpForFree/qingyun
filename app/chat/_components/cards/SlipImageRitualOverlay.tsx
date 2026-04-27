@@ -66,10 +66,10 @@ export function SlipImageRitualOverlay({
         className="relative w-full max-w-md rounded-2xl border-2 border-[#a87c5e] bg-[#F5EFE6] p-5 shadow-2xl"
       >
         <header className="mb-3 text-center">
-          <p className="font-[family-name:var(--font-serif)] text-[24px] tracking-ritual2 text-[#7d2f2f]">
+          <p className="font-[family-name:var(--font-calligraphy),var(--font-serif)] text-[24px] tracking-ritual2 text-[#7d2f2f]">
             第 {slipNumber} 签 · {level}
           </p>
-          <p className="mt-0.5 font-[family-name:var(--font-serif)] text-[16px] tracking-ritual text-[#3a2a4a]">
+          <p className="mt-0.5 font-[family-name:var(--font-calligraphy),var(--font-serif)] text-[16px] tracking-ritual text-[#3a2a4a]">
             《{title}》
           </p>
         </header>

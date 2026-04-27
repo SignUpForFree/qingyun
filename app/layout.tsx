@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { Noto_Serif_SC, Noto_Sans_SC } from "next/font/google";
+import { Noto_Serif_SC, Noto_Sans_SC, Ma_Shan_Zheng } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
 import { AppShell } from "@/components/layout";
@@ -17,6 +17,19 @@ const notoSans = Noto_Sans_SC({
   weight: ["300", "400", "500"],
   variable: "--font-sans",
   display: "swap",
+});
+
+/**
+ * M4.29 书法字体（手写宋）— 仅在仪式特化卡片标题使用
+ * Ma Shan Zheng 仅 Regular weight，Google Fonts 覆盖中文常用字（含繁简）
+ * + 拉丁字符。chinese-simplified 子集自动按 unicode-range 切片，按需加载。
+ */
+const maShanZheng = Ma_Shan_Zheng({
+  subsets: ["latin"],
+  weight: ["400"],
+  variable: "--font-calligraphy",
+  display: "swap",
+  preload: false, // 非首屏关键字体，懒加载省 LCP
 });
 
 export const metadata: Metadata = {
@@ -49,7 +62,12 @@ export default function RootLayout({
   return (
     <html
       lang="zh-CN"
-      className={cn("h-full antialiased", notoSerif.variable, notoSans.variable)}
+      className={cn(
+        "h-full antialiased",
+        notoSerif.variable,
+        notoSans.variable,
+        maShanZheng.variable,
+      )}
     >
       <body className="min-h-full flex flex-col font-sans">
         <AppShell>{children}</AppShell>

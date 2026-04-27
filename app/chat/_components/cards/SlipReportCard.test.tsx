@@ -65,11 +65,12 @@ describe("SlipReportCard (M2.12)", () => {
 
   // ============ M4.23 仪式特化 ============
 
-  it("题目用红朱色（书法风）", () => {
+  it("题目用红朱色（书法风 — M4.29 calligraphy 优先 + serif 回退）", () => {
     render(<SlipReportCard {...baseProps} />);
     const title = screen.getByTestId("report-title");
     expect(title.className).toContain("text-[#7d2f2f]");
-    expect(title.className).toContain("font-[family-name:var(--font-serif)]");
+    expect(title.className).toContain("var(--font-calligraphy)");
+    expect(title.className).toContain("var(--font-serif)");
   });
 
   it("整卡米黄渐变背景（仪式特化）", () => {
