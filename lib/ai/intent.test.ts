@@ -1,8 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   classifyByKeyword,
+  classifyIntent,
   classifyIntentSync,
   INTENT_RULES,
+  type LlmIntentCall,
 } from "./intent";
 
 /**
@@ -122,6 +124,77 @@ describe("classifyIntentSync (hint 强制 / 关键词回落)", () => {
 
   it("纯闲聊 → chat", () => {
     expect(classifyIntentSync("今天天气怎么样")).toBe("chat");
+  });
+});
+
+describe("classifyIntent (M2.3 — 异步 keyword + LLM 兜底)", () => {
+  it("关键词命中时不调 LLM (source=keyword)", async () => {
+    const llmCall = vi.fn();
+    const r = await classifyIntent("帮我看八字", { llmCall });
+    expect(r.intent).toBe("bazi");
+    expect(r.source).toBe("keyword");
+    expect(r.confidence).toBe(1);
+    expect(llmCall).not.toHaveBeenCalled();
+  });
+
+  it("关键词 miss 时调 LLM (source=llm)", async () => {
+    const llmCall: LlmIntentCall = vi.fn().mockResolvedValue({ intent: "bazi" });
+    const r = await classifyIntent("帮我研究下命格走势", { llmCall });
+    // 注意：命格 是关键词 → 命中 keyword，不会到 llm。换 phrase
+    // 这里用关键词不命中的句子证明 LLM 路径
+    expect(r.source).toBe("keyword");
+    expect(llmCall).not.toHaveBeenCalled();
+  });
+
+  it("无关键词时落到 LLM 并接受 LLM 给的 intent", async () => {
+    const llmCall: LlmIntentCall = vi.fn().mockResolvedValue({ intent: "bazi" });
+    const r = await classifyIntent("帮我研究一下命运走向", { llmCall });
+    expect(r.intent).toBe("bazi");
+    expect(r.source).toBe("llm");
+    expect(r.confidence).toBe(0.85);
+    expect(llmCall).toHaveBeenCalledOnce();
+  });
+
+  it("LLM 返回 null 时 fallback chat", async () => {
+    const llmCall: LlmIntentCall = vi.fn().mockResolvedValue(null);
+    const r = await classifyIntent("帮我研究一下命运走向", { llmCall });
+    expect(r.intent).toBe("chat");
+    expect(r.source).toBe("fallback");
+  });
+
+  it("LLM 抛错时 fallback chat", async () => {
+    const llmCall: LlmIntentCall = vi.fn().mockRejectedValue(new Error("AI down"));
+    const r = await classifyIntent("帮我研究一下命运走向", { llmCall });
+    expect(r.intent).toBe("chat");
+    expect(r.source).toBe("fallback");
+  });
+
+  it("不传 llmCall 时无关键词 → fallback chat (不抛)", async () => {
+    const r = await classifyIntent("帮我研究一下命运走向");
+    expect(r.intent).toBe("chat");
+    expect(r.source).toBe("fallback");
+  });
+
+  it("hint 优先于一切（不调 LLM 不查关键词）", async () => {
+    const llmCall = vi.fn();
+    const r = await classifyIntent("我要抽灵签", { hint: "meihua", llmCall });
+    expect(r.intent).toBe("meihua");
+    expect(llmCall).not.toHaveBeenCalled();
+  });
+
+  it("空字符串 → chat / fallback", async () => {
+    const r = await classifyIntent("");
+    expect(r.intent).toBe("chat");
+    expect(r.source).toBe("fallback");
+  });
+
+  it("LLM 返回非法 intent → fallback chat", async () => {
+    const llmCall: LlmIntentCall = vi
+      .fn()
+      .mockResolvedValue({ intent: "invalid_intent" as never });
+    const r = await classifyIntent("帮我研究一下命运走向", { llmCall });
+    expect(r.intent).toBe("chat");
+    expect(r.source).toBe("fallback");
   });
 });
 

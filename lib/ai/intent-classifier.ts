@@ -1,15 +1,15 @@
 import "server-only";
-import { classifyByKeyword } from "./intent";
+import { classifyIntent as classifyIntentCore, type LlmIntentCall, type IntentClassification } from "./intent";
 import { chat } from "./client";
 import type { Intent } from "@/types/domain";
 
-const VALID_INTENTS = ["chat", "divination", "dream", "bazi", "meihua"] as const;
-
-export interface IntentClassification {
-  intent: Intent;
-  confidence: number;
-  source: "keyword" | "llm" | "fallback";
-}
+const VALID_INTENTS: readonly Intent[] = [
+  "chat",
+  "divination",
+  "dream",
+  "bazi",
+  "meihua",
+] as const;
 
 const CLASSIFY_SYSTEM_PROMPT = `你是意图分类器。把用户的中文输入归到下列 5 个类别之一，只输出标签词，不输出任何解释：
 
@@ -24,42 +24,33 @@ const CLASSIFY_SYSTEM_PROMPT = `你是意图分类器。把用户的中文输入
 const CLASSIFIER_TIMEOUT_MS = 5000;
 
 /**
- * 意图分类器（B 策略 = 关键词 + LLM 兜底）
+ * 生产 llmCall — 把 chat() 客户端 + 5s 超时 + label 解析包成 LlmIntentCall。
+ */
+const productionLlmCall: LlmIntentCall = async (text) => {
+  const ai = await Promise.race([
+    chat({
+      systemPrompt: CLASSIFY_SYSTEM_PROMPT,
+      messages: [{ role: "user", content: text.slice(0, 500) }],
+      stream: false,
+      meta: { conversationId: "intent-classify", userId: "system" },
+    }),
+    new Promise<never>((_, rej) =>
+      setTimeout(() => rej(new Error("intent classifier timeout")), CLASSIFIER_TIMEOUT_MS),
+    ),
+  ]);
+  const label = ai.text.trim().toLowerCase();
+  const intent = VALID_INTENTS.find((i) => label.includes(i));
+  return intent ? { intent } : null;
+};
+
+/**
+ * 意图分类器（B 策略 = 关键词 + LLM 兜底）— 生产入口
  *
- * - 第一层：关键词命中 → 0 token，confidence=1
- * - 第二层：DeepSeek 分类（5s 超时） → confidence=0.85
- * - 第三层：LLM 失败或返回非法标签 → fallback chat
+ * 主逻辑在 lib/ai/intent.ts 的 classifyIntent。这里只负责把
+ * production chat 客户端装进 llmCall 注入点。
  */
 export async function classifyIntent(text: string): Promise<IntentClassification> {
-  if (!text || text.trim().length === 0) {
-    return { intent: "chat", confidence: 0, source: "fallback" };
-  }
-
-  const kw = classifyByKeyword(text);
-  if (kw.matched !== null) {
-    return { intent: kw.intent, confidence: 1, source: "keyword" };
-  }
-
-  try {
-    const ai = await Promise.race([
-      chat({
-        systemPrompt: CLASSIFY_SYSTEM_PROMPT,
-        messages: [{ role: "user", content: text.slice(0, 500) }],
-        stream: false,
-        meta: { conversationId: "intent-classify", userId: "system" },
-      }),
-      new Promise<never>((_, rej) =>
-        setTimeout(() => rej(new Error("intent classifier timeout")), CLASSIFIER_TIMEOUT_MS),
-      ),
-    ]);
-    const label = ai.text.trim().toLowerCase();
-    const intent = VALID_INTENTS.find((i) => label.includes(i));
-    if (intent) {
-      return { intent, confidence: 0.85, source: "llm" };
-    }
-    return { intent: "chat", confidence: 0.5, source: "fallback" };
-  } catch (e) {
-    console.error("intent classifier 失败", e);
-    return { intent: "chat", confidence: 0, source: "fallback" };
-  }
+  return classifyIntentCore(text, { llmCall: productionLlmCall });
 }
+
+export type { IntentClassification } from "./intent";
