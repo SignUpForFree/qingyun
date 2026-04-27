@@ -6,6 +6,7 @@ import {
   verifyState,
   exchangeCodeForToken,
   fetchUserinfo,
+  type OAuthTokenResp,
 } from "@/lib/wechat/oauth";
 import { getDb } from "@/lib/db/client";
 import { users, wechatBind, profiles } from "@/lib/db/schema";
@@ -48,7 +49,7 @@ export async function GET(req: Request): Promise<NextResponse> {
   }
 
   // Path 6: 40029 (code 重用) — 静默重启 OAuth
-  let token;
+  let token: OAuthTokenResp;
   try {
     token = await exchangeCodeForToken(code);
   } catch (e: unknown) {
@@ -86,31 +87,37 @@ export async function GET(req: Request): Promise<NextResponse> {
       .where(eq(wechatBind.user_id, userId));
   } else {
     // Path 4: 首次用户 — 建 users + wechat_bind + 默认 profile
+    // Atomic via db.transaction：任一插入失败（FK / 并发 unique violation / 进程崩溃）
+    // 全部回滚，避免孤儿 users 行或缺 profile 的用户破坏 M1.11 onboarding。
+    // 注意：drizzle better-sqlite3 的 transaction 是同步的（底层 better-sqlite3 限制），
+    // callback 不能返回 Promise，所以这里不用 async / await，每条语句用 .run() 立即执行。
     userId = crypto.randomUUID();
-    await db.insert(users).values({ id: userId, created_at: now, updated_at: now });
-    await db.insert(wechatBind).values({
-      user_id: userId,
-      openid: info.openid,
-      unionid: info.unionid,
-      nickname: info.nickname,
-      avatar_url: info.headimgurl,
-      raw_userinfo: JSON.stringify(info),
-      bound_at: now,
-      last_synced_at: now,
-    });
-    await db.insert(profiles).values({
-      id: crypto.randomUUID(),
-      user_id: userId,
-      is_default: true,
-      nickname: info.nickname,
-      avatar_url: info.headimgurl,
-      gender: "other",
-      birth_date: "1990-01-01",
-      birth_time: "12:00",
-      birth_calendar: "solar",
-      birth_place: "未填",
-      created_at: now,
-      updated_at: now,
+    db.transaction((tx) => {
+      tx.insert(users).values({ id: userId, created_at: now, updated_at: now }).run();
+      tx.insert(wechatBind).values({
+        user_id: userId,
+        openid: info.openid,
+        unionid: info.unionid,
+        nickname: info.nickname,
+        avatar_url: info.headimgurl,
+        raw_userinfo: JSON.stringify(info),
+        bound_at: now,
+        last_synced_at: now,
+      }).run();
+      tx.insert(profiles).values({
+        id: crypto.randomUUID(),
+        user_id: userId,
+        is_default: true,
+        nickname: info.nickname,
+        avatar_url: info.headimgurl,
+        gender: "other",
+        birth_date: "1990-01-01",
+        birth_time: "12:00",
+        birth_calendar: "solar",
+        birth_place: "未填",
+        created_at: now,
+        updated_at: now,
+      }).run();
     });
     isFirstTime = true;
   }
