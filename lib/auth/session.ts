@@ -4,16 +4,14 @@ import type { NextResponse } from "next/server";
 import { shouldSecureCookie } from "./cookie-flags";
 
 /**
- * 本地匿名 session — 替代 Supabase signInAnonymously
+ * 微信绑定的 session（V2.0）
  *
- * - cookie key: qy_uid，存 uuid
- * - 长期有效（1 年），httpOnly + sameSite=lax
- * - 首次访问时由 proxy.ts 自动生成
+ * - cookie key: qy_uid，值是 users.id
+ * - 长期有效（1 年），httpOnly + sameSite=lax (防御 #12)
+ * - 由 /api/auth/wechat/callback (M1.7) 在 OAuth 成功后通过 setSessionCookie 写入
+ * - middleware.ts (M1.8) 强制：无 cookie -> 302 /api/auth/wechat（页面）/ 401（API）
  *
- * 简化模型：
- *   - 没有"账号"概念，只有匿名 user_id（uuid）
- *   - 全部 user 数据通过 user_id 字段过滤（不依赖 RLS，service 层显式 where）
- *   - 未来要接微信 / 邮箱登录时，把 uid 与微信 openid 关联即可
+ * V1.0 的匿名 proxy.ts 已废弃 — V2.0 不再 bootstrap 匿名用户。
  */
 export const SESSION_COOKIE_KEY = "qy_uid";
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
