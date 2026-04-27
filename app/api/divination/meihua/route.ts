@@ -8,6 +8,8 @@ import { guardTexts } from "@/lib/safety/guard";
 import { chat } from "@/lib/ai/client";
 import { frame, heartbeat, safeEnqueue, SSE_HEADERS } from "@/lib/chat/sse";
 import { serializeJson } from "@/lib/db/json";
+import { meihuaV2 } from "@/lib/divination/meihua-v2";
+import { buildMeihuaPrompt } from "@/lib/ai/prompts/meihua-interpret";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -37,27 +39,8 @@ const bodySchema = z.object({
   userQuestion: z.string().trim().max(200).optional(),
 });
 
-const SYSTEM_PROMPT = [
-  "你是温和的梅花易数老师。",
-  "结构：[卦象速断 60-100 字] / [体用关系 60-100 字] / [应期建议 60-100 字] / [行动建议 60-100 字]。",
-  "禁词：大凶 / 倒霉 / 厄运 / 命中注定。负面信号转柔和说法（先慢一步、沉住气）。",
-  "字数：280-400 字。",
-].join("\n");
-
-// 后天八卦序号 1-8 → 卦名
-const TRIGRAMS = ["乾", "兑", "离", "震", "巽", "坎", "艮", "坤"] as const;
-type Trigram = (typeof TRIGRAMS)[number];
-
-const TRIGRAM_WUXING: Record<Trigram, "金" | "木" | "水" | "火" | "土"> = {
-  乾: "金",
-  兑: "金",
-  离: "火",
-  震: "木",
-  巽: "木",
-  坎: "水",
-  艮: "土",
-  坤: "土",
-};
+// V1 SYSTEM_PROMPT / TRIGRAMS / TRIGRAM_WUXING 已移到 lib/ai/prompts/meihua-interpret.ts
+// 与 lib/divination/meihua-v2.ts，本路由专心做 SSE + DB
 
 export async function POST(req: Request) {
   let raw: unknown;
@@ -209,12 +192,19 @@ export async function POST(req: Request) {
   const numbers = data.numbers;
   const userQuestion = data.userQuestion ?? "";
 
-  const benGua = numbersToHexagram(numbers);
-  const dongYao = computeDongYao(numbers);
-  const bianGua = mutateHexagram(benGua, dongYao);
-  const huGua = innerHexagram(benGua);
-  const tiYong = computeTiYong(benGua, dongYao);
-  const yingQi = computeYingQi(benGua, dongYao);
+  // M3.23：用 V2 算法（5 卦推演 + 体用 + 时辰能量 + 五行损益 + 应期 +
+  // 64 卦字典 panci/yaoci/tuanci）替代 V1 内联简化算法
+  const v2 = meihuaV2({
+    numbers,
+    userQuestion,
+    profile: {
+      id: profile.id,
+      gender: profile.gender,
+      birth_date: profile.birth_date,
+      birth_time: profile.birth_time,
+      bazi_pillars: profile.bazi_pillars,
+    },
+  });
 
   const sse = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -246,25 +236,15 @@ export async function POST(req: Request) {
       let tokens = 0;
 
       try {
-        const userPrompt = [
-          `请按梅花易数解读：`,
-          `档案性别：${profile.gender}`,
-          `用户报数：${numbers.join(" / ")}`,
-          `本卦：${benGua.upper}${benGua.lower}（上${benGua.upper}下${benGua.lower}）`,
-          `互卦：${huGua.upper}${huGua.lower}`,
-          `变卦：${bianGua.upper}${bianGua.lower}`,
-          `动爻：第 ${dongYao} 爻`,
-          `体用关系：${tiYong}`,
-          `应期：${yingQi}`,
-          userQuestion ? `用户问的：${userQuestion}` : "用户未指定具体问题，请综合解读。",
-          "",
-          "结构：卦象速断 / 体用关系 / 应期建议 / 行动建议（4 段）。",
-        ].join("\n");
+        const { systemPrompt, userPrompt } = buildMeihuaPrompt({
+          result: v2,
+          userQuestion,
+        });
 
         safeEnqueue(controller, frame("progress", { stage: "streaming", percent: 40 }));
 
         const stream = await chat({
-          systemPrompt: SYSTEM_PROMPT,
+          systemPrompt,
           messages: [{ role: "user", content: userPrompt }],
           stream: true,
           meta: { conversationId: data.conversationId, userId },
@@ -283,12 +263,27 @@ export async function POST(req: Request) {
         const cardMeta = {
           ui: "meihua_result" as const,
           profileId,
-          benGua: `${benGua.upper}${benGua.lower}`,
-          huGua: `${huGua.upper}${huGua.lower}`,
-          bianGua: `${bianGua.upper}${bianGua.lower}`,
-          dongYao,
-          tiYong,
-          yingQi,
+          numbers,
+          // V2 5 卦推演：每卦含 number/name/upper/lower/lines
+          ben: { name: v2.ben.name, upper: v2.ben.upper, lower: v2.ben.lower, lines: v2.ben.lines },
+          hu: { name: v2.hu.name, upper: v2.hu.upper, lower: v2.hu.lower, lines: v2.hu.lines },
+          bian: { name: v2.bian.name, upper: v2.bian.upper, lower: v2.bian.lower, lines: v2.bian.lines },
+          guaZhongGua: {
+            name: v2.guaZhongGua.name,
+            upper: v2.guaZhongGua.upper,
+            lower: v2.guaZhongGua.lower,
+            lines: v2.guaZhongGua.lines,
+          },
+          dongYao: v2.dongYao,
+          // 体用 / 应期 / 时辰能量 / 五行损益（V2 新增）
+          tiYong: v2.tiYong,
+          yingQi: v2.yingQi,
+          timeEnergy: v2.timeEnergy,
+          sunYi: v2.sunYi,
+          // gua64 字典视图（动爻爻辞 + 卦辞 + 彖辞），前端可直接渲染
+          benDict: v2.benDict,
+          huDict: v2.huDict,
+          bianDict: v2.bianDict,
           verdict: aiText.slice(0, 60) || "(AI 卦辞未生成)",
           aiText,
         };
@@ -347,101 +342,6 @@ export async function POST(req: Request) {
   });
 
   return new Response(sse, { headers: SSE_HEADERS });
-}
-
-// ============ V1.0 简化算法（V2.0 在 M3.16+ 升级） ============
-
-/**
- * 报数 → 本卦
- * 单数：上卦 = (n % 8) || 8；下卦同 n；动爻 = (n % 6) || 6
- * 双数：上卦 = (n1 % 8) || 8；下卦 = (n2 % 8) || 8；动爻 = ((n1+n2) % 6) || 6
- * 三数：上卦 = (n1 % 8) || 8；下卦 = (n2 % 8) || 8；动爻 = ((n1+n2+n3) % 6) || 6
- */
-function numbersToHexagram(numbers: number[]): { upper: Trigram; lower: Trigram } {
-  const n1 = numbers[0] ?? 1;
-  const n2 = numbers[1] ?? n1;
-  const upperIdx = ((n1 - 1) % 8 + 8) % 8;
-  const lowerIdx = ((n2 - 1) % 8 + 8) % 8;
-  return { upper: TRIGRAMS[upperIdx]!, lower: TRIGRAMS[lowerIdx]! };
-}
-
-function computeDongYao(numbers: number[]): number {
-  const sum = numbers.reduce((a, b) => a + b, 0);
-  const r = sum % 6;
-  return r === 0 ? 6 : r;
-}
-
-/**
- * 互卦：取本卦 234 爻为下卦、345 爻为上卦
- * V1.0 简化：直接拿本卦的 lower / upper 反过来作互卦 placeholder（后续 V2 接 64 卦表）
- */
-function innerHexagram(ben: { upper: Trigram; lower: Trigram }): { upper: Trigram; lower: Trigram } {
-  return { upper: ben.lower, lower: ben.upper };
-}
-
-/**
- * 变卦：动爻所在卦换一个相邻位（V1.0 简化：上下卦互换 placeholder）
- */
-function mutateHexagram(
-  ben: { upper: Trigram; lower: Trigram },
-  dongYao: number,
-): { upper: Trigram; lower: Trigram } {
-  // 动爻 1-3 影响下卦，4-6 影响上卦
-  if (dongYao <= 3) {
-    const idx = TRIGRAMS.indexOf(ben.lower);
-    return { upper: ben.upper, lower: TRIGRAMS[(idx + 1) % 8]! };
-  }
-  const idx = TRIGRAMS.indexOf(ben.upper);
-  return { upper: TRIGRAMS[(idx + 1) % 8]!, lower: ben.lower };
-}
-
-/**
- * 体用关系：动爻所在卦为用，另一卦为体
- * 比较 wuxing 给出生克关系（生体 / 比和 / 体生用 / 克体 / 体克用）
- */
-function computeTiYong(ben: { upper: Trigram; lower: Trigram }, dongYao: number): string {
-  const ti = dongYao <= 3 ? ben.upper : ben.lower; // 不动的为体
-  const yong = dongYao <= 3 ? ben.lower : ben.upper;
-  const tiE = TRIGRAM_WUXING[ti];
-  const yongE = TRIGRAM_WUXING[yong];
-
-  if (tiE === yongE) return `比和（${ti}/${yong} 同${tiE}），运势平稳`;
-  if (sheng(yongE, tiE)) return `用生体（${yong}${yongE} 生 ${ti}${tiE}），得力`;
-  if (sheng(tiE, yongE)) return `体生用（${ti}${tiE} 生 ${yong}${yongE}），耗力`;
-  if (ke(yongE, tiE)) return `用克体（${yong}${yongE} 克 ${ti}${tiE}），先慢一步`;
-  if (ke(tiE, yongE)) return `体克用（${ti}${tiE} 克 ${yong}${yongE}），主导`;
-  return `${ti}${tiE} / ${yong}${yongE}，需结合时运`;
-}
-
-/**
- * 应期：动爻数对应当下 / 近期 / 中期
- */
-function computeYingQi(_ben: { upper: Trigram; lower: Trigram }, dongYao: number): string {
-  if (dongYao <= 2) return "近 1-3 日";
-  if (dongYao <= 4) return "近 1-3 周";
-  return "1-3 个月";
-}
-
-function sheng(a: string, b: string): boolean {
-  // 五行相生：木→火→土→金→水→木
-  return (
-    (a === "木" && b === "火") ||
-    (a === "火" && b === "土") ||
-    (a === "土" && b === "金") ||
-    (a === "金" && b === "水") ||
-    (a === "水" && b === "木")
-  );
-}
-
-function ke(a: string, b: string): boolean {
-  // 五行相克：木克土，土克水，水克火，火克金，金克木
-  return (
-    (a === "木" && b === "土") ||
-    (a === "土" && b === "水") ||
-    (a === "水" && b === "火") ||
-    (a === "火" && b === "金") ||
-    (a === "金" && b === "木")
-  );
 }
 
 function jsonError(message: string, status: number): Response {
