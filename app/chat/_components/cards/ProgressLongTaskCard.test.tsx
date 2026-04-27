@@ -78,4 +78,66 @@ describe("ProgressLongTaskCard (M2.8)", () => {
     expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("45");
     expect(screen.getByRole("button", { name: "取消" })).toBeInTheDocument();
   });
+
+  // ============ M4.24 仪式特化 ============
+
+  it("variant 缺省 → default 容器（向后兼容）", () => {
+    render(<ProgressLongTaskCard />);
+    expect(screen.getByTestId("progress-long-task-default")).toBeInTheDocument();
+    expect(screen.queryByTestId("progress-long-task-bazi")).toBeNull();
+    expect(screen.queryByTestId("progress-long-task-meihua")).toBeNull();
+  });
+
+  it("variant='bazi' 渲染古铜金容器 + 八卦圆 SVG", () => {
+    render(<ProgressLongTaskCard variant="bazi" />);
+    const card = screen.getByTestId("progress-long-task-bazi");
+    expect(card).toBeInTheDocument();
+    // 古铜金渐变背景（jsdom 把 #2A2118 转 rgb(42, 33, 24)）
+    expect(card.style.background).toContain("rgb(42, 33, 24)");
+    expect(screen.getByTestId("ritual-glyph-bazi")).toBeInTheDocument();
+  });
+
+  it("variant='meihua' 渲染古铜金容器 + 六爻 SVG", () => {
+    render(<ProgressLongTaskCard variant="meihua" />);
+    expect(screen.getByTestId("progress-long-task-meihua")).toBeInTheDocument();
+    expect(screen.getByTestId("ritual-glyph-meihua")).toBeInTheDocument();
+  });
+
+  it("bazi 八卦 SVG 含 8 条经卦标记线", () => {
+    render(<ProgressLongTaskCard variant="bazi" />);
+    const glyph = screen.getByTestId("ritual-glyph-bazi");
+    // 8 条 line（经卦） + 2 个 circle（同心圆，与 line 不冲突）
+    const lines = glyph.querySelectorAll("line");
+    expect(lines.length).toBe(8);
+  });
+
+  it("meihua 六爻 SVG 含 6 行（阳爻 1 line / 阴爻 2 line）", () => {
+    render(<ProgressLongTaskCard variant="meihua" />);
+    const glyph = screen.getByTestId("ritual-glyph-meihua");
+    // 6 爻：i % 2 === 0 阳爻 1 line（i=0,2,4 = 3 阳爻 = 3 line）
+    //     i % 2 === 1 阴爻 2 line（i=1,3,5 = 3 阴爻 = 6 line）
+    // 总计 3 + 6 = 9 line
+    const lines = glyph.querySelectorAll("line");
+    expect(lines.length).toBe(9);
+  });
+
+  it("ritual variant 也渲染 stage label + etaSec", () => {
+    render(<ProgressLongTaskCard variant="bazi" stage="computing" etaSec={45} />);
+    expect(screen.getByText("推算中…")).toBeInTheDocument();
+    expect(screen.getByText("约 45s")).toBeInTheDocument();
+  });
+
+  it("ritual variant 进度条 percent 受控", () => {
+    render(<ProgressLongTaskCard variant="meihua" percent={66} />);
+    const bar = screen.getByRole("progressbar");
+    expect(bar.getAttribute("aria-valuenow")).toBe("66");
+  });
+
+  it("ritual variant onCancel 渲染古铜金按钮", () => {
+    const onCancel = vi.fn();
+    render(<ProgressLongTaskCard variant="bazi" onCancel={onCancel} />);
+    const btn = screen.getByRole("button", { name: "取消" });
+    fireEvent.click(btn);
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
 });

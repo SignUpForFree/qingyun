@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { GlassCard, Divider } from "@/components/su";
+import { Divider } from "@/components/su";
 import { cn } from "@/lib/utils";
 import type { SlipImageLevel } from "./SlipImageFullscreen";
 
@@ -55,7 +55,19 @@ export function SlipReportCard({
   className,
 }: SlipReportCardProps) {
   return (
-    <GlassCard className={cn("space-y-4 p-5", className)}>
+    <div
+      data-testid="slip-report-card"
+      className={cn(
+        "relative space-y-4 overflow-hidden rounded-[16px] border border-[#a87c5e]/30 p-5 shadow-[0_8px_24px_rgba(200,170,220,0.15)]",
+        className,
+      )}
+      style={{
+        // M4.23: 整卡米黄渐变 + 隐约纸纹（自画 repeating-linear-gradient）
+        background:
+          "linear-gradient(180deg, #FFF8E8 0%, #FCEFC8 100%)," +
+          "repeating-linear-gradient(0deg, rgba(168,124,94,0.05) 0px, rgba(168,124,94,0.05) 1px, transparent 1px, transparent 6px)",
+      }}
+    >
       <header className="space-y-2 text-center">
         <span
           className={cn(
@@ -65,7 +77,10 @@ export function SlipReportCard({
         >
           {LEVEL_LABEL[level]}
         </span>
-        <h3 className="font-[family-name:var(--font-serif)] text-lg tracking-ritual text-[var(--color-ink-plum)]">
+        <h3
+          className="font-[family-name:var(--font-serif)] text-[22px] tracking-ritual text-[#7d2f2f]"
+          data-testid="report-title"
+        >
           第 {slipNumber} 签 · {title}
         </h3>
         <p className="text-[11px] tracking-ritual2 text-[var(--color-ink-fade)]">
@@ -74,8 +89,8 @@ export function SlipReportCard({
         </p>
       </header>
 
-      <div className="rounded-[12px] bg-gradient-to-br from-[#FFF6E0]/60 to-[#F0DDB8]/40 px-4 py-4">
-        <p className="whitespace-pre-line text-center font-[family-name:var(--font-serif)] text-[15px] leading-loose tracking-ritual text-[var(--color-ink-plum)]">
+      <div className="rounded-[12px] border border-[#a87c5e]/30 bg-[#FFF6E0]/85 px-4 py-4 shadow-inner">
+        <p className="whitespace-pre-line text-center font-[family-name:var(--font-serif)] text-[16px] leading-loose tracking-ritual text-[var(--color-ink-plum)]">
           {poem}
         </p>
       </div>
@@ -83,9 +98,7 @@ export function SlipReportCard({
       <Divider />
 
       <section className="space-y-1.5">
-        <p className="text-[11px] tracking-ritual2 text-[var(--color-ink-fade)]">
-          解 签 词
-        </p>
+        <p className="text-[11px] tracking-ritual2 text-[#a87c5e]">解 签 词</p>
         <p className="whitespace-pre-line text-sm leading-relaxed text-[var(--color-ink-plum)]">
           {reading}
         </p>
@@ -100,6 +113,21 @@ export function SlipReportCard({
         </p>
       </section>
 
+      {/* M4.23 红朱方框落款印章（右下角，避免遮 share 按钮） */}
+      <div
+        aria-hidden
+        data-testid="report-seal"
+        className="absolute bottom-3 right-3 flex h-9 w-9 flex-col items-center justify-center rounded-md border-[1.5px] border-[#a83333]/55"
+        style={{
+          color: "rgba(168,51,51,0.65)",
+          fontFamily: "var(--font-serif)",
+          lineHeight: 1,
+        }}
+      >
+        <span className="text-[11px]">轻</span>
+        <span className="text-[11px]">运</span>
+      </div>
+
       {onShare && (
         <div className="flex justify-end pt-1">
           <button
@@ -111,6 +139,6 @@ export function SlipReportCard({
           </button>
         </div>
       )}
-    </GlassCard>
+    </div>
   );
 }

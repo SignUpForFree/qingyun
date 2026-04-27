@@ -8,6 +8,8 @@ interface GlassCardProps {
   className?: string;
   shadow?: GlassShadow;
   rounded?: GlassRadius;
+  /** 透传给底层 div 的 data-testid（测试与无障碍属性钩子） */
+  "data-testid"?: string;
 }
 
 const RADIUS_CLASS: Record<GlassRadius, string> = {
@@ -27,9 +29,13 @@ export function GlassCard({
   className,
   shadow = "glass",
   rounded = "card",
+  "data-testid": dataTestId,
 }: GlassCardProps) {
   return (
-    <div className={cn("glass hairline", RADIUS_CLASS[rounded], SHADOW_CLASS[shadow], className)}>
+    <div
+      className={cn("glass hairline", RADIUS_CLASS[rounded], SHADOW_CLASS[shadow], className)}
+      data-testid={dataTestId}
+    >
       {children}
     </div>
   );

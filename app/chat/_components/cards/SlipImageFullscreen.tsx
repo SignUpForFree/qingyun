@@ -2,6 +2,7 @@
 import * as React from "react";
 import { GlassCard, Sparkle } from "@/components/su";
 import { cn } from "@/lib/utils";
+import { SlipImageRitualOverlay } from "./SlipImageRitualOverlay";
 
 export type SlipImageLevel = "上上" | "上吉" | "中吉" | "中平" | "下下";
 
@@ -48,6 +49,7 @@ export function SlipImageFullscreen({
   className,
 }: SlipImageFullscreenProps) {
   const [imgError, setImgError] = React.useState(false);
+  const [overlayOpen, setOverlayOpen] = React.useState(false);
   const tone = LEVEL_TONE[level];
 
   return (
@@ -73,8 +75,10 @@ export function SlipImageFullscreen({
         <img
           src={imageUrl}
           alt={`第 ${slipNumber} 签 · ${title}`}
-          className="w-full rounded-[12px] border border-[var(--color-accent-lavender)]/30"
+          className="w-full cursor-zoom-in rounded-[12px] border border-[var(--color-accent-lavender)]/30 transition hover:opacity-90"
           onError={() => setImgError(true)}
+          onClick={() => setOverlayOpen(true)}
+          data-testid="slip-card-img"
         />
       ) : (
         <div
@@ -100,6 +104,17 @@ export function SlipImageFullscreen({
           <span className="text-[var(--color-accent-plum)]">{category}</span>
         </p>
       )}
+
+      <SlipImageRitualOverlay
+        open={overlayOpen}
+        onClose={() => setOverlayOpen(false)}
+        imageUrl={imageUrl}
+        slipNumber={slipNumber}
+        level={level}
+        title={title}
+        poemLines={poemLines}
+        category={category}
+      />
 
       <div className="flex gap-2">
         {onExplain && (

@@ -62,4 +62,27 @@ describe("SlipReportCard (M2.12)", () => {
     render(<SlipReportCard {...baseProps} level={level} />);
     expect(screen.getByText(label)).toBeInTheDocument();
   });
+
+  // ============ M4.23 仪式特化 ============
+
+  it("题目用红朱色（书法风）", () => {
+    render(<SlipReportCard {...baseProps} />);
+    const title = screen.getByTestId("report-title");
+    expect(title.className).toContain("text-[#7d2f2f]");
+    expect(title.className).toContain("font-[family-name:var(--font-serif)]");
+  });
+
+  it("整卡米黄渐变背景（仪式特化）", () => {
+    render(<SlipReportCard {...baseProps} />);
+    const card = screen.getByTestId("slip-report-card");
+    // jsdom 把 hex 转 rgb：#FFF8E8 → rgb(255, 248, 232)
+    expect(card.style.background).toContain("rgb(255, 248, 232)");
+  });
+
+  it("右下角红朱方框印章（落款 轻运）", () => {
+    render(<SlipReportCard {...baseProps} />);
+    const seal = screen.getByTestId("report-seal");
+    expect(seal).toHaveTextContent("轻");
+    expect(seal).toHaveTextContent("运");
+  });
 });
