@@ -1,5 +1,6 @@
 import "server-only";
 import { cookies } from "next/headers";
+import type { NextResponse } from "next/server";
 import { shouldSecureCookie } from "./cookie-flags";
 
 /**
@@ -44,6 +45,25 @@ export async function setUserId(userId: string): Promise<void> {
 export async function clearUserId(): Promise<void> {
   const store = await cookies();
   store.delete(SESSION_COOKIE_KEY);
+}
+
+/**
+ * Response 变体 — 把 qy_uid cookie 写在 NextResponse 上而非 cookies() store。
+ *
+ * Route handler 在返回 `NextResponse.redirect(...)` 时（如 OAuth 回调跳 /onboarding），
+ * 必须把 cookie 挂在那个 response 上；调 cookies().set 不会跟随到 redirect 响应。
+ *
+ * 防御 #12（V2.0 风险 #5）：sameSite=lax，**不**用 None。微信内嵌浏览器对 SameSite=None
+ * 的处理不一致，Lax 能在 OAuth 重定向（top-level navigation）下稳定工作。
+ */
+export function setSessionCookie(res: NextResponse, userId: string): void {
+  res.cookies.set(SESSION_COOKIE_KEY, userId, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: shouldSecureCookie(),
+    maxAge: ONE_YEAR_SECONDS,
+    path: "/",
+  });
 }
 
 /**

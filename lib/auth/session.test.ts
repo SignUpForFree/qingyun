@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextResponse } from "next/server";
 
 vi.mock("server-only", () => ({}));
 
@@ -26,6 +27,7 @@ import {
   setUserId,
   clearUserId,
   requireUserId,
+  setSessionCookie,
   SESSION_COOKIE_KEY,
   UnauthenticatedError,
 } from "./session";
@@ -89,5 +91,27 @@ describe("requireUserId", () => {
 
   it("无 cookie 抛 UnauthenticatedError", async () => {
     await expect(requireUserId()).rejects.toBeInstanceOf(UnauthenticatedError);
+  });
+});
+
+describe("setSessionCookie (response variant)", () => {
+  it("attaches qy_uid cookie to NextResponse with httpOnly + sameSite=lax + path=/", () => {
+    const res = NextResponse.redirect(new URL("https://x.test/onboarding"), 302);
+    setSessionCookie(res, "uid-123");
+    const cookie = res.cookies.get(SESSION_COOKIE_KEY);
+    expect(cookie?.value).toBe("uid-123");
+    // NextResponse.cookies stores options on the cookie record; assert presence
+    const setHeader = res.headers.get("set-cookie") ?? "";
+    expect(setHeader).toMatch(/qy_uid=uid-123/);
+    expect(setHeader.toLowerCase()).toContain("httponly");
+    expect(setHeader.toLowerCase()).toContain("samesite=lax");
+    expect(setHeader.toLowerCase()).toContain("path=/");
+  });
+
+  it("does not mutate cookies() store (only the response)", () => {
+    const res = NextResponse.redirect(new URL("https://x.test/"), 302);
+    setSessionCookie(res, "uid-isolated");
+    // The cookies() store mock should be untouched by this helper.
+    expect(cookieStore.get(SESSION_COOKIE_KEY)).toBeUndefined();
   });
 });
