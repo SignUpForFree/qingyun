@@ -139,3 +139,120 @@ describe("POST /api/chat schema", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("POST /api/chat — M2.15 SSE 路由", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { getDb } = await import("@/lib/db/client");
+    (getDb as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue(makeFakeDb());
+  });
+
+  async function readSse(res: Response): Promise<string> {
+    return await res.text();
+  }
+
+  it("成功 200 + SSE Content-Type", async () => {
+    const req = new Request("http://test/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "你好" }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toMatch(/text\/event-stream/);
+  });
+
+  it("intent=chat → 流式 token 事件 + meta + done", async () => {
+    const req = new Request("http://test/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "你好" }),
+    });
+    const text = await readSse(await POST(req));
+    expect(text).toContain("event: meta");
+    expect(text).toContain("event: token");
+    expect(text).toContain("event: done");
+    expect(text).toMatch(/"intent":"chat"/);
+  });
+
+  it("intent=divination → SSE card 事件含 slip_type_picker metadata", async () => {
+    const req = new Request("http://test/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "我想抽签" }),
+    });
+    const text = await readSse(await POST(req));
+    expect(text).toContain("event: card");
+    expect(text).toContain("slip_type_picker");
+    expect(text).toContain('"intent":"divination"');
+  });
+
+  it("intent=dream → SSE card 事件含 dream_choice metadata", async () => {
+    const req = new Request("http://test/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "我想解梦" }),
+    });
+    const text = await readSse(await POST(req));
+    expect(text).toContain("dream_choice");
+  });
+
+  it("?intent=meihua query 覆盖分类器（即使 text 是抽签关键词）", async () => {
+    const req = new Request("http://test/api/chat?intent=meihua", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "我想抽签" }),
+    });
+    const text = await readSse(await POST(req));
+    expect(text).toContain('"intent":"meihua"');
+    expect(text).toContain('"source":"query"');
+  });
+
+  it("?intent=invalid 非法值不覆盖（fallback 走 classifier）", async () => {
+    const req = new Request("http://test/api/chat?intent=banana", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "我想抽签" }),
+    });
+    const text = await readSse(await POST(req));
+    // text 命中 "抽签" → divination via classifier
+    expect(text).toContain('"intent":"divination"');
+    expect(text).toContain('"source":"keyword"');
+  });
+
+  it("限流命中 → 429 不进 SSE", async () => {
+    const { checkRateLimit } = await import("@/lib/ai/check-rate-limit");
+    (checkRateLimit as unknown as { mockResolvedValueOnce: (v: unknown) => void }).mockResolvedValueOnce({
+      allowed: false,
+      used: 30,
+      limit: 30,
+    });
+
+    const req = new Request("http://test/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "你好" }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(429);
+    expect(res.headers.get("content-type")).toMatch(/application\/json/);
+  });
+
+  it("安全词 guard 拦截 → 不进 SSE", async () => {
+    const { guardTexts } = await import("@/lib/safety/guard");
+    (guardTexts as unknown as { mockReturnValueOnce: (v: unknown) => void }).mockReturnValueOnce(
+      new Response(JSON.stringify({ error: "blocked" }), {
+        status: 422,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    const req = new Request("http://test/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "敏感词" }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(422);
+  });
+});

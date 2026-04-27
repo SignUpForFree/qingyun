@@ -1,58 +1,52 @@
 import { z } from "zod";
-import { and, desc, eq } from "drizzle-orm";
-import type { ModelMessage } from "ai";
+import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { conversations, messages, profiles } from "@/lib/db/schema";
+import { conversations, messages } from "@/lib/db/schema";
 import { ensureUserId } from "@/lib/auth/session";
 import { classifyIntent } from "@/lib/ai/intent-classifier";
 import { checkRateLimit } from "@/lib/ai/check-rate-limit";
-import { chat } from "@/lib/ai/client";
 import { guardTexts } from "@/lib/safety/guard";
-import {
-  buildPromptMessages,
-  shouldSummarize,
-  summarize,
-  K_RECENT,
-} from "@/lib/ai/summarizer";
-import { serializeJson } from "@/lib/db/json";
+import { shouldSummarize, summarize } from "@/lib/ai/summarizer";
+import { routeIntent } from "@/lib/chat/router";
+import { frame, heartbeat, safeEnqueue, SSE_HEADERS } from "@/lib/chat/sse";
 import type { Intent } from "@/types/domain";
 
 /**
- * POST /api/chat — SSE 流式对话端点（路由器）
+ * POST /api/chat — SSE 6 事件流式对话端点 (M2.15)
  *
- * 请求 body：{ conversationId?: uuid|null, text: string (1-2000) }
+ * Body：{ conversationId?: string|null, text: string (1-2000) }
+ * Query：?intent=divination|dream|bazi|meihua|chat 强制覆盖分类器（用于按钮回流）
  *
  * 工作流：
- *   1. 校验 + 限流 + 安全词
- *   2. 建/取 conversation（首次会话用 text 前 10 字做 title）
- *   3. classifyIntent (B 策略 = keyword + LLM 兜底)
- *   4. 写 user message + 更新 conversations.last_intent / last_message_at
- *   5. 分流：
- *      - intent === 'chat' → multi-turn 流式回复（带摘要 + 最近 K 条历史）
- *      - 其他 4 类 → 写引导卡 message → SSE 'card' 事件
- *   6. 异步触发 maybeSummarize
+ *   1. 校验 (zod nullish #1) + 限流 + 安全词
+ *   2. ensure user / conversation（首次会话用 text 前 10 字做 title）
+ *   3. classifyIntent (?intent= 覆盖 → keyword → LLM)
+ *   4. 写 user message + 更新 conversation.last_intent / last_message_at
+ *   5. routeIntent 分流：chat 流式 / 4 类引导卡
+ *   6. 25s heartbeat 防 nginx/wechat 代理切连 (#18)
+ *   7. enqueue 走 safeEnqueue (#11)
+ *   8. finally void maybeSummarize
  *
- * SSE 事件：
- *   meta   { conversationId, intent, source }
- *   token  "<text chunk>"  (仅 chat)
- *   card   { id, role, content, metadata }  (4 类引导)
- *   done   {}
- *   error  { message }
+ * SSE 6 events：meta / token / card / progress / done / error
  */
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+const HEARTBEAT_MS = 25_000;
 
 const bodySchema = z.object({
   conversationId: z.string().min(1).nullish(),
   text: z.string().min(1, "消息不能为空").max(2000, "消息超过 2000 字"),
 });
 
-const SYSTEM_PROMPT = [
-  "你是轻运 AI，一位温柔、年轻化的国学陪伴助手。",
-  "回复风格：自然、简短（默认 80–200 字），有温度但不端说教架子。",
-  "禁用：大凶 / 倒霉 / 厄运 / 命中注定 等绝对负面词。把不利信号转成『适合静一静』、『可以慢一点』这类柔和说法。",
-  "结尾不要硬贴『加油』、『相信自己』这种空洞鸡汤。",
-].join("\n");
+const VALID_INTENT_QUERY = ["divination", "dream", "bazi", "meihua", "chat"] as const;
+
+function parseIntentQuery(req: Request): Intent | null {
+  const url = new URL(req.url);
+  const v = url.searchParams.get("intent");
+  if (!v) return null;
+  return (VALID_INTENT_QUERY as readonly string[]).includes(v) ? (v as Intent) : null;
+}
 
 export async function POST(req: Request) {
   let raw: unknown;
@@ -106,7 +100,11 @@ export async function POST(req: Request) {
   }
   const finalConvId: string = convId;
 
-  const cls = await classifyIntent(text);
+  // ?intent= query 覆盖分类（用于按钮回流，省一次 LLM 调用）
+  const overrideIntent = parseIntentQuery(req);
+  const cls = overrideIntent
+    ? { intent: overrideIntent, confidence: 1, source: "query" as const }
+    : await classifyIntent(text);
   const intent: Intent = cls.intent;
 
   await db.insert(messages).values({
@@ -121,12 +119,22 @@ export async function POST(req: Request) {
     .set({ last_intent: intent, last_message_at: new Date().toISOString() })
     .where(eq(conversations.id, finalConvId));
 
-  const encoder = new TextEncoder();
-
-  const sse = new ReadableStream({
+  const sse = new ReadableStream<Uint8Array>({
     async start(controller) {
-      controller.enqueue(
-        sseFrame(encoder, "meta", {
+      let heartbeatId: ReturnType<typeof setInterval> | null = setInterval(() => {
+        safeEnqueue(controller, heartbeat());
+      }, HEARTBEAT_MS);
+
+      const stopHeartbeat = () => {
+        if (heartbeatId) {
+          clearInterval(heartbeatId);
+          heartbeatId = null;
+        }
+      };
+
+      safeEnqueue(
+        controller,
+        frame("meta", {
           conversationId: finalConvId,
           intent,
           source: cls.source,
@@ -134,189 +142,41 @@ export async function POST(req: Request) {
       );
 
       try {
-        if (intent === "chat") {
-          await streamChatReply({
-            controller,
-            encoder,
-            convId: finalConvId,
-            userId,
-            text,
-          });
-        } else {
-          const cardMeta = await buildGuideCard(intent, userId);
-          const [card] = await db
-            .insert(messages)
-            .values({
-              conversation_id: finalConvId,
-              role: "assistant",
-              content: cardMeta.contentText,
-              intent,
-              metadata: serializeJson(cardMeta.meta),
-            })
-            .returning();
-          controller.enqueue(
-            sseFrame(encoder, "card", {
-              id: card?.id,
-              role: "assistant",
-              content: cardMeta.contentText,
-              metadata: serializeJson(cardMeta.meta),
-            }),
-          );
-        }
-        controller.enqueue(sseFrame(encoder, "done", {}));
+        await routeIntent({
+          controller,
+          conversationId: finalConvId,
+          userId,
+          text,
+          intent,
+        });
+        safeEnqueue(controller, frame("done", {}));
       } catch (e) {
-        console.error("/api/chat 失败", e);
-        controller.enqueue(
-          sseFrame(encoder, "error", {
+        if (process.env.NODE_ENV !== "production") {
+          console.error("/api/chat 失败", e);
+        }
+        safeEnqueue(
+          controller,
+          frame("error", {
             message: "AI 卡了一下，请稍后再试",
+            retryable: true,
           }),
         );
       } finally {
-        controller.close();
+        stopHeartbeat();
+        try {
+          controller.close();
+        } catch {
+          /* 已 close 不致命 */
+        }
         void maybeSummarize(finalConvId);
       }
     },
-  });
-
-  return new Response(sse, {
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
+    cancel() {
+      // 客户端断开 → 由 finally 的 stopHeartbeat 处理（start 还在跑会清理）
     },
   });
-}
 
-interface GuideCard {
-  contentText: string;
-  meta: { ui: string; [k: string]: unknown };
-}
-
-const FOCUS_OPTIONS = [
-  { key: "综合运势", label: "综合运势" },
-  { key: "事业学业", label: "事业学业" },
-  { key: "财运", label: "财运" },
-  { key: "感情姻缘", label: "感情姻缘" },
-  { key: "人际贵人", label: "人际贵人" },
-  { key: "平安健康", label: "平安健康" },
-];
-
-async function buildGuideCard(intent: Intent, userId: string): Promise<GuideCard> {
-  switch (intent) {
-    case "divination":
-      return {
-        contentText: "好的，您想求哪一类签？",
-        meta: { ui: "slip_type_picker", options: FOCUS_OPTIONS },
-      };
-    case "dream":
-      return {
-        contentText: "请问您想快速解梦还是精准解梦？",
-        meta: {
-          ui: "dream_choice",
-          options: [
-            { key: "fast", label: "快速解梦", hint: "简单描述 快速解梦" },
-            { key: "precise", label: "精准解梦", hint: "多维度场景描述 精准解读" },
-          ],
-        },
-      };
-    case "bazi": {
-      const hasProfile = await userHasDefaultProfile(userId);
-      if (hasProfile) {
-        return {
-          contentText: "好的，您想从哪个角度看八字？",
-          meta: { ui: "bazi_focus_picker", options: FOCUS_OPTIONS },
-        };
-      }
-      return {
-        contentText: "请填写八字信息",
-        meta: { ui: "bazi_quick_form" },
-      };
-    }
-    case "meihua":
-      return {
-        contentText: "好的，请输入 3 个数字（1-999），并描述您想测算的事情。",
-        meta: { ui: "meihua_number_input" },
-      };
-    default:
-      return { contentText: "", meta: { ui: "text" } };
-  }
-}
-
-async function userHasDefaultProfile(userId: string): Promise<boolean> {
-  const db = getDb();
-  const hit = await db
-    .select({ id: profiles.id })
-    .from(profiles)
-    .where(eq(profiles.user_id, userId))
-    .limit(1);
-  return Boolean(hit[0]);
-}
-
-async function streamChatReply(args: {
-  controller: ReadableStreamDefaultController;
-  encoder: TextEncoder;
-  convId: string;
-  userId: string;
-  text: string;
-}) {
-  const db = getDb();
-  const [conv] = await db
-    .select()
-    .from(conversations)
-    .where(eq(conversations.id, args.convId))
-    .limit(1);
-
-  const recentRows = await db
-    .select({ role: messages.role, content: messages.content })
-    .from(messages)
-    .where(eq(messages.conversation_id, args.convId))
-    .orderBy(desc(messages.created_at))
-    .limit(K_RECENT + 1);
-
-  const recentExclSelf = recentRows
-    .slice(1)
-    .reverse()
-    .filter((m) => m.role === "user" || m.role === "assistant")
-    .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
-
-  const prompt = buildPromptMessages({
-    systemPrompt: SYSTEM_PROMPT,
-    summary: conv?.summary ?? null,
-    recent: recentExclSelf,
-    userText: args.text,
-  });
-
-  const modelMessages: ModelMessage[] = prompt
-    .slice(1)
-    .map((m) => ({ role: m.role, content: m.content }) as ModelMessage);
-
-  const stream = await chat({
-    messages: modelMessages,
-    systemPrompt: SYSTEM_PROMPT,
-    stream: true,
-    meta: { conversationId: args.convId, userId: args.userId },
-  });
-
-  let assistantText = "";
-  let tokens = 0;
-  for await (const chunk of stream.textStream) {
-    assistantText += chunk;
-    args.controller.enqueue(sseFrame(args.encoder, "token", chunk));
-  }
-  try {
-    tokens = (await stream.usage).totalTokens ?? 0;
-  } catch {
-    /* 拉不到 usage 不致命 */
-  }
-
-  await db.insert(messages).values({
-    conversation_id: args.convId,
-    role: "assistant",
-    content: assistantText || "(无内容)",
-    intent: "chat",
-    tokens_used: tokens,
-  });
+  return new Response(sse, { headers: SSE_HEADERS });
 }
 
 async function maybeSummarize(convId: string) {
@@ -336,12 +196,10 @@ async function maybeSummarize(convId: string) {
       await summarize(convId);
     }
   } catch (e) {
-    console.error("maybeSummarize failed", e);
+    if (process.env.NODE_ENV !== "production") {
+      console.error("maybeSummarize failed", e);
+    }
   }
-}
-
-function sseFrame(encoder: TextEncoder, event: string, data: unknown): Uint8Array {
-  return encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
 function jsonError(message: string, status: number): Response {
