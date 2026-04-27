@@ -3,14 +3,21 @@ import { Sparkle } from "@/components/su";
 import { ChoiceCard } from "./cards/ChoiceCard";
 import { FormCard, type FormField } from "./cards/FormCard";
 import { SlipImageCard } from "./cards/SlipImageCard";
+import { SlipImageFullscreen } from "./cards/SlipImageFullscreen";
+import { SlipReportCard } from "./cards/SlipReportCard";
 import { BaziResultCard } from "./cards/BaziResultCard";
 import { DreamResultCard } from "./cards/DreamResultCard";
+import { ProfilePickerCard } from "./cards/ProfilePickerCard";
+import { ProgressLongTaskCard, type LongTaskStage } from "./cards/ProgressLongTaskCard";
+import { ErrorCard, type ErrorCode } from "./cards/ErrorCard";
+import { ShakeSlipAnim } from "./cards/ShakeSlipAnim";
 import { SlipResultCard } from "@/components/divination/SlipResultCard";
 import { MeihuaResultCard } from "@/components/divination/MeihuaResultCard";
 import type { Message } from "@/lib/db/schema";
 import type { SlipLevel } from "@/db/seed/slips-v2";
 import type { BaziPillars, BaziTenGods } from "@/types/domain";
 import type { Wuxing } from "@/lib/bazi/stems-branches";
+import type { SlipImageLevel } from "./cards/SlipImageFullscreen";
 
 export type DisplayMessage = Pick<
   Message,
@@ -25,6 +32,7 @@ export type CardSubmitCallback = (
   ui: string,
   values: Record<string, string>,
 ) => void;
+export type CardActionCallback = (msgId: string, ui: string, action: string) => void;
 
 interface MessageBubbleProps {
   message: DisplayMessage;
@@ -32,6 +40,7 @@ interface MessageBubbleProps {
   className?: string;
   onCardPick?: CardPickCallback;
   onCardSubmit?: CardSubmitCallback;
+  onCardAction?: CardActionCallback;
   busy?: boolean;
 }
 
@@ -50,36 +59,10 @@ function parseMeta(raw: string | null | undefined): MetaUi | null {
 }
 
 const DREAM_PRECISE_FIELDS: readonly FormField[] = [
-  {
-    key: "core",
-    label: "核心场景",
-    type: "textarea",
-    required: true,
-    max: 500,
-    placeholder: "描述梦境画面、人物、地点、发生的事",
-  },
-  {
-    key: "emotion",
-    label: "情绪感受",
-    type: "textarea",
-    required: true,
-    max: 200,
-    placeholder: "梦中的情绪 + 醒来后的变化",
-  },
-  {
-    key: "reality",
-    label: "现实关联（可选）",
-    type: "textarea",
-    max: 200,
-    placeholder: "近期类似的场景或在意的事",
-  },
-  {
-    key: "special",
-    label: "特殊细节（可选）",
-    type: "textarea",
-    max: 200,
-    placeholder: "印象深刻的奇怪细节",
-  },
+  { key: "core", label: "核心场景", type: "textarea", required: true, max: 500 },
+  { key: "emotion", label: "情绪感受", type: "textarea", required: true, max: 200 },
+  { key: "reality", label: "现实关联（可选）", type: "textarea", max: 200 },
+  { key: "special", label: "特殊细节（可选）", type: "textarea", max: 200 },
 ];
 
 const BAZI_QUICK_FIELDS: readonly FormField[] = [
@@ -93,60 +76,29 @@ const BAZI_QUICK_FIELDS: readonly FormField[] = [
       { value: "female", label: "女" },
     ],
   },
-  {
-    key: "birth_time",
-    label: "出生时间（含时辰）",
-    type: "text",
-    required: true,
-    placeholder: "例如 1995-03-22 09:00",
-    max: 30,
-  },
-  {
-    key: "birth_place",
-    label: "出生地（省 市 区）",
-    type: "text",
-    required: true,
-    placeholder: "例如 上海 上海 黄浦",
-    max: 30,
-  },
+  { key: "birth_time", label: "出生时间（含时辰）", type: "text", required: true, max: 30 },
+  { key: "birth_place", label: "出生地（省 市 区）", type: "text", required: true, max: 30 },
 ];
 
 const MEIHUA_NUMBER_FIELDS: readonly FormField[] = [
-  {
-    key: "numbers",
-    label: "1-3 个数字（1-9，逗号分隔）",
-    type: "text",
-    required: true,
-    placeholder: "例如 3, 6, 9",
-    max: 20,
-  },
-  {
-    key: "userQuestion",
-    label: "想测什么事？",
-    type: "textarea",
-    required: true,
-    max: 200,
-  },
+  { key: "numbers", label: "1-3 个数字（1-9，逗号分隔）", type: "text", required: true, max: 20 },
+  { key: "userQuestion", label: "想测什么事？", type: "textarea", required: true, max: 200 },
 ];
 
 const SLIP_QUESTION_FIELDS: readonly FormField[] = [
-  {
-    key: "userQuestion",
-    label: "心事 / 想问的事",
-    type: "textarea",
-    required: true,
-    max: 200,
-    placeholder: "默念在心，写下来更准",
-  },
+  { key: "userQuestion", label: "心事 / 想问的事", type: "textarea", required: true, max: 200 },
 ];
 
 interface SlipImageMeta {
   slipNumber: number;
   level: SlipLevel;
   title: string;
-  poem: string;
-  dimension: string;
-  reading: string;
+  poem?: string;
+  poemLines?: string[];
+  imageUrl?: string;
+  dimension?: string;
+  reading?: string;
+  category?: string;
 }
 
 interface BaziResultMeta {
@@ -161,20 +113,62 @@ interface BaziResultMeta {
 }
 
 interface DreamResultMeta {
-  mode: "fast" | "precise";
+  mode?: "fast" | "precise";
+}
+
+interface ProfilePickerMeta {
+  profiles: Array<{
+    id: string;
+    nickname: string;
+    isDefault: boolean;
+    avatarUrl?: string;
+    birthDate?: string;
+    gender?: "male" | "female" | "other";
+  }>;
+  conversationId?: string;
+  allowAddNew?: boolean;
+}
+
+interface ErrorCardMeta {
+  message: string;
+  code?: ErrorCode;
+  retryable?: boolean;
+}
+
+interface ProgressLongTaskMeta {
+  etaSec?: number;
+  stage?: LongTaskStage;
+  percent?: number;
+  cancellable?: boolean;
+}
+
+interface SlipReportMeta {
+  slipNumber: number;
+  level: SlipImageLevel;
+  title: string;
+  poem: string;
+  dimension: string;
+  reading: string;
+  aiInterpretation: string;
 }
 
 /**
- * 单条消息气泡 — 14 ui 分发（spec §6 metadata.ui）
+ * 单条消息气泡 — 22 ui 分发（M2.14, spec §4.4）
  *
- * 组：
- *   1. text + 用户消息：文本气泡
- *   2. 引导卡（ChoiceCard）：dream_choice / slip_type_picker / meihua_method_picker
- *   3. 表单卡（FormCard）：dream_precise_form / bazi_quick_form / meihua_number_input / slip_question_input
- *   4. 结果卡：slip_image / bazi_result / dream_result / meihua_result / slip_result（兼容旧）
- *   5. 静态提示：meihua_intro / fortune_result（暂占位） / intent_pending
+ * 分组（22）：
+ *  state/transient: intent_pending / progress_long_task / error_card / slip_drawing
+ *  pickers:         choice_card / profile_picker / slip_type_picker / bazi_focus_picker
+ *                   (V1.0 别名: dream_choice / meihua_method_picker)
+ *  forms:           slip_question_input / bazi_quick_form / meihua_number_input /
+ *                   dream_precise_form
+ *  results:         slip_image / slip_report / dream_result_fast / dream_result_precise /
+ *                   bazi_result / meihua_result / fortune_brief_card
+ *                   (V1.0 别名: dream_result / slip_result)
+ *  auxiliary:       summary_card / profile_added_hint / quick_action_chips
+ *  fallback:        text（包括 meihua_intro 静态提示）
  *
- * onCardPick / onCardSubmit 由 ChatWindow 统一注入；卡片不知道 API，只汇报"用户做了 X 操作"。
+ * onCardPick / onCardSubmit / onCardAction 由 ChatWindow 统一注入；
+ * 卡片不知道 API，只汇报"用户做了 X 操作"。
  */
 export function MessageBubble({
   message,
@@ -182,6 +176,7 @@ export function MessageBubble({
   className,
   onCardPick,
   onCardSubmit,
+  onCardAction,
   busy,
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
@@ -205,6 +200,8 @@ export function MessageBubble({
   const ui = meta?.ui ?? "text";
 
   switch (ui) {
+    // ============ state / transient ============
+
     case "intent_pending":
       return (
         <div className={cn("flex justify-start", className)}>
@@ -214,16 +211,70 @@ export function MessageBubble({
         </div>
       );
 
+    case "progress_long_task": {
+      const m = (meta ?? {}) as unknown as ProgressLongTaskMeta;
+      return (
+        <CardWrap className={className}>
+          <ProgressLongTaskCard
+            etaSec={m.etaSec}
+            stage={m.stage}
+            percent={m.percent}
+            cancellable={m.cancellable}
+            onCancel={
+              m.cancellable
+                ? () => onCardAction?.(message.id, ui, "cancel")
+                : undefined
+            }
+          />
+        </CardWrap>
+      );
+    }
+
+    case "error_card": {
+      const m = (meta ?? {}) as unknown as ErrorCardMeta;
+      return (
+        <CardWrap className={className}>
+          <ErrorCard
+            message={m.message ?? "出错了，请稍后重试"}
+            code={m.code}
+            retryable={m.retryable}
+            onRetry={
+              m.retryable
+                ? () => onCardAction?.(message.id, ui, "retry")
+                : undefined
+            }
+          />
+        </CardWrap>
+      );
+    }
+
+    case "slip_drawing": {
+      const m = (meta ?? {}) as { durationMs?: number };
+      return (
+        <CardWrap className={className}>
+          <ShakeSlipAnim
+            durationMs={m.durationMs}
+            onComplete={() => onCardAction?.(message.id, ui, "complete")}
+          />
+        </CardWrap>
+      );
+    }
+
+    // ============ pickers ============
+
+    case "choice_card":
     case "dream_choice":
     case "slip_type_picker":
     case "bazi_focus_picker":
     case "meihua_method_picker": {
       const options =
         ((meta?.options as Array<{ key: string; label: string; hint?: string }>) ?? []);
+      const title =
+        ((meta?.question as string | undefined) ?? message.content) || "请选择";
       return (
         <CardWrap className={className}>
           <ChoiceCard
-            title={message.content || "请选择"}
+            title={title}
             options={options}
             busy={busy}
             onPick={(k) => onCardPick?.(message.id, ui, k)}
@@ -231,6 +282,23 @@ export function MessageBubble({
         </CardWrap>
       );
     }
+
+    case "profile_picker": {
+      const m = (meta ?? {}) as unknown as ProfilePickerMeta;
+      return (
+        <CardWrap className={className}>
+          <ProfilePickerCard
+            profiles={m.profiles ?? []}
+            conversationId={m.conversationId}
+            allowAddNew={m.allowAddNew}
+            busy={busy}
+            onPick={(id) => onCardPick?.(message.id, ui, id)}
+          />
+        </CardWrap>
+      );
+    }
+
+    // ============ forms ============
 
     case "dream_precise_form":
       return (
@@ -284,26 +352,63 @@ export function MessageBubble({
         </CardWrap>
       );
 
-    case "meihua_intro":
-      return <TextBubble message={message} isUser={false} className={className} />;
+    // ============ results ============
 
     case "slip_image": {
       const m = meta as unknown as SlipImageMeta;
+      // V2.0：spec 字段 poemLines + imageUrl + category
+      // V1.0：旧字段 poem + reading + dimension（fall back 到 V1.0 卡片）
+      if (m.poemLines && m.imageUrl) {
+        return (
+          <CardWrap className={className}>
+            <SlipImageFullscreen
+              slipNumber={m.slipNumber}
+              level={m.level as SlipImageLevel}
+              title={m.title}
+              poemLines={m.poemLines}
+              imageUrl={m.imageUrl}
+              category={m.category}
+              onExplain={() => onCardAction?.(message.id, ui, "explain")}
+              onShare={() => onCardAction?.(message.id, ui, "share")}
+              busy={busy}
+            />
+          </CardWrap>
+        );
+      }
       return (
         <CardWrap className={className}>
           <SlipImageCard
             slipNumber={m.slipNumber}
             level={m.level}
             title={m.title}
+            poem={m.poem ?? ""}
+            dimension={m.dimension ?? ""}
+            reading={m.reading ?? ""}
+          />
+        </CardWrap>
+      );
+    }
+
+    case "slip_report": {
+      const m = meta as unknown as SlipReportMeta;
+      return (
+        <CardWrap className={className}>
+          <SlipReportCard
+            slipNumber={m.slipNumber}
+            level={m.level}
+            title={m.title}
             poem={m.poem}
             dimension={m.dimension}
             reading={m.reading}
+            aiInterpretation={m.aiInterpretation || message.content}
+            onShare={() => onCardAction?.(message.id, ui, "share")}
           />
         </CardWrap>
       );
     }
 
     case "slip_result": {
+      // V1.0 别名 → SlipResultCard
       const m = meta as unknown as SlipImageMeta;
       return (
         <CardWrap className={className}>
@@ -311,9 +416,9 @@ export function MessageBubble({
             number={m.slipNumber}
             level={m.level}
             title={m.title}
-            poem={m.poem}
-            reading={m.reading}
-            dimension={m.dimension}
+            poem={m.poem ?? ""}
+            reading={m.reading ?? ""}
+            dimension={m.dimension ?? ""}
           />
         </CardWrap>
       );
@@ -328,11 +433,26 @@ export function MessageBubble({
       );
     }
 
+    case "dream_result_fast":
+      return (
+        <CardWrap className={className}>
+          <DreamResultCard mode="fast" aiText={message.content} />
+        </CardWrap>
+      );
+
+    case "dream_result_precise":
+      return (
+        <CardWrap className={className}>
+          <DreamResultCard mode="precise" aiText={message.content} />
+        </CardWrap>
+      );
+
     case "dream_result": {
+      // V1.0 别名 — 用 metadata.mode 区分
       const m = meta as unknown as DreamResultMeta;
       return (
         <CardWrap className={className}>
-          <DreamResultCard mode={m.mode} aiText={message.content} />
+          <DreamResultCard mode={m.mode ?? "fast"} aiText={message.content} />
         </CardWrap>
       );
     }
@@ -368,6 +488,73 @@ export function MessageBubble({
       );
     }
 
+    case "fortune_brief_card": {
+      const m = (meta ?? {}) as { date?: string; overall?: number; topDimension?: string; oneLiner?: string };
+      return (
+        <CardWrap className={className}>
+          <div className="glass hairline rounded-[16px] p-4">
+            <p className="text-[11px] tracking-ritual2 text-[var(--color-ink-fade)]">
+              {m.date ?? "今日"} · {m.topDimension ?? "综合"}
+            </p>
+            <p className="mt-2 font-[family-name:var(--font-serif)] text-2xl text-[var(--color-ink-plum)]">
+              {m.overall ?? "—"}
+              <span className="ml-1 text-xs text-[var(--color-ink-fade)]">分</span>
+            </p>
+            <p className="mt-1 text-sm text-[var(--color-ink-plum)]">{m.oneLiner ?? message.content}</p>
+          </div>
+        </CardWrap>
+      );
+    }
+
+    // ============ auxiliary ============
+
+    case "summary_card":
+      return (
+        <div className={cn("flex justify-center", className)}>
+          <span className="rounded-full bg-[var(--color-accent-lavender)]/15 px-3 py-1 text-[11px] tracking-ritual2 text-[var(--color-ink-fade)]">
+            ✦ {message.content || "已记录本段对话要点"}
+          </span>
+        </div>
+      );
+
+    case "profile_added_hint": {
+      const m = (meta ?? {}) as { nickname?: string };
+      return (
+        <div className={cn("flex justify-center", className)}>
+          <span className="rounded-full bg-[var(--color-wuxing-wood)]/20 px-3 py-1 text-[11px] tracking-ritual2 text-[var(--color-ink-plum)]">
+            ✓ 已新增档案 · {m.nickname ?? "新档案"}
+          </span>
+        </div>
+      );
+    }
+
+    case "quick_action_chips": {
+      const m = (meta ?? {}) as {
+        chips?: Array<{ key: string; label: string; intent?: string }>;
+      };
+      const chips = m.chips ?? [];
+      return (
+        <div className={cn("flex flex-wrap gap-2", className)}>
+          {chips.map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => onCardPick?.(message.id, ui, c.key)}
+              disabled={busy}
+              className={cn(
+                "rounded-full border border-[var(--color-accent-lavender)]/40 bg-white/30 px-3 py-1 text-[12px] tracking-ritual2 text-[var(--color-ink-plum)]",
+                "hover:bg-[var(--color-accent-lavender)]/20",
+                "disabled:cursor-not-allowed disabled:opacity-50",
+              )}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    case "meihua_intro":
     case "text":
     default:
       return (
