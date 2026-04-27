@@ -78,4 +78,23 @@ describe("DimensionDetailCards (M4.6)", () => {
     expect(screen.getByText("75")).toBeInTheDocument();
     expect(screen.getByText("80")).toBeInTheDocument();
   });
+
+  // ============ M4.27 SVG icon 复用 ============
+
+  it("7 维度卡每张挂对应 FunctionIcon SVG", () => {
+    render(<DimensionDetailCards scores={SCORES} reading={READING} />);
+    // 7 dim → 7 个不同 icon
+    const expected = [
+      "fn-icon-love",
+      "fn-icon-wealth",
+      "fn-icon-career",
+      "fn-icon-study",
+      "fn-icon-health",
+      "fn-icon-social",
+      "fn-icon-mood",
+    ];
+    for (const id of expected) {
+      expect(screen.getByTestId(id)).toBeInTheDocument();
+    }
+  });
 });

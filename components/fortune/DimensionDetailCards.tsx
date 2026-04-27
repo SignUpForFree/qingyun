@@ -1,5 +1,17 @@
 import type { DailyDim7, DimensionScores7 } from "@/lib/fortune/daily-7dim";
 import { DAILY_7_DIMS } from "@/lib/fortune/daily-7dim";
+import { FunctionIcon, type FunctionIconName } from "@/components/icons/FunctionIcon";
+
+/** 7 home dim → FunctionIcon name 映射（M4.27 复用） */
+const DIM_ICON: Record<DailyDim7, FunctionIconName> = {
+  爱情: "love",
+  财富: "wealth",
+  事业: "career",
+  学习: "study",
+  健康: "health",
+  人际: "social",
+  心情: "mood",
+};
 
 interface DimensionDetailCardsProps {
   scores: DimensionScores7;
@@ -37,7 +49,12 @@ export function DimensionDetailCards({ scores, reading, order }: DimensionDetail
             className="rounded-2xl border border-[var(--color-accent-lavender)]/25 bg-[var(--color-paper)]/55 p-4"
           >
             <div className="flex items-baseline justify-between">
-              <span className="font-[family-name:var(--font-serif)] text-[14px] tracking-ritual text-[var(--color-ink-plum)]">
+              <span className="flex items-center gap-2 font-[family-name:var(--font-serif)] text-[14px] tracking-ritual text-[var(--color-ink-plum)]">
+                <FunctionIcon
+                  name={DIM_ICON[dim]}
+                  size={16}
+                  className="shrink-0 text-[var(--color-accent-plum)]"
+                />
                 {dim}
               </span>
               <span className="num-mono text-[12px] text-[var(--color-ink-mist)]">{v}</span>
