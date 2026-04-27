@@ -45,8 +45,12 @@ export function sendOtp(phone: string): SendOtpResult {
   // 已足够防爆破（M1 验收口径）。M5 接 SMS gateway 时同步换 crypto.randomInt。
   const code = String(Math.floor(100000 + Math.random() * 900000));
   store.set(phone, { code, createdAt: Date.now(), attempts: 0 });
-  // M1: console only. M5: replace with SMS gateway send.
-  console.info(`[otp] ${phone} ${code}`);
+  // M1: console only, GATED to non-production to keep PII (phone) + live OTP
+  // out of prod docker journald (anyone with shell access could read otherwise).
+  // M5: replace with SMS gateway send (and drop the console branch entirely).
+  if (process.env.NODE_ENV !== "production") {
+    console.info(`[otp] ${phone} ${code}`);
+  }
   return { sent: true };
 }
 
@@ -55,20 +59,39 @@ export interface VerifyOtpResult {
   reason?: "expired" | "wrong" | "too_many_attempts";
 }
 
-export function verifyOtp(phone: string, code: string): VerifyOtpResult {
+/**
+ * Returns Promise even though the M1 implementation is synchronous —
+ * M5 will swap the in-process Map for SQLite/Redis (genuinely async).
+ * Keeping the shape async NOW prevents a silent-bypass trap: if a
+ * caller writes `if (!verifyOtp(...).ok)` against an async impl, the
+ * Promise is always truthy → bypass. With async-from-day-1 the missing
+ * `await` is caught at type-check time.
+ */
+export async function verifyOtp(
+  phone: string,
+  code: string,
+): Promise<VerifyOtpResult> {
   const entry = store.get(phone);
   if (!entry) return { ok: false, reason: "expired" };
   if (Date.now() - entry.createdAt > TTL_MS) {
     store.delete(phone);
     return { ok: false, reason: "expired" };
   }
-  // bump attempts FIRST so wrong-then-success doesn't bypass the cap
-  entry.attempts += 1;
-  if (entry.attempts > MAX_ATTEMPTS) {
+  // Immutable: build a new entry instead of mutating the Map's stored object.
+  // Bump attempts FIRST so wrong-then-success doesn't bypass the cap.
+  const next = { ...entry, attempts: entry.attempts + 1 };
+  if (next.attempts > MAX_ATTEMPTS) {
     store.delete(phone);
     return { ok: false, reason: "too_many_attempts" };
   }
-  if (entry.code !== code) return { ok: false, reason: "wrong" };
+  if (next.code !== code) {
+    // Persist incremented count so subsequent calls see the bump.
+    // (Critical: the previous mutate-in-place version persisted via shared
+    // reference; the immutable version MUST `set` here or the count never
+    // moves and the 3-strike lockout becomes unbounded.)
+    store.set(phone, next);
+    return { ok: false, reason: "wrong" };
+  }
   store.delete(phone);
   return { ok: true };
 }

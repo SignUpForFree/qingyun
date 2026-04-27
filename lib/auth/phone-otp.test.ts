@@ -24,7 +24,7 @@ describe("phone-otp", () => {
     vi.restoreAllMocks();
   });
 
-  it("generates 6-digit code on send", () => {
+  it("generates 6-digit code on send", async () => {
     const result = sendOtp("+8613800138000");
     expect(result.sent).toBe(true);
     expect(result.cooldownMs).toBeUndefined();
@@ -39,7 +39,7 @@ describe("phone-otp", () => {
     expect(code).toMatch(/^\d{6}$/);
 
     // 该 code 必须能验证通过（证明它真的写进了 store）
-    expect(verifyOtp("+8613800138000", code)).toEqual({ ok: true });
+    expect(await verifyOtp("+8613800138000", code)).toEqual({ ok: true });
   });
 
   it("rate limits 1/60s per phone", () => {
@@ -66,7 +66,7 @@ describe("phone-otp", () => {
     expect(other.sent).toBe(true);
   });
 
-  it("verifies within 10 min window", () => {
+  it("verifies within 10 min window", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-27T00:00:00Z"));
 
@@ -77,10 +77,10 @@ describe("phone-otp", () => {
 
     // 9 分 59 秒后仍可验证
     vi.advanceTimersByTime(9 * 60_000 + 59_000);
-    expect(verifyOtp("+8613800138000", code)).toEqual({ ok: true });
+    expect(await verifyOtp("+8613800138000", code)).toEqual({ ok: true });
   });
 
-  it("returns expired when code is older than 10 min", () => {
+  it("returns expired when code is older than 10 min", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-27T00:00:00Z"));
 
@@ -91,44 +91,44 @@ describe("phone-otp", () => {
 
     // 10 分 1 秒后超时
     vi.advanceTimersByTime(10 * 60_000 + 1_000);
-    const r = verifyOtp("+8613800138000", code);
+    const r = await verifyOtp("+8613800138000", code);
     expect(r.ok).toBe(false);
     expect(r.reason).toBe("expired");
 
     // 过期条目应被删除：再 verify 仍是 expired（不是 wrong，避免泄露 phone 已存在）
-    const r2 = verifyOtp("+8613800138000", code);
+    const r2 = await verifyOtp("+8613800138000", code);
     expect(r2.ok).toBe(false);
     expect(r2.reason).toBe("expired");
   });
 
-  it("rejects after 3 wrong attempts", () => {
+  it("rejects after 3 wrong attempts", async () => {
     sendOtp("+8613800138000");
     const realCode = String(vi.mocked(console.info).mock.calls[0][0]).match(
       /\b(\d{6})\b/,
     )![1];
 
     // 3 次错误尝试都返回 wrong
-    expect(verifyOtp("+8613800138000", "000000")).toEqual({
+    expect(await verifyOtp("+8613800138000", "000000")).toEqual({
       ok: false,
       reason: "wrong",
     });
-    expect(verifyOtp("+8613800138000", "111111")).toEqual({
+    expect(await verifyOtp("+8613800138000", "111111")).toEqual({
       ok: false,
       reason: "wrong",
     });
-    expect(verifyOtp("+8613800138000", "222222")).toEqual({
+    expect(await verifyOtp("+8613800138000", "222222")).toEqual({
       ok: false,
       reason: "wrong",
     });
 
     // 第 4 次（即使是正确的 code）也应被锁定
-    expect(verifyOtp("+8613800138000", realCode)).toEqual({
+    expect(await verifyOtp("+8613800138000", realCode)).toEqual({
       ok: false,
       reason: "too_many_attempts",
     });
 
     // 锁定后条目已删除：再 verify 返回 expired
-    expect(verifyOtp("+8613800138000", realCode)).toEqual({
+    expect(await verifyOtp("+8613800138000", realCode)).toEqual({
       ok: false,
       reason: "expired",
     });

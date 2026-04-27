@@ -15,9 +15,11 @@ import { sendOtp } from "@/lib/auth/phone-otp";
  */
 export const runtime = "nodejs";
 
-// E.164: optional + then 1-15 digits, first digit non-zero
+// E.164 strict: leading + REQUIRED. The store key is exactly the input phone
+// string, so accepting `8613...` AND `+8613...` would cause divergence between
+// send and change calls (silent verify-always-fails UX trap).
 const PhoneBody = z.object({
-  phone: z.string().regex(/^\+?[1-9]\d{6,14}$/),
+  phone: z.string().regex(/^\+[1-9]\d{6,14}$/),
 });
 
 export async function POST(req: Request): Promise<Response> {

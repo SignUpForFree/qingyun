@@ -22,8 +22,11 @@ import { phoneBind } from "@/lib/db/schema";
  */
 export const runtime = "nodejs";
 
+// E.164 strict: leading + REQUIRED. Without `+` the store key would diverge
+// from the send-OTP key (`+8613...` vs `8613...`), making verify always fail
+// closed with `expired` — silent UX trap.
 const ChangeBody = z.object({
-  phone: z.string().regex(/^\+?[1-9]\d{6,14}$/),
+  phone: z.string().regex(/^\+[1-9]\d{6,14}$/),
   code: z.string().regex(/^\d{6}$/),
 });
 
@@ -44,7 +47,7 @@ export async function POST(req: Request): Promise<Response> {
       );
     }
     const { phone, code } = parsed.data;
-    const result = verifyOtp(phone, code);
+    const result = await verifyOtp(phone, code);
     if (!result.ok) {
       return NextResponse.json(
         { error: "verify_failed", reason: result.reason },

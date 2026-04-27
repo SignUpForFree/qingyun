@@ -109,6 +109,18 @@ describe("POST /api/me/phone/verify", () => {
     expect(vi.mocked(sendOtp)).not.toHaveBeenCalled();
   });
 
+  it("rejects E.164 missing leading + with 400", async () => {
+    // 不带 + 的号会让 send/change 之间的 store key 出现分歧（silent UX trap），
+    // 所以必须强制 leading +。
+    const r = await VerifyPOST(
+      makeReq("/api/me/phone/verify", { phone: "8613800138000" }),
+    );
+    expect(r.status).toBe(400);
+    const body = await r.json();
+    expect(body.error).toBe("validation");
+    expect(vi.mocked(sendOtp)).not.toHaveBeenCalled();
+  });
+
   it("rejects invalid JSON with 400", async () => {
     const r = await VerifyPOST(makeReq("/api/me/phone/verify", "not-json"));
     expect(r.status).toBe(400);
@@ -126,7 +138,7 @@ describe("POST /api/me/phone/verify", () => {
 
 describe("POST /api/me/phone/change", () => {
   it("inserts phone_bind row on first bind (verify ok)", async () => {
-    vi.mocked(verifyOtp).mockReturnValueOnce({ ok: true });
+    vi.mocked(verifyOtp).mockResolvedValueOnce({ ok: true });
 
     const r = await ChangePOST(
       makeReq("/api/me/phone/change", { phone: "+8613800138000", code: "123456" }),
@@ -152,7 +164,7 @@ describe("POST /api/me/phone/change", () => {
       phone_e164: "+8613800000000",
     });
 
-    vi.mocked(verifyOtp).mockReturnValueOnce({ ok: true });
+    vi.mocked(verifyOtp).mockResolvedValueOnce({ ok: true });
     const r = await ChangePOST(
       makeReq("/api/me/phone/change", { phone: "+8613911119999", code: "123456" }),
     );
@@ -167,7 +179,7 @@ describe("POST /api/me/phone/change", () => {
   });
 
   it("returns 400 verify_failed with reason when OTP wrong", async () => {
-    vi.mocked(verifyOtp).mockReturnValueOnce({ ok: false, reason: "wrong" });
+    vi.mocked(verifyOtp).mockResolvedValueOnce({ ok: false, reason: "wrong" });
 
     const r = await ChangePOST(
       makeReq("/api/me/phone/change", { phone: "+8613800138000", code: "999999" }),
@@ -184,7 +196,7 @@ describe("POST /api/me/phone/change", () => {
   });
 
   it("returns 400 with reason=expired when OTP expired", async () => {
-    vi.mocked(verifyOtp).mockReturnValueOnce({ ok: false, reason: "expired" });
+    vi.mocked(verifyOtp).mockResolvedValueOnce({ ok: false, reason: "expired" });
 
     const r = await ChangePOST(
       makeReq("/api/me/phone/change", { phone: "+8613800138000", code: "123456" }),
@@ -202,7 +214,7 @@ describe("POST /api/me/phone/change", () => {
       phone_e164: "+8613800138000",
     });
 
-    vi.mocked(verifyOtp).mockReturnValueOnce({ ok: true });
+    vi.mocked(verifyOtp).mockResolvedValueOnce({ ok: true });
     const r = await ChangePOST(
       makeReq("/api/me/phone/change", { phone: "+8613800138000", code: "123456" }),
     );
@@ -218,6 +230,19 @@ describe("POST /api/me/phone/change", () => {
   it("rejects invalid phone format with 400 validation", async () => {
     const r = await ChangePOST(
       makeReq("/api/me/phone/change", { phone: "bad", code: "123456" }),
+    );
+    expect(r.status).toBe(400);
+    const body = await r.json();
+    expect(body.error).toBe("validation");
+    expect(vi.mocked(verifyOtp)).not.toHaveBeenCalled();
+  });
+
+  it("rejects E.164 missing leading + with 400 validation", async () => {
+    const r = await ChangePOST(
+      makeReq("/api/me/phone/change", {
+        phone: "8613800138000",
+        code: "123456",
+      }),
     );
     expect(r.status).toBe(400);
     const body = await r.json();

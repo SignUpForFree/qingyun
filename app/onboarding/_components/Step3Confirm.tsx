@@ -3,9 +3,23 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { z } from "zod";
 import { GlassCard, Divider } from "@/components/su";
 import { StepShell } from "./StepShell";
 import { toProfilePatch, type OnboardingForm } from "./schema";
+
+// 最小 zod schema — 只校验我们用到的字段。`.passthrough()` 让 M2/M4 增加新字段时
+// 不破坏 onboarding 提交流程。
+const ProfileListResponse = z.object({
+  data: z.array(
+    z
+      .object({
+        id: z.string(),
+        is_default: z.boolean(),
+      })
+      .passthrough(),
+  ),
+});
 
 interface Step3Props {
   form: OnboardingForm;
@@ -31,10 +45,12 @@ export function Step3Confirm({ form, onPrev, editing }: Step3Props) {
         toast.error(`加载档案失败 (${listRes.status})`);
         return;
       }
-      const listJson = (await listRes.json()) as {
-        data: Array<{ id: string; is_default: boolean }>;
-      };
-      const defaultProfile = listJson.data.find((p) => p.is_default);
+      const parsed = ProfileListResponse.safeParse(await listRes.json());
+      if (!parsed.success) {
+        toast.error("加载档案失败：响应格式异常");
+        return;
+      }
+      const defaultProfile = parsed.data.data.find((p) => p.is_default);
       if (!defaultProfile) {
         toast.error("默认档案缺失，请重新登录");
         return;

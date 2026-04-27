@@ -227,6 +227,87 @@ describe("GET /api/auth/wechat/callback", () => {
     expect(await db.select().from(profiles)).toHaveLength(1);
   });
 
+  it("returning user with null privacy_accepted_at: backfills to now (PIPL §17 compliance)", async () => {
+    // M1.13 backfill: 早于隐私门槛上线注册的老用户 privacy_accepted_at 为 NULL，
+    // 第二次 OAuth 时应被回填为当前时间；同时另一个有 timestamp 的用户不应被覆盖。
+    const db = getDb();
+    const earlier = "2026-01-01T00:00:00.000Z";
+    const nullUserId = "u-null-privacy";
+    const stampedUserId = "u-stamped-privacy";
+
+    await db.insert(users).values({
+      id: nullUserId,
+      created_at: earlier,
+      updated_at: earlier,
+      privacy_accepted_at: null,
+    });
+    await db.insert(wechatBind).values({
+      user_id: nullUserId,
+      openid: "ox-null-priv",
+      nickname: "无隐私时间戳",
+      avatar_url: "https://wx.qlogo.cn/null.jpg",
+      bound_at: earlier,
+      last_synced_at: null,
+    });
+    await db.insert(profiles).values({
+      id: "p-null-priv",
+      user_id: nullUserId,
+      is_default: true,
+      nickname: "无隐私时间戳",
+      gender: "other",
+      birth_date: "1990-01-01",
+      birth_time: "12:00",
+      birth_calendar: "solar",
+      birth_place: "未填",
+      created_at: earlier,
+      updated_at: earlier,
+    });
+
+    // 控制组：另一个独立用户，已有 privacy_accepted_at（不应被覆盖）
+    await db.insert(users).values({
+      id: stampedUserId,
+      created_at: earlier,
+      updated_at: earlier,
+      privacy_accepted_at: earlier,
+    });
+
+    const state = signState("nonce-null-priv");
+    vi.mocked(exchangeCodeForToken).mockResolvedValueOnce({
+      access_token: "at-3",
+      openid: "ox-null-priv",
+      expires_in: 7200,
+    });
+    vi.mocked(fetchUserinfo).mockResolvedValueOnce({
+      openid: "ox-null-priv",
+      nickname: "无隐私时间戳",
+      headimgurl: "https://wx.qlogo.cn/null.jpg",
+    });
+
+    const r = await GET(
+      new Request(
+        `https://qingyun.example.com/api/auth/wechat/callback?code=ok&state=${state}`,
+      ),
+    );
+    expect(r.status).toBe(302);
+    expect(r.cookies.get("qy_uid")?.value).toBe(nullUserId);
+
+    const [nullUserAfter] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, nullUserId));
+    expect(nullUserAfter.privacy_accepted_at).not.toBeNull();
+    expect(nullUserAfter.privacy_accepted_at).toMatch(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
+    );
+
+    const [stampedUserAfter] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, stampedUserId));
+    // 不应被覆盖
+    expect(stampedUserAfter.privacy_accepted_at).toBe(earlier);
+  });
+
   it("wechat errcode 40029 (code reused) -> 302 -> /api/auth/wechat", async () => {
     const state = signState("nonce-40029");
     vi.mocked(exchangeCodeForToken).mockRejectedValueOnce(

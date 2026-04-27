@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import crypto from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import {
   verifyState,
@@ -85,6 +85,14 @@ export async function GET(req: Request): Promise<NextResponse> {
         last_synced_at: now,
       })
       .where(eq(wechatBind.user_id, userId));
+    // M1.13 backfill: returning users registered before privacy gate shipped
+    // have privacy_accepted_at = NULL. PIPL §17 ("明确同意") would silently
+    // exclude them from compliance reporting. Stamp `now` only when NULL —
+    // never overwrite an existing acceptance timestamp.
+    await db
+      .update(users)
+      .set({ privacy_accepted_at: now })
+      .where(and(eq(users.id, userId), isNull(users.privacy_accepted_at)));
   } else {
     // Path 4: 首次用户 — 建 users + wechat_bind + 默认 profile
     // Atomic via db.transaction：任一插入失败（FK / 并发 unique violation / 进程崩溃）
