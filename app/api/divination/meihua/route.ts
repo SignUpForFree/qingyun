@@ -1,56 +1,63 @@
-import { NextResponse } from "next/server";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import {
-  conversations,
-  divinationRecords,
-  hexagrams,
-  messages,
-} from "@/lib/db/schema";
+import { conversations, messages, profiles } from "@/lib/db/schema";
 import { ensureUserId } from "@/lib/auth/session";
-import { parseJson, serializeJson } from "@/lib/db/json";
-import { castByNumbers } from "@/lib/meihua/cast";
-import { interpretMeihua, type MeihuaResult } from "@/lib/meihua/interpret";
-import { loadPrompt, renderTemplate } from "@/lib/ai/prompts";
-import { chat } from "@/lib/ai/client";
 import { checkRateLimit } from "@/lib/ai/check-rate-limit";
 import { guardTexts } from "@/lib/safety/guard";
+import { chat } from "@/lib/ai/client";
+import { frame, heartbeat, safeEnqueue, SSE_HEADERS } from "@/lib/chat/sse";
+import { serializeJson } from "@/lib/db/json";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+const HEARTBEAT_MS = 25_000;
 
 /**
- * POST /api/divination/meihua — 简化为纯数字测算
+ * /api/divination/meihua — 梅花易数 (M2.20, spec §4.4)
  *
- * 请求 body：{ conversationId, numbers([1-3 个 1-9 整数]), userQuestion }
+ * 多分支 body schema：
+ *  A) { conversationId } only                 → 列档案 / 引导建档
+ *     - 有任意 profile → profile_picker 卡（A3 多档案）
+ *     - 无 profile     → bazi_quick_form 卡（先建档再起卦）
+ *  B) { conversationId, profileId }           → meihua_number_input 卡（让用户报数）
+ *  C) { conversationId, profileId, numbers, userQuestion? } → SSE → meihua_result 卡
  *
- * 工作流：
- *   1. castByNumbers(numbers) → interpretMeihua → 完整推演
- *   2. 写 user message（[测算 · 数字 X、Y、Z] {userQuestion}）
- *   3. 调 AI 解读 → assistant message metadata.ui='meihua_result'（含 ben/hu/bian/guaZhongGua/dongYao/tiYong/yingQi/verdict）
- *   4. 写 divination_records (type='meihua') + 更新 last_message_at
- *
- * PATCH /api/divination/meihua — 外应回填 + 二次解读（保留原有实现）
+ * V1.0 的算法是简化版（先把 8 卦 / 体用 / 应期 placeholder 送进 AI prompt，AI 自由发挥）。
+ * V2.0 五行损益 / 时辰能量加权在 M3.16+ 升级 lib/divination/meihua-v2.ts。
  */
-export const runtime = "nodejs";
-export const maxDuration = 90;
 
-const VERDICT_BY_RELATION: Record<MeihuaResult["tiYong"]["relation"], string> = {
-  yong_sheng_ti: "用生体 · 大吉",
-  ti_ke_yong: "体克用 · 吉",
-  bi_he: "比和 · 平顺",
-  ti_sheng_yong: "体生用 · 略耗心力",
-  yong_ke_ti: "用克体 · 留神",
-};
+const VALID_NUMBER = z.number().int().min(1).max(999);
 
-const postSchema = z.object({
+const bodySchema = z.object({
   conversationId: z.string().min(1),
-  numbers: z.array(z.number().int().min(1).max(9)).min(1).max(3),
-  userQuestion: z.string().trim().min(1).max(500),
+  profileId: z.string().min(1).optional(),
+  numbers: z.array(VALID_NUMBER).min(1).max(3).optional(),
+  userQuestion: z.string().trim().max(200).optional(),
 });
 
-const patchSchema = z.object({
-  messageId: z.string().min(1),
-  waiying: z.string().trim().min(1).max(200),
-});
+const SYSTEM_PROMPT = [
+  "你是温和的梅花易数老师。",
+  "结构：[卦象速断 60-100 字] / [体用关系 60-100 字] / [应期建议 60-100 字] / [行动建议 60-100 字]。",
+  "禁词：大凶 / 倒霉 / 厄运 / 命中注定。负面信号转柔和说法（先慢一步、沉住气）。",
+  "字数：280-400 字。",
+].join("\n");
+
+// 后天八卦序号 1-8 → 卦名
+const TRIGRAMS = ["乾", "兑", "离", "震", "巽", "坎", "艮", "坤"] as const;
+type Trigram = (typeof TRIGRAMS)[number];
+
+const TRIGRAM_WUXING: Record<Trigram, "金" | "木" | "水" | "火" | "土"> = {
+  乾: "金",
+  兑: "金",
+  离: "火",
+  震: "木",
+  巽: "木",
+  坎: "水",
+  艮: "土",
+  坤: "土",
+};
 
 export async function POST(req: Request) {
   let raw: unknown;
@@ -59,23 +66,18 @@ export async function POST(req: Request) {
   } catch {
     return jsonError("请求体不是合法 JSON", 400);
   }
-  const parsed = postSchema.safeParse(raw);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "校验失败", issues: parsed.error.issues },
-      { status: 400 },
-    );
-  }
-  const { conversationId, numbers, userQuestion } = parsed.data;
 
-  const safetyFail = guardTexts({ userQuestion });
-  if (safetyFail) return safetyFail;
+  const parsed = bodySchema.safeParse(raw);
+  if (!parsed.success) {
+    return jsonError(parsed.error.issues[0]?.message ?? "校验失败", 400);
+  }
+  const data = parsed.data;
 
   const userId = await ensureUserId();
-  const rate = await checkRateLimit(userId);
-  if (!rate.allowed) {
+  const limit = await checkRateLimit(userId);
+  if (!limit.allowed) {
     return jsonError(
-      `每小时上限 ${rate.limit} 条，请稍后再试（已用 ${rate.used}）`,
+      `每小时上限 ${limit.limit} 条，请稍后再试（已发 ${limit.used}）`,
       429,
     );
   }
@@ -84,277 +86,367 @@ export async function POST(req: Request) {
   const owned = await db
     .select({ id: conversations.id })
     .from(conversations)
-    .where(
-      and(eq(conversations.id, conversationId), eq(conversations.user_id, userId)),
-    )
+    .where(and(eq(conversations.id, data.conversationId), eq(conversations.user_id, userId)))
     .limit(1);
   if (!owned[0]) return jsonError("会话不存在", 404);
 
-  let cast;
-  try {
-    cast = castByNumbers(...numbers);
-  } catch (e) {
-    return jsonError(e instanceof Error ? e.message : "起卦失败", 400);
-  }
-  const result = interpretMeihua(cast);
+  // ============ Branch A: 仅 conversationId — 列档案 / 引导建档 ============
+  if (!data.profileId) {
+    const userProfiles = await db
+      .select({
+        id: profiles.id,
+        nickname: profiles.nickname,
+        isDefault: profiles.is_default,
+        gender: profiles.gender,
+        birthDate: profiles.birth_date,
+      })
+      .from(profiles)
+      .where(eq(profiles.user_id, userId));
 
-  const [userMsg] = await db
-    .insert(messages)
-    .values({
-      conversation_id: conversationId,
-      role: "user",
-      content: `[测算 · 数字 ${numbers.join("、")}] ${userQuestion}`,
-      intent: "meihua",
-    })
-    .returning();
-  if (!userMsg) return jsonError("用户消息写入失败", 500);
+    if (userProfiles.length === 0) {
+      const cardMeta = {
+        ui: "bazi_quick_form" as const,
+        fields: ["gender", "birth_time", "birth_place"],
+        reason: "起梅花卦先要档案信息，做好后回来报数。",
+      };
+      const [card] = await db
+        .insert(messages)
+        .values({
+          conversation_id: data.conversationId,
+          role: "assistant",
+          content: "起梅花卦先要您的档案，请填一下",
+          intent: "meihua",
+          metadata: serializeJson(cardMeta),
+        })
+        .returning();
+      return Response.json({
+        step: "quick_form_needed",
+        card: {
+          id: card?.id,
+          role: "assistant",
+          content: "起梅花卦先要您的档案，请填一下",
+          metadata: serializeJson(cardMeta),
+        },
+      });
+    }
 
-  let aiText = "（解读暂时不可用，请稍后再试）";
-  let tokens = 0;
-  try {
-    const prompt = await loadPrompt("meihua.interpret");
-    const benRow = await db
-      .select({ judgment: hexagrams.judgment })
-      .from(hexagrams)
-      .where(eq(hexagrams.number, result.ben.number))
-      .limit(1);
-    const tpl = renderTemplate(prompt.userPromptTpl, {
-      benName: result.ben.name,
-      upperWuxing: wuxingOf(result.ben.upper),
-      lowerWuxing: wuxingOf(result.ben.lower),
-      benJudgment: benRow[0]?.judgment ?? "（卦辞待补）",
-      dongYao: result.dongYao,
-      huName: result.hu.name,
-      bianName: result.bian.name,
-      guaZhongName: result.guaZhongGua.name,
-      ti: result.tiYong.ti,
-      yong: result.tiYong.yong,
-      tiWuxing: wuxingOf(result.tiYong.ti),
-      yongWuxing: wuxingOf(result.tiYong.yong),
-      relation: result.tiYong.relation,
-      verdict: VERDICT_BY_RELATION[result.tiYong.relation] ?? "",
-      speed: result.yingQi.speed,
-      timeHint: result.yingQi.timeHint,
-      branchHour: result.yingQi.branchHour ?? "（数字起卦无）",
-      userQuestion,
-      waiying: "（用户尚未提供）",
+    const cardMeta = {
+      ui: "profile_picker" as const,
+      profiles: userProfiles.map((p) => ({
+        id: p.id,
+        nickname: p.nickname,
+        isDefault: Boolean(p.isDefault),
+        gender: (p.gender ?? "other") as "male" | "female" | "other",
+        birthDate: p.birthDate ?? undefined,
+      })),
+      conversationId: data.conversationId,
+      allowAddNew: true,
+    };
+    const [card] = await db
+      .insert(messages)
+      .values({
+        conversation_id: data.conversationId,
+        role: "assistant",
+        content: "用谁的档案起卦？",
+        intent: "meihua",
+        metadata: serializeJson(cardMeta),
+      })
+      .returning();
+    return Response.json({
+      step: "profile_picker",
+      card: {
+        id: card?.id,
+        role: "assistant",
+        content: "用谁的档案起卦？",
+        metadata: serializeJson(cardMeta),
+      },
     });
-    const ai = await chat({
-      systemPrompt: prompt.systemPrompt,
-      messages: [{ role: "user", content: tpl }],
-      stream: false,
-      meta: { conversationId, userId },
-    });
-    aiText = ai.text;
-    tokens = ai.tokensUsed;
-  } catch (e) {
-    console.error("meihua AI 解读失败", e);
   }
 
-  const [resultMsg] = await db
-    .insert(messages)
-    .values({
-      conversation_id: conversationId,
-      role: "assistant",
-      content: aiText,
-      intent: "meihua",
-      tokens_used: tokens,
-      metadata: serializeJson({
-        ui: "meihua_result",
-        ben: result.ben,
-        hu: result.hu,
-        bian: result.bian,
-        guaZhongGua: result.guaZhongGua,
-        dongYao: result.dongYao,
-        tiYong: result.tiYong,
-        yingQi: result.yingQi,
-        verdict: VERDICT_BY_RELATION[result.tiYong.relation] ?? "",
-      }),
-    })
-    .returning();
-  if (!resultMsg) return jsonError("解读消息写入失败", 500);
+  // 校验 profile 属于当前用户（B/C 都需要）
+  const [profile] = await db
+    .select()
+    .from(profiles)
+    .where(and(eq(profiles.id, data.profileId), eq(profiles.user_id, userId)))
+    .limit(1);
+  if (!profile) return jsonError("档案不存在或无权限", 404);
 
-  await db.insert(divinationRecords).values({
-    message_id: resultMsg.id,
-    type: "meihua",
-    input: serializeJson({ numbers, userQuestion, waiying: null }),
-    result: serializeJson(result),
-    ai_reading: aiText,
+  // ============ Branch B: profileId 但无 numbers → meihua_number_input 卡 ============
+  if (!data.numbers || data.numbers.length === 0) {
+    const cardMeta = {
+      ui: "meihua_number_input" as const,
+      profileId: data.profileId,
+      numberCount: 3,
+    };
+    const [card] = await db
+      .insert(messages)
+      .values({
+        conversation_id: data.conversationId,
+        role: "assistant",
+        content: "请报 3 个 1-999 之间的随机数（也可只报 1-2 个）",
+        intent: "meihua",
+        metadata: serializeJson(cardMeta),
+      })
+      .returning();
+    return Response.json({
+      step: "number_input",
+      card: {
+        id: card?.id,
+        role: "assistant",
+        content: "请报 3 个 1-999 之间的随机数（也可只报 1-2 个）",
+        metadata: serializeJson(cardMeta),
+      },
+    });
+  }
+
+  // ============ Branch C: profileId + numbers → 起卦 + SSE 流 ============
+  if (data.userQuestion) {
+    const safetyFail = guardTexts({ text: data.userQuestion });
+    if (safetyFail) return safetyFail;
+  }
+
+  const profileId = data.profileId;
+  const numbers = data.numbers;
+  const userQuestion = data.userQuestion ?? "";
+
+  const benGua = numbersToHexagram(numbers);
+  const dongYao = computeDongYao(numbers);
+  const bianGua = mutateHexagram(benGua, dongYao);
+  const huGua = innerHexagram(benGua);
+  const tiYong = computeTiYong(benGua, dongYao);
+  const yingQi = computeYingQi(benGua, dongYao);
+
+  const sse = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let heartbeatId: ReturnType<typeof setInterval> | null = setInterval(() => {
+        safeEnqueue(controller, heartbeat());
+      }, HEARTBEAT_MS);
+
+      const stopHeartbeat = () => {
+        if (heartbeatId) {
+          clearInterval(heartbeatId);
+          heartbeatId = null;
+        }
+      };
+
+      safeEnqueue(
+        controller,
+        frame("meta", {
+          conversationId: data.conversationId,
+          intent: "meihua",
+          profileId,
+          numbers,
+          source: "meihua_api",
+        }),
+      );
+
+      safeEnqueue(controller, frame("progress", { stage: "computing", percent: 20 }));
+
+      let aiText = "";
+      let tokens = 0;
+
+      try {
+        const userPrompt = [
+          `请按梅花易数解读：`,
+          `档案性别：${profile.gender}`,
+          `用户报数：${numbers.join(" / ")}`,
+          `本卦：${benGua.upper}${benGua.lower}（上${benGua.upper}下${benGua.lower}）`,
+          `互卦：${huGua.upper}${huGua.lower}`,
+          `变卦：${bianGua.upper}${bianGua.lower}`,
+          `动爻：第 ${dongYao} 爻`,
+          `体用关系：${tiYong}`,
+          `应期：${yingQi}`,
+          userQuestion ? `用户问的：${userQuestion}` : "用户未指定具体问题，请综合解读。",
+          "",
+          "结构：卦象速断 / 体用关系 / 应期建议 / 行动建议（4 段）。",
+        ].join("\n");
+
+        safeEnqueue(controller, frame("progress", { stage: "streaming", percent: 40 }));
+
+        const stream = await chat({
+          systemPrompt: SYSTEM_PROMPT,
+          messages: [{ role: "user", content: userPrompt }],
+          stream: true,
+          meta: { conversationId: data.conversationId, userId },
+        });
+
+        for await (const chunk of stream.textStream) {
+          aiText += chunk;
+          if (!safeEnqueue(controller, frame("token", chunk))) break;
+        }
+        try {
+          tokens = (await stream.usage).totalTokens ?? 0;
+        } catch {
+          /* usage 不致命 */
+        }
+
+        const cardMeta = {
+          ui: "meihua_result" as const,
+          profileId,
+          benGua: `${benGua.upper}${benGua.lower}`,
+          huGua: `${huGua.upper}${huGua.lower}`,
+          bianGua: `${bianGua.upper}${bianGua.lower}`,
+          dongYao,
+          tiYong,
+          yingQi,
+          verdict: aiText.slice(0, 60) || "(AI 卦辞未生成)",
+          aiText,
+        };
+
+        const [card] = await db
+          .insert(messages)
+          .values({
+            conversation_id: data.conversationId,
+            role: "assistant",
+            content: aiText || "(AI 卦辞未生成)",
+            intent: "meihua",
+            metadata: serializeJson(cardMeta),
+            tokens_used: tokens,
+            profile_id_used: profileId,
+          })
+          .returning();
+
+        safeEnqueue(
+          controller,
+          frame("card", {
+            id: card?.id,
+            role: "assistant",
+            content: aiText,
+            metadata: serializeJson(cardMeta),
+          }),
+        );
+
+        await db
+          .update(conversations)
+          .set({ last_intent: "meihua", last_message_at: new Date().toISOString() })
+          .where(eq(conversations.id, data.conversationId));
+
+        safeEnqueue(controller, frame("done", {}));
+      } catch (e) {
+        if (process.env.NODE_ENV !== "production") {
+          console.error("/api/divination/meihua 失败", e);
+        }
+        const isTimeout = e instanceof Error && /timeout|abort/i.test(e.message);
+        safeEnqueue(
+          controller,
+          frame("error", {
+            message: isTimeout ? "AI 演算超时，请重试" : "AI 卡了一下，请稍后再试",
+            code: isTimeout ? "ai_timeout" : "unknown",
+            retryable: true,
+          }),
+        );
+      } finally {
+        stopHeartbeat();
+        try {
+          controller.close();
+        } catch {
+          /* 已 close 不致命 */
+        }
+      }
+    },
   });
 
-  await db
-    .update(conversations)
-    .set({ last_message_at: new Date().toISOString() })
-    .where(eq(conversations.id, conversationId));
+  return new Response(sse, { headers: SSE_HEADERS });
+}
 
-  return NextResponse.json({
-    conversationId,
-    userMessage: {
-      id: userMsg.id,
-      role: "user" as const,
-      content: userMsg.content,
-      created_at: userMsg.created_at,
-    },
-    resultMessage: {
-      id: resultMsg.id,
-      role: "assistant" as const,
-      content: resultMsg.content,
-      created_at: resultMsg.created_at,
-      metadata: resultMsg.metadata,
-    },
-  });
+// ============ V1.0 简化算法（V2.0 在 M3.16+ 升级） ============
+
+/**
+ * 报数 → 本卦
+ * 单数：上卦 = (n % 8) || 8；下卦同 n；动爻 = (n % 6) || 6
+ * 双数：上卦 = (n1 % 8) || 8；下卦 = (n2 % 8) || 8；动爻 = ((n1+n2) % 6) || 6
+ * 三数：上卦 = (n1 % 8) || 8；下卦 = (n2 % 8) || 8；动爻 = ((n1+n2+n3) % 6) || 6
+ */
+function numbersToHexagram(numbers: number[]): { upper: Trigram; lower: Trigram } {
+  const n1 = numbers[0] ?? 1;
+  const n2 = numbers[1] ?? n1;
+  const upperIdx = ((n1 - 1) % 8 + 8) % 8;
+  const lowerIdx = ((n2 - 1) % 8 + 8) % 8;
+  return { upper: TRIGRAMS[upperIdx]!, lower: TRIGRAMS[lowerIdx]! };
+}
+
+function computeDongYao(numbers: number[]): number {
+  const sum = numbers.reduce((a, b) => a + b, 0);
+  const r = sum % 6;
+  return r === 0 ? 6 : r;
 }
 
 /**
- * PATCH — 外应回填 + 二次解读（保留原有逻辑）
+ * 互卦：取本卦 234 爻为下卦、345 爻为上卦
+ * V1.0 简化：直接拿本卦的 lower / upper 反过来作互卦 placeholder（后续 V2 接 64 卦表）
  */
-export async function PATCH(req: Request) {
-  let raw: unknown;
-  try {
-    raw = await req.json();
-  } catch {
-    return jsonError("请求体不是合法 JSON", 400);
+function innerHexagram(ben: { upper: Trigram; lower: Trigram }): { upper: Trigram; lower: Trigram } {
+  return { upper: ben.lower, lower: ben.upper };
+}
+
+/**
+ * 变卦：动爻所在卦换一个相邻位（V1.0 简化：上下卦互换 placeholder）
+ */
+function mutateHexagram(
+  ben: { upper: Trigram; lower: Trigram },
+  dongYao: number,
+): { upper: Trigram; lower: Trigram } {
+  // 动爻 1-3 影响下卦，4-6 影响上卦
+  if (dongYao <= 3) {
+    const idx = TRIGRAMS.indexOf(ben.lower);
+    return { upper: ben.upper, lower: TRIGRAMS[(idx + 1) % 8]! };
   }
-  const parsed = patchSchema.safeParse(raw);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "校验失败", issues: parsed.error.issues },
-      { status: 400 },
-    );
-  }
-  const { messageId, waiying } = parsed.data;
+  const idx = TRIGRAMS.indexOf(ben.upper);
+  return { upper: TRIGRAMS[(idx + 1) % 8]!, lower: ben.lower };
+}
 
-  const safetyFail = guardTexts({ waiying });
-  if (safetyFail) return safetyFail;
+/**
+ * 体用关系：动爻所在卦为用，另一卦为体
+ * 比较 wuxing 给出生克关系（生体 / 比和 / 体生用 / 克体 / 体克用）
+ */
+function computeTiYong(ben: { upper: Trigram; lower: Trigram }, dongYao: number): string {
+  const ti = dongYao <= 3 ? ben.upper : ben.lower; // 不动的为体
+  const yong = dongYao <= 3 ? ben.lower : ben.upper;
+  const tiE = TRIGRAM_WUXING[ti];
+  const yongE = TRIGRAM_WUXING[yong];
 
-  const userId = await ensureUserId();
-  const db = getDb();
+  if (tiE === yongE) return `比和（${ti}/${yong} 同${tiE}），运势平稳`;
+  if (sheng(yongE, tiE)) return `用生体（${yong}${yongE} 生 ${ti}${tiE}），得力`;
+  if (sheng(tiE, yongE)) return `体生用（${ti}${tiE} 生 ${yong}${yongE}），耗力`;
+  if (ke(yongE, tiE)) return `用克体（${yong}${yongE} 克 ${ti}${tiE}），先慢一步`;
+  if (ke(tiE, yongE)) return `体克用（${ti}${tiE} 克 ${yong}${yongE}），主导`;
+  return `${ti}${tiE} / ${yong}${yongE}，需结合时运`;
+}
 
-  const msgRow = await db
-    .select({
-      messageId: messages.id,
-      conversationId: messages.conversation_id,
-      ownerId: conversations.user_id,
-    })
-    .from(messages)
-    .innerJoin(conversations, eq(conversations.id, messages.conversation_id))
-    .where(eq(messages.id, messageId))
-    .limit(1);
-  const m = msgRow[0];
-  if (!m || m.ownerId !== userId) {
-    return NextResponse.json({ error: "消息不存在或无权操作" }, { status: 404 });
-  }
+/**
+ * 应期：动爻数对应当下 / 近期 / 中期
+ */
+function computeYingQi(_ben: { upper: Trigram; lower: Trigram }, dongYao: number): string {
+  if (dongYao <= 2) return "近 1-3 日";
+  if (dongYao <= 4) return "近 1-3 周";
+  return "1-3 个月";
+}
 
-  const recordRow = await db
-    .select()
-    .from(divinationRecords)
-    .where(eq(divinationRecords.message_id, messageId))
-    .limit(1);
-  const record = recordRow[0];
-  if (!record || record.type !== "meihua") {
-    return NextResponse.json({ error: "找不到对应的梅花记录" }, { status: 404 });
-  }
+function sheng(a: string, b: string): boolean {
+  // 五行相生：木→火→土→金→水→木
+  return (
+    (a === "木" && b === "火") ||
+    (a === "火" && b === "土") ||
+    (a === "土" && b === "金") ||
+    (a === "金" && b === "水") ||
+    (a === "水" && b === "木")
+  );
+}
 
-  const oldInput = parseJson<{
-    numbers: number[];
-    userQuestion: string;
-    waiying: string | null;
-  }>(record.input, { numbers: [], userQuestion: "", waiying: null });
-  await db
-    .update(divinationRecords)
-    .set({ input: serializeJson({ ...oldInput, waiying }) })
-    .where(eq(divinationRecords.id, record.id));
+function ke(a: string, b: string): boolean {
+  // 五行相克：木克土，土克水，水克火，火克金，金克木
+  return (
+    (a === "木" && b === "土") ||
+    (a === "土" && b === "水") ||
+    (a === "水" && b === "火") ||
+    (a === "火" && b === "金") ||
+    (a === "金" && b === "木")
+  );
+}
 
-  const result = parseJson<MeihuaResult>(record.result, null as unknown as MeihuaResult);
-  if (!result) {
-    return NextResponse.json({ error: "原卦象数据损坏" }, { status: 500 });
-  }
-
-  let aiText = "（外应解读暂时不可用，请稍后再试）";
-  let tokens = 0;
-  try {
-    const prompt = await loadPrompt("meihua.interpret");
-    const benRow = await db
-      .select({ judgment: hexagrams.judgment })
-      .from(hexagrams)
-      .where(eq(hexagrams.number, result.ben.number))
-      .limit(1);
-
-    const tpl = renderTemplate(prompt.userPromptTpl, {
-      benName: result.ben.name,
-      upperWuxing: wuxingOf(result.ben.upper),
-      lowerWuxing: wuxingOf(result.ben.lower),
-      benJudgment: benRow[0]?.judgment ?? "（卦辞待补）",
-      dongYao: result.dongYao,
-      huName: result.hu.name,
-      bianName: result.bian.name,
-      guaZhongName: result.guaZhongGua.name,
-      ti: result.tiYong.ti,
-      yong: result.tiYong.yong,
-      tiWuxing: wuxingOf(result.tiYong.ti),
-      yongWuxing: wuxingOf(result.tiYong.yong),
-      relation: result.tiYong.relation,
-      verdict: VERDICT_BY_RELATION[result.tiYong.relation] ?? "",
-      speed: result.yingQi.speed,
-      timeHint: result.yingQi.timeHint,
-      branchHour: result.yingQi.branchHour ?? "（数字起卦无）",
-      userQuestion: oldInput.userQuestion,
-      waiying,
-    });
-    const ai = await chat({
-      systemPrompt: prompt.systemPrompt,
-      messages: [{ role: "user", content: tpl }],
-      stream: false,
-      meta: { conversationId: m.conversationId, userId },
-    });
-    aiText = ai.text;
-    tokens = ai.tokensUsed;
-  } catch (e) {
-    console.error("meihua PATCH AI 解读失败", e);
-  }
-
-  const [aiMsg] = await db
-    .insert(messages)
-    .values({
-      conversation_id: m.conversationId,
-      role: "assistant",
-      content: aiText,
-      intent: "meihua",
-      tokens_used: tokens,
-      metadata: serializeJson({ ui: "meihua_reading", waiying }),
-    })
-    .returning();
-
-  await db
-    .update(conversations)
-    .set({ last_message_at: new Date().toISOString() })
-    .where(eq(conversations.id, m.conversationId));
-
-  return NextResponse.json({
-    assistantMessage: aiMsg && {
-      id: aiMsg.id,
-      role: "assistant" as const,
-      content: aiMsg.content,
-      created_at: aiMsg.created_at,
-      metadata: aiMsg.metadata,
-    },
+function jsonError(message: string, status: number): Response {
+  return new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: { "Content-Type": "application/json" },
   });
-}
-
-function wuxingOf(trigram: string): string {
-  const map: Record<string, string> = {
-    乾: "金",
-    兑: "金",
-    离: "火",
-    震: "木",
-    巽: "木",
-    坎: "水",
-    艮: "土",
-    坤: "土",
-  };
-  return map[trigram] ?? "?";
-}
-
-function jsonError(msg: string, status: number) {
-  return NextResponse.json({ error: msg }, { status });
 }
