@@ -20,13 +20,26 @@ import type { DisplayMessage } from "./_components/MessageBubble";
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  searchParams: Promise<{ cid?: string; initial?: string }>;
+  searchParams: Promise<{
+    cid?: string;
+    initial?: string;
+    /** M2.24: ?intent=divination|dream|bazi|meihua → mount 时 auto-send */
+    intent?: string;
+    /** M2.24: ?open=history → mount 时打开历史抽屉 */
+    open?: string;
+  }>;
 }
+
+const VALID_INTENTS = new Set(["divination", "dream", "bazi", "meihua"]);
 
 export default async function ChatPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const cid = sp.cid && sp.cid.length > 0 ? sp.cid : null;
   const initial = sp.initial;
+  const intent = sp.intent && VALID_INTENTS.has(sp.intent)
+    ? (sp.intent as "divination" | "dream" | "bazi" | "meihua")
+    : null;
+  const openHistory = sp.open === "history";
 
   let initialMessages: DisplayMessage[] = [];
   let resolvedConvId: string | null = null;
@@ -65,6 +78,8 @@ export default async function ChatPage({ searchParams }: PageProps) {
         conversationId={resolvedConvId}
         initialMessages={initialMessages}
         autoSendText={initial}
+        initialIntent={intent}
+        openHistoryOnMount={openHistory}
       />
     </>
   );
