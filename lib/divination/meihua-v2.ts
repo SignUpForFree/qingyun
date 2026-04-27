@@ -1,8 +1,10 @@
 import type { Profile } from "@/lib/db/schema";
-import type { Branch } from "@/lib/bazi/stems-branches";
+import type { Branch, Wuxing } from "@/lib/bazi/stems-branches";
 import { castByNumbers, castByTime, type CastResult } from "@/lib/meihua/cast";
 import { interpretMeihua, type MeihuaResult } from "@/lib/meihua/interpret";
 import { findGuaByTrigrams, type Trigram as Gua64Trigram } from "@/db/seed/gua64";
+import { computeTimeEnergy, type TimeEnergyResult } from "./time-energy";
+import { TRIGRAM_WUXING } from "@/lib/meihua/trigrams";
 
 /**
  * 梅花易数 V2 入口 (M3.17)
@@ -35,8 +37,8 @@ export interface MeihuaV2Result extends MeihuaResult {
   benDict: GuaDictView;
   huDict: GuaDictView;
   bianDict: GuaDictView;
-  /** M3.19 时辰能量场 — 现为 stub */
-  timeEnergy: TimeEnergyStub;
+  /** M3.19 时辰能量场（hourBranch 缺省 → null） */
+  timeEnergy: TimeEnergyResult | null;
   /** M3.20 五行损益 — 现为 stub */
   sunYi: SunYiStub;
 }
@@ -50,13 +52,6 @@ export interface GuaDictView {
   dongYaoCi?: string;
 }
 
-export interface TimeEnergyStub {
-  /** 当前时辰的主导五行（M3.19 实现） */
-  dominantWuxing?: "金" | "木" | "水" | "火" | "土";
-  /** 卦象与时辰能量场的合冲（M3.19 实现） */
-  alignment?: "aligned" | "neutral" | "conflict";
-}
-
 export interface SunYiStub {
   /** profile.yongShen 与卦象主五行的关系（M3.20 实现） */
   yongShenSupported?: boolean;
@@ -68,14 +63,33 @@ export function meihuaV2(args: MeihuaV2Args): MeihuaV2Result {
   const cast = pickCast(args);
   const base = interpretMeihua(cast, args.hourBranch);
 
+  // M3.19 时辰能量场（仅在传入 hourBranch 时计算）
+  const timeEnergy: TimeEnergyResult | null = args.hourBranch
+    ? computeTimeEnergy({
+        hourBranch: args.hourBranch,
+        guaWuxing: TRIGRAM_WUXING[base.tiYong.ti] as Wuxing,
+        yongShen: pickYongShen(args.profile),
+      })
+    : null;
+
   return {
     ...base,
     benDict: buildDictView(base.ben.upper, base.ben.lower, cast.dongYao),
     huDict: buildDictView(base.hu.upper, base.hu.lower, undefined),
     bianDict: buildDictView(base.bian.upper, base.bian.lower, undefined),
-    timeEnergy: {}, // M3.19 stub
+    timeEnergy,
     sunYi: {}, // M3.20 stub
   };
+}
+
+/**
+ * 从 profile.bazi_pillars 缓存里挑出用神 — 缓存只放 pillars，不含 yongShen，
+ * 所以 V2 这一步 yongShen 默认 null；M3.20 会扩展缓存把 yongShen 一起存。
+ *
+ * 暂时返 null，给 timeEnergy.supportYongShen 走 null 兜底分支。
+ */
+function pickYongShen(_profile: MeihuaV2Args["profile"]): Wuxing | null {
+  return null;
 }
 
 function pickCast(args: MeihuaV2Args): CastResult {
