@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
 import { IntentChips } from "./IntentChips";
+import { HistoryDrawer } from "./HistoryDrawer";
 import { GlassCard, Sparkle } from "@/components/su";
 import type { DisplayMessage } from "./MessageBubble";
 
@@ -14,7 +15,18 @@ interface ChatWindowProps {
   initialMessages: DisplayMessage[];
   /** 从 /chat?initial=xxx 跳过来时自动发送的首条消息 */
   autoSendText?: string;
+  /** ?intent=divination|dream|bazi|meihua → mount 时自动发送对应预设话术（M2.24, spec §4.2） */
+  initialIntent?: "divination" | "dream" | "bazi" | "meihua" | null;
+  /** ?open=history → mount 时打开历史抽屉（M2.24） */
+  openHistoryOnMount?: boolean;
 }
+
+const INTENT_AUTO_TEXT: Record<NonNullable<ChatWindowProps["initialIntent"]>, string> = {
+  divination: "我要抽灵签",
+  dream: "我要 AI 解梦",
+  bazi: "我要八字解读",
+  meihua: "我要测算",
+};
 
 interface SubActionResponse {
   conversationId: string;
@@ -45,12 +57,16 @@ export function ChatWindow({
   conversationId: initialConvId,
   initialMessages,
   autoSendText,
+  initialIntent,
+  openHistoryOnMount,
 }: ChatWindowProps) {
   const router = useRouter();
   const [convId, setConvId] = React.useState<string | null>(initialConvId);
   const [messages, setMessages] = React.useState<DisplayMessage[]>(initialMessages);
   const [streaming, setStreaming] = React.useState<string | null>(null);
+  const [progressHint, setProgressHint] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const [drawerOpen, setDrawerOpen] = React.useState<boolean>(Boolean(openHistoryOnMount));
   const abortRef = React.useRef<AbortController | null>(null);
   const autoSentRef = React.useRef(false);
   const sendRef = React.useRef<(t: string) => Promise<void>>(() => Promise.resolve());
@@ -104,8 +120,20 @@ export function ChatWindow({
       }
 
       if (!res.ok || !res.body) {
-        const errBody = await res.text().catch(() => "");
-        toast.error(`AI 暂时无响应 (${res.status})${errBody ? "：" + errBody.slice(0, 80) : ""}`);
+        // 优先读 errorCard（M2.28），fallback 文本
+        let friendly = `AI 暂时无响应 (${res.status})`;
+        try {
+          const j = (await res.clone().json()) as {
+            errorCard?: { message?: string };
+            error?: string;
+          };
+          if (j.errorCard?.message) friendly = j.errorCard.message;
+          else if (j.error) friendly = j.error;
+        } catch {
+          const errBody = await res.text().catch(() => "");
+          if (errBody) friendly += "：" + errBody.slice(0, 80);
+        }
+        toast.error(friendly);
         setStreaming(null);
         return;
       }
@@ -168,8 +196,24 @@ export function ChatWindow({
                   metadata: data.metadata,
                 });
               }
+            } else if (parsed.event === "progress") {
+              const data = parsed.data as { stage?: string; percent?: number } | string;
+              if (typeof data === "object" && data !== null) {
+                const stage = String(data.stage ?? "");
+                const pct = typeof data.percent === "number" ? data.percent : 0;
+                setProgressHint(stage ? `${stageLabel(stage)} ${pct}%` : null);
+              }
+            } else if (parsed.event === "done") {
+              setProgressHint(null);
             } else if (parsed.event === "error") {
-              toast.error(typeof parsed.data === "string" ? parsed.data : "AI 出错");
+              const data = parsed.data as
+                | { message?: string; code?: string }
+                | string;
+              const msg =
+                typeof data === "string"
+                  ? data
+                  : (data?.message ?? "AI 出错");
+              toast.error(msg);
             }
           }
         }
@@ -179,6 +223,7 @@ export function ChatWindow({
         }
       } finally {
         cancelPendingFlush();
+        setProgressHint(null);
       }
 
       setMessages((m) => {
@@ -383,11 +428,17 @@ export function ChatWindow({
   );
 
   React.useEffect(() => {
-    if (autoSendText && !autoSentRef.current) {
+    if (autoSentRef.current) return;
+    if (autoSendText) {
       autoSentRef.current = true;
       void sendRef.current(autoSendText);
+      return;
     }
-  }, [autoSendText]);
+    if (initialIntent && INTENT_AUTO_TEXT[initialIntent]) {
+      autoSentRef.current = true;
+      void sendRef.current(INTENT_AUTO_TEXT[initialIntent]);
+    }
+  }, [autoSendText, initialIntent]);
 
   React.useEffect(() => {
     return () => abortRef.current?.abort();
@@ -395,6 +446,11 @@ export function ChatWindow({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <HistoryDrawer
+        currentId={convId ?? undefined}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+      />
       <MessageList
         messages={messages}
         streamingText={streaming}
@@ -414,10 +470,26 @@ export function ChatWindow({
           </div>
         }
       />
+      {progressHint && (
+        <p
+          aria-live="polite"
+          data-testid="progress-hint"
+          className="px-4 pb-1 text-[10px] tracking-ritual2 text-[var(--color-ink-fade)]"
+        >
+          {progressHint}
+        </p>
+      )}
       <IntentChips onPick={(t) => void send(t)} busy={streaming !== null || busy} />
       <ChatInput onSend={send} busy={streaming !== null || busy} />
     </div>
   );
+}
+
+function stageLabel(stage: string): string {
+  if (stage === "computing") return "演算中";
+  if (stage === "streaming") return "拟稿中";
+  if (stage === "classifying") return "判定中";
+  return stage;
 }
 
 interface SseFrame {
