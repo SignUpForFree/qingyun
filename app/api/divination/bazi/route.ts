@@ -8,6 +8,8 @@ import { guardTexts } from "@/lib/safety/guard";
 import { chat } from "@/lib/ai/client";
 import { frame, heartbeat, safeEnqueue, SSE_HEADERS } from "@/lib/chat/sse";
 import { serializeJson } from "@/lib/db/json";
+import { buildChartV2 } from "@/lib/bazi/chart";
+import { buildBaziPrompt, type V2DivinationDim } from "@/lib/ai/prompts/bazi-interpret";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -50,13 +52,6 @@ const bodySchema = z.object({
   focus: z.enum(VALID_CATEGORIES).optional(),
   quickFormData: quickFormSchema.optional(),
 });
-
-const SYSTEM_PROMPT = [
-  "你是温柔细致的八字老师。",
-  "回复风格：先给一句呼应用户问题的开场，再分 3-4 段（按用户的 focus 维度）解读，最后给一句行动建议。",
-  "结构：开场 1 句 / 3-4 段（80-120 字一段）/ 收尾 1 句行动建议。字数 350-500。",
-  "禁词：大凶 / 倒霉 / 厄运 / 命中注定。负面信号转柔和说法。",
-].join("\n");
 
 export async function POST(req: Request) {
   let raw: unknown;
@@ -303,19 +298,34 @@ export async function POST(req: Request) {
       let tokens = 0;
 
       try {
-        const userPrompt = [
-          `请按【${focus}】方向解读以下八字：`,
-          `性别：${profile.gender}`,
-          `出生：${profile.birth_date} ${profile.birth_time} (${profile.birth_calendar === "solar" ? "公历" : "农历"})`,
-          `出生地：${profile.birth_place}`,
-          "",
-          "结构：开场 1 句 / 3-4 段（80-120 字）/ 收尾 1 句行动建议。",
-        ].join("\n");
+        // M3.13: V2 算盘 — 真太阳时 + 30+ 神煞 + 大运 8 步 + 流年 5 年 + 用神
+        const chartV2 = buildChartV2(
+          {
+            birthTime: parseBirthDateTime(profile.birth_date, profile.birth_time),
+            longitude: 121.47, // 上海兜底（M3 后续接 IP geo / 出生地查表）
+            latitude: 31.23,
+            gender: (profile.gender ?? "male") as "male" | "female",
+            calendarType: profile.birth_calendar,
+          },
+          { centerYear: new Date().getUTCFullYear() },
+        );
+
+        const { systemPrompt, userPrompt } = buildBaziPrompt({
+          chart: chartV2,
+          focus: focus as V2DivinationDim,
+          profile: {
+            gender: (profile.gender ?? "male") as "male" | "female",
+            birthDate: profile.birth_date,
+            birthTime: profile.birth_time,
+            birthPlace: profile.birth_place,
+            calendarType: profile.birth_calendar,
+          },
+        });
 
         safeEnqueue(controller, frame("progress", { stage: "streaming", percent: 30 }));
 
         const stream = await chat({
-          systemPrompt: SYSTEM_PROMPT,
+          systemPrompt,
           messages: [{ role: "user", content: userPrompt }],
           stream: true,
           meta: { conversationId: data.conversationId, userId },
@@ -336,12 +346,17 @@ export async function POST(req: Request) {
           profileId,
           focus,
           chart: {
-            // M3 算法升级前 chart 字段先放 placeholder 让前端能渲染
-            pillars: parseBaziPillarsCache(profile.bazi_pillars),
-            fiveElements: { 金: 0, 木: 0, 水: 0, 火: 0, 土: 0 },
-            dayMaster: "",
-            tenGods: { year: "", month: "", hour: "" },
-            currentLuck: "",
+            pillars: chartV2.pillars,
+            fiveElements: chartV2.fiveElements,
+            dayMaster: chartV2.dayMaster,
+            tenGods: chartV2.tenGods,
+            shensha: chartV2.shensha,
+            yongShen: chartV2.yongShen,
+            luckPillars: chartV2.luckPillars,
+            liunian: chartV2.liunian,
+            currentLuck: chartV2.luckPillars[0]
+              ? `${chartV2.luckPillars[0].gan}${chartV2.luckPillars[0].zhi}`
+              : "",
           },
           aiText,
         };
@@ -414,25 +429,18 @@ function splitDateTime(raw: string): { dateOnly: string; timeOnly: string } {
   return { dateOnly, timeOnly };
 }
 
-function parseBaziPillarsCache(raw: string | null) {
-  if (!raw) {
-    return {
-      year: { gan: "甲" as const, zhi: "子" as const },
-      month: { gan: "甲" as const, zhi: "子" as const },
-      day: { gan: "甲" as const, zhi: "子" as const },
-      hour: { gan: "甲" as const, zhi: "子" as const },
-    };
+/**
+ * 把 profile 里的 birth_date / birth_time 文本拼成一个带 +08:00 偏移的 Date。
+ * 之所以显式带 UTC+8：buildChartV2 内部用真太阳时校正，依赖准确的 UTC 表示。
+ */
+function parseBirthDateTime(date: string, time: string): Date {
+  const t = time.length >= 5 ? time.slice(0, 5) : "12:00";
+  const iso = `${date}T${t}:00+08:00`;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) {
+    return new Date("1990-01-01T12:00:00+08:00");
   }
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return {
-      year: { gan: "甲" as const, zhi: "子" as const },
-      month: { gan: "甲" as const, zhi: "子" as const },
-      day: { gan: "甲" as const, zhi: "子" as const },
-      hour: { gan: "甲" as const, zhi: "子" as const },
-    };
-  }
+  return d;
 }
 
 function jsonError(message: string, status: number): Response {
