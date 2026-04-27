@@ -4,31 +4,40 @@ import { conversations, messages } from "@/lib/db/schema";
 import {
   isWithinLimit,
   type CountUserMessagesDeps,
+  type RateLimitIntent,
   type RateLimitResult,
 } from "./rate-limit";
 
 /**
  * 通用入口：用 drizzle 实现 countUserMessages 并跑 isWithinLimit
  *
- * 给 /api/chat 和 4 个 /api/divination/* 路由复用，避免每个路由都重写一段查询。
+ * M3.30：可选 `intent` 参数 → 仅统计该 intent 的用户消息，按 intent 限额：
+ *   chat 30 / divination 12 / bazi 8 / meihua 8 / dream 8。
+ *
+ * 兼容：`checkRateLimit(userId)` 不传 intent 走全站 30 老逻辑。
  */
-export async function checkRateLimit(userId: string): Promise<RateLimitResult> {
+export async function checkRateLimit(
+  userId: string,
+  intent?: RateLimitIntent,
+): Promise<RateLimitResult> {
   const db = getDb();
   const deps: CountUserMessagesDeps = {
-    countUserMessages: async (uid, sinceIso) => {
+    countUserMessages: async (uid, sinceIso, scopedIntent) => {
+      const filters = [
+        eq(conversations.user_id, uid),
+        eq(messages.role, "user"),
+        gte(messages.created_at, sinceIso),
+      ];
+      if (scopedIntent && scopedIntent !== "default") {
+        filters.push(eq(messages.intent, scopedIntent));
+      }
       const r = await db
         .select({ n: count() })
         .from(messages)
         .innerJoin(conversations, eq(conversations.id, messages.conversation_id))
-        .where(
-          and(
-            eq(conversations.user_id, uid),
-            eq(messages.role, "user"),
-            gte(messages.created_at, sinceIso),
-          ),
-        );
+        .where(and(...filters));
       return r[0]?.n ?? 0;
     },
   };
-  return isWithinLimit(userId, deps);
+  return isWithinLimit(userId, deps, { intent });
 }

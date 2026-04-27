@@ -66,10 +66,10 @@ export async function POST(req: Request) {
   if (safetyFail) return safetyFail;
 
   const userId = await ensureUserId();
-  const limit = await checkRateLimit(userId);
+  const limit = await checkRateLimit(userId, "chat");
   if (!limit.allowed) {
     return jsonError(
-      `每小时上限 ${limit.limit} 条，请稍后再试（已发 ${limit.used}）`,
+      `每小时聊天上限 ${limit.limit} 条，请稍后再试（已发 ${limit.used}）`,
       429,
     );
   }

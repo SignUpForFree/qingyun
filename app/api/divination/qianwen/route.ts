@@ -58,10 +58,10 @@ export async function POST(req: Request) {
   if (userQuestion && safetyFail) return safetyFail;
 
   const userId = await ensureUserId();
-  const limit = await checkRateLimit(userId);
+  const limit = await checkRateLimit(userId, "divination");
   if (!limit.allowed) {
     return jsonError(
-      `每小时上限 ${limit.limit} 条，请稍后再试（已发 ${limit.used}）`,
+      `每小时抽签上限 ${limit.limit} 次，请稍后再试（已发 ${limit.used}）`,
       429,
     );
   }
