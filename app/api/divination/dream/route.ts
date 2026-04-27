@@ -1,52 +1,63 @@
-import { NextResponse } from "next/server";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { conversations, divinationRecords, messages } from "@/lib/db/schema";
+import { conversations, messages } from "@/lib/db/schema";
 import { ensureUserId } from "@/lib/auth/session";
-import { chat } from "@/lib/ai/client";
-import { loadPrompt, renderTemplate } from "@/lib/ai/prompts";
-import { serializeJson } from "@/lib/db/json";
 import { checkRateLimit } from "@/lib/ai/check-rate-limit";
 import { guardTexts } from "@/lib/safety/guard";
+import { chat } from "@/lib/ai/client";
+import { frame, heartbeat, safeEnqueue, SSE_HEADERS } from "@/lib/chat/sse";
+import { serializeJson } from "@/lib/db/json";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+const HEARTBEAT_MS = 25_000;
 
 /**
- * POST /api/divination/dream — 解梦 sub-action
+ * /api/divination/dream — 解梦 fast / precise 双模 (M2.18, spec §4.4)
  *
- * 接 dream_choice 卡的提交：
- *   - fast：用户在快速 form 输入 dreamText（+ 可选 emotion）
- *   - precise：用户在精准 form 输入 4 字段（core / emotion / reality / special）
+ * Body:
+ *   - mode='fast'    : { conversationId, mode, dream }                   一段文本
+ *   - mode='precise' : { conversationId, mode, core, emotion, reality?, special? }   4 字段
  *
- * 工作流：写 user message → 调 AI → 写 assistant message(metadata.ui='dream_result')
- *        → 写 divination_records (type='dream') → 更新 last_message_at
+ * 流程：
+ *   1. 校验 + 限流 + 安全词
+ *   2. 写 user message（fast → dream 文本；precise → 拼 4 字段）
+ *   3. SSE meta → AI 流 → 写 dream_result_fast / dream_result_precise 卡
+ *
+ * 三视角解读（precise）：心理学 / 周公 / 现代实用建议（在 prompt 内分段，AI 自由组织文本）
  */
-export const runtime = "nodejs";
-export const maxDuration = 90;
 
 const fastSchema = z.object({
-  dreamText: z.string().min(10).max(2000),
-  emotion: z.enum(["平静", "害怕", "焦虑", "喜悦", "疑惑"]).nullish(),
+  conversationId: z.string().min(1),
+  mode: z.literal("fast"),
+  dream: z.string().trim().min(1).max(1000),
 });
 
 const preciseSchema = z.object({
-  core: z.string().min(5).max(500),
-  emotion: z.string().min(2).max(200),
-  reality: z.string().max(200).nullish(),
-  special: z.string().max(200).nullish(),
+  conversationId: z.string().min(1),
+  mode: z.literal("precise"),
+  core: z.string().trim().min(1).max(500),
+  emotion: z.string().trim().min(1).max(200),
+  reality: z.string().trim().max(200).optional().default(""),
+  special: z.string().trim().max(200).optional().default(""),
 });
 
-const bodySchema = z.discriminatedUnion("mode", [
-  z.object({
-    conversationId: z.string().min(1),
-    mode: z.literal("fast"),
-    payload: fastSchema,
-  }),
-  z.object({
-    conversationId: z.string().min(1),
-    mode: z.literal("precise"),
-    payload: preciseSchema,
-  }),
-]);
+const bodySchema = z.discriminatedUnion("mode", [fastSchema, preciseSchema]);
+
+const SYSTEM_PROMPT_FAST = [
+  "你是温柔的解梦师。给用户一段简短回应。",
+  "结构：1) 一句话点出主要意象；2) 一句话现代视角解读；3) 一句话行动建议。",
+  "字数：100-200 字。语气温柔不武断，不用 '凶兆' '不祥' 等词。",
+].join("\n");
+
+const SYSTEM_PROMPT_PRECISE = [
+  "你是资深解梦师，融合心理学 / 传统 / 现代视角。",
+  "结构：[心理视角] 60-100 字 / [周公解梦] 60-100 字 / [现代实用建议] 60-100 字 / [总结一句] 1 句。",
+  "禁词：凶兆 / 不祥 / 厄运 等绝对负面词。",
+  "用户填的 4 字段（核心场景/情绪/现实关联/特殊符号）请逐项呼应。",
+].join("\n");
 
 export async function POST(req: Request) {
   let raw: unknown;
@@ -58,25 +69,22 @@ export async function POST(req: Request) {
 
   const parsed = bodySchema.safeParse(raw);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "校验失败", issues: parsed.error.issues },
-      { status: 400 },
-    );
+    return jsonError(parsed.error.issues[0]?.message ?? "校验失败", 400);
   }
-  const { conversationId, mode, payload } = parsed.data;
+  const data = parsed.data;
 
   const safetyText =
-    mode === "fast"
-      ? payload.dreamText
-      : `${payload.core}\n${payload.emotion}\n${payload.reality ?? ""}\n${payload.special ?? ""}`;
-  const safetyFail = guardTexts({ dream: safetyText });
+    data.mode === "fast"
+      ? data.dream
+      : [data.core, data.emotion, data.reality, data.special].join("\n");
+  const safetyFail = guardTexts({ text: safetyText });
   if (safetyFail) return safetyFail;
 
   const userId = await ensureUserId();
-  const rate = await checkRateLimit(userId);
-  if (!rate.allowed) {
+  const limit = await checkRateLimit(userId);
+  if (!limit.allowed) {
     return jsonError(
-      `每小时上限 ${rate.limit} 条，请稍后再试（已用 ${rate.used}）`,
+      `每小时上限 ${limit.limit} 条，请稍后再试（已发 ${limit.used}）`,
       429,
     );
   }
@@ -85,110 +93,201 @@ export async function POST(req: Request) {
   const owned = await db
     .select({ id: conversations.id })
     .from(conversations)
-    .where(
-      and(eq(conversations.id, conversationId), eq(conversations.user_id, userId)),
-    )
+    .where(and(eq(conversations.id, data.conversationId), eq(conversations.user_id, userId)))
     .limit(1);
   if (!owned[0]) return jsonError("会话不存在", 404);
 
+  const userPrompt = buildUserPrompt(data);
   const userText =
-    mode === "fast"
-      ? `[解梦 · 快速${payload.emotion ? " · " + payload.emotion : ""}] ${payload.dreamText}`
+    data.mode === "fast"
+      ? data.dream
       : [
-          "[解梦 · 精准]",
-          `核心场景：${payload.core}`,
-          `情绪感受：${payload.emotion}`,
-          payload.reality ? `现实关联：${payload.reality}` : null,
-          payload.special ? `特殊细节：${payload.special}` : null,
+          `核心场景：${data.core}`,
+          `情绪感受：${data.emotion}`,
+          data.reality ? `现实关联：${data.reality}` : "",
+          data.special ? `特殊符号：${data.special}` : "",
         ]
           .filter(Boolean)
           .join("\n");
 
-  const [userMsg] = await db
-    .insert(messages)
-    .values({
-      conversation_id: conversationId,
-      role: "user",
-      content: userText,
-      intent: "dream",
-    })
-    .returning();
-  if (!userMsg) return jsonError("用户消息写入失败", 500);
-
-  let aiText = "（解读暂时不可用，请稍后再试）";
-  let tokens = 0;
-  try {
-    const prompt = await loadPrompt("dream.parse");
-    const dreamFullText =
-      mode === "fast"
-        ? payload.dreamText
-        : [
-            `核心场景：${payload.core}`,
-            payload.reality ? `现实关联：${payload.reality}` : null,
-            payload.special ? `特殊细节：${payload.special}` : null,
-          ]
-            .filter(Boolean)
-            .join("\n");
-    const tpl = renderTemplate(prompt.userPromptTpl, {
-      dreamText: dreamFullText,
-      emotionHint: `情绪：${mode === "fast" ? (payload.emotion ?? "未明确") : payload.emotion}`,
-    });
-    const ai = await chat({
-      systemPrompt: prompt.systemPrompt,
-      messages: [{ role: "user", content: tpl }],
-      stream: false,
-      meta: { conversationId, userId },
-    });
-    aiText = ai.text;
-    tokens = ai.tokensUsed;
-  } catch (e) {
-    console.error("dream AI 解读失败", e);
-  }
-
-  const [resultMsg] = await db
-    .insert(messages)
-    .values({
-      conversation_id: conversationId,
-      role: "assistant",
-      content: aiText,
-      intent: "dream",
-      tokens_used: tokens,
-      metadata: serializeJson({ ui: "dream_result", mode }),
-    })
-    .returning();
-  if (!resultMsg) return jsonError("解读消息写入失败", 500);
-
-  await db.insert(divinationRecords).values({
-    message_id: resultMsg.id,
-    type: "dream",
-    input: serializeJson({ mode, payload }),
-    result: serializeJson({ text: aiText }),
-    ai_reading: aiText,
+  await db.insert(messages).values({
+    conversation_id: data.conversationId,
+    role: "user",
+    content: userText,
+    intent: "dream",
   });
 
-  await db
-    .update(conversations)
-    .set({ last_message_at: new Date().toISOString() })
-    .where(eq(conversations.id, conversationId));
+  const sysPrompt = data.mode === "fast" ? SYSTEM_PROMPT_FAST : SYSTEM_PROMPT_PRECISE;
+  const resultUi = data.mode === "fast" ? "dream_result_fast" : "dream_result_precise";
 
-  return NextResponse.json({
-    conversationId,
-    userMessage: {
-      id: userMsg.id,
-      role: "user" as const,
-      content: userMsg.content,
-      created_at: userMsg.created_at,
-    },
-    resultMessage: {
-      id: resultMsg.id,
-      role: "assistant" as const,
-      content: resultMsg.content,
-      created_at: resultMsg.created_at,
-      metadata: resultMsg.metadata,
+  const sse = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let heartbeatId: ReturnType<typeof setInterval> | null = setInterval(() => {
+        safeEnqueue(controller, heartbeat());
+      }, HEARTBEAT_MS);
+
+      const stopHeartbeat = () => {
+        if (heartbeatId) {
+          clearInterval(heartbeatId);
+          heartbeatId = null;
+        }
+      };
+
+      safeEnqueue(
+        controller,
+        frame("meta", {
+          conversationId: data.conversationId,
+          intent: "dream",
+          mode: data.mode,
+          source: "dream_api",
+        }),
+      );
+
+      let aiText = "";
+      let tokens = 0;
+
+      try {
+        const stream = await chat({
+          systemPrompt: sysPrompt,
+          messages: [{ role: "user", content: userPrompt }],
+          stream: true,
+          meta: { conversationId: data.conversationId, userId },
+        });
+
+        for await (const chunk of stream.textStream) {
+          aiText += chunk;
+          if (!safeEnqueue(controller, frame("token", chunk))) break;
+        }
+        try {
+          tokens = (await stream.usage).totalTokens ?? 0;
+        } catch {
+          /* usage 不致命 */
+        }
+
+        const cardMeta =
+          data.mode === "fast"
+            ? { ui: "dream_result_fast" as const, summary: aiText }
+            : {
+                ui: "dream_result_precise" as const,
+                threeViews: extractThreeViews(aiText),
+                summary: aiText.slice(0, 200),
+                suggestions: extractSuggestions(aiText),
+              };
+
+        const [card] = await db
+          .insert(messages)
+          .values({
+            conversation_id: data.conversationId,
+            role: "assistant",
+            content: aiText || "(AI 解梦未生成)",
+            intent: "dream",
+            metadata: serializeJson(cardMeta),
+            tokens_used: tokens,
+          })
+          .returning();
+
+        safeEnqueue(
+          controller,
+          frame("card", {
+            id: card?.id,
+            role: "assistant",
+            content: aiText,
+            metadata: serializeJson(cardMeta),
+          }),
+        );
+
+        await db
+          .update(conversations)
+          .set({ last_intent: "dream", last_message_at: new Date().toISOString() })
+          .where(eq(conversations.id, data.conversationId));
+
+        safeEnqueue(controller, frame("done", {}));
+      } catch (e) {
+        if (process.env.NODE_ENV !== "production") {
+          console.error("/api/divination/dream 失败", e);
+        }
+        const isTimeout = e instanceof Error && /timeout|abort/i.test(e.message);
+        safeEnqueue(
+          controller,
+          frame("error", {
+            message: isTimeout ? "AI 演算超时，请重试" : "AI 卡了一下，请稍后再试",
+            code: isTimeout ? "ai_timeout" : "unknown",
+            retryable: true,
+          }),
+        );
+      } finally {
+        stopHeartbeat();
+        try {
+          controller.close();
+        } catch {
+          /* 已 close 不致命 */
+        }
+      }
+
+      // suppress unused var lint
+      void resultUi;
     },
   });
+
+  return new Response(sse, { headers: SSE_HEADERS });
 }
 
-function jsonError(msg: string, status: number) {
-  return NextResponse.json({ error: msg }, { status });
+function buildUserPrompt(data: z.infer<typeof bodySchema>): string {
+  if (data.mode === "fast") {
+    return `用户的梦：${data.dream}\n\n请给一段简短温柔的解读。`;
+  }
+  return [
+    `用户描述的梦境（4 字段）：`,
+    `[核心场景] ${data.core}`,
+    `[情绪感受] ${data.emotion}`,
+    data.reality ? `[现实关联] ${data.reality}` : "",
+    data.special ? `[特殊符号] ${data.special}` : "",
+    "",
+    "请按 [心理视角 / 周公解梦 / 现代实用建议 / 总结] 4 段输出。",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+/**
+ * 从 AI 返回文本里粗粒度切出 3 视角文本。
+ * AI 不严格遵守 4 段格式时尽量退化（split 失败 fallback 整段）。
+ */
+function extractThreeViews(text: string): {
+  psychology: string;
+  zhouGong: string;
+  modern: string;
+} {
+  const tryFind = (label: RegExp) => {
+    const m = text.match(label);
+    if (!m) return "";
+    const start = m.index ?? 0;
+    const after = text.slice(start + m[0].length);
+    // 取到下个 [ 标签或结束
+    const stopMatch = after.match(/\[[^\]]+\]|总结/);
+    const end = stopMatch ? stopMatch.index : after.length;
+    return after.slice(0, end).trim();
+  };
+
+  return {
+    psychology: tryFind(/\[心理视角\]/) || text,
+    zhouGong: tryFind(/\[周公解梦\]/),
+    modern: tryFind(/\[现代实用建议\]/),
+  };
+}
+
+function extractSuggestions(text: string): string[] {
+  // AI 可能用 - / 1. / • 等列表项；这里粗暴切
+  return text
+    .split(/\n[-•·\d.][\s)]/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && s.length < 100)
+    .slice(0, 3);
+}
+
+function jsonError(message: string, status: number): Response {
+  return new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
