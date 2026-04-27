@@ -152,6 +152,12 @@ describe("GET /api/auth/wechat/callback", () => {
 
     const cookie = r.cookies.get("qy_uid");
     expect(cookie?.value).toBe(userId);
+
+    // M1.13: first-time OAuth implies privacy acceptance (spec §3.5)
+    expect(userRows[0].privacy_accepted_at).not.toBeNull();
+    expect(userRows[0].privacy_accepted_at).toMatch(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
+    );
   });
 
   it("returning user: no profile dup, 302 -> /", async () => {
@@ -159,7 +165,12 @@ describe("GET /api/auth/wechat/callback", () => {
     const db = getDb();
     const oldUserId = "u-old-1234";
     const earlier = "2026-01-01T00:00:00.000Z";
-    await db.insert(users).values({ id: oldUserId, created_at: earlier, updated_at: earlier });
+    await db.insert(users).values({
+      id: oldUserId,
+      created_at: earlier,
+      updated_at: earlier,
+      privacy_accepted_at: earlier,
+    });
     await db.insert(wechatBind).values({
       user_id: oldUserId,
       openid: "ox-ret",
@@ -204,7 +215,10 @@ describe("GET /api/auth/wechat/callback", () => {
     expect(r.headers.get("location")).toMatch(/\/$/);
     expect(r.cookies.get("qy_uid")?.value).toBe(oldUserId);
 
-    expect(await db.select().from(users)).toHaveLength(1);
+    const userRowsAfter = await db.select().from(users);
+    expect(userRowsAfter).toHaveLength(1);
+    // M1.13: returning user keeps original privacy_accepted_at (not overwritten)
+    expect(userRowsAfter[0].privacy_accepted_at).toBe(earlier);
     const bindRows = await db.select().from(wechatBind);
     expect(bindRows).toHaveLength(1);
     expect(bindRows[0].nickname).toBe("新昵称");

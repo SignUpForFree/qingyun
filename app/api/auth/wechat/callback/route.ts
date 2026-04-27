@@ -93,7 +93,16 @@ export async function GET(req: Request): Promise<NextResponse> {
     // callback 不能返回 Promise，所以这里不用 async / await，每条语句用 .run() 立即执行。
     userId = crypto.randomUUID();
     db.transaction((tx) => {
-      tx.insert(users).values({ id: userId, created_at: now, updated_at: now }).run();
+      // M1.13: OAuth completion implies acceptance of privacy policy
+      // (per spec §3.5; /legal/privacy is shown upfront via permission prompt + footer link).
+      tx.insert(users)
+        .values({
+          id: userId,
+          created_at: now,
+          updated_at: now,
+          privacy_accepted_at: now,
+        })
+        .run();
       tx.insert(wechatBind).values({
         user_id: userId,
         openid: info.openid,
