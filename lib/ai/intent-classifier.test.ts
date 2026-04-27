@@ -43,7 +43,7 @@ describe("classifyIntent (B 策略 = 关键词 + LLM 兜底)", () => {
     const cases = [
       ["我做了一个非常奇怪的梦，需要给解读一下", "dream"],
       ["帮我算一下事业运势", "meihua"],
-      ["我的命盘怎么样", "bazi"],
+      ["想看看自己的命理", "bazi"],
       ["你好啊轻运", "chat"],
       ["最近工作压力大想聊聊", "chat"],
     ] as const;

@@ -36,8 +36,8 @@ export async function classifyIntent(text: string): Promise<IntentClassification
   }
 
   const kw = classifyByKeyword(text);
-  if (kw) {
-    return { intent: kw, confidence: 1, source: "keyword" };
+  if (kw.matched !== null) {
+    return { intent: kw.intent, confidence: 1, source: "keyword" };
   }
 
   try {
