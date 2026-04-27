@@ -72,10 +72,27 @@ describe("meihuaV2 (M3.17)", () => {
     expect(r.method).toBe("time");
   });
 
-  it("M3.19 / M3.20 stub 预留 (timeEnergy + sunYi)", () => {
+  it("无 hourBranch → timeEnergy=null", () => {
     const r = meihuaV2({ numbers: [3, 6, 9], userQuestion: "q", profile: mockProfile });
-    expect(r.timeEnergy).toBeDefined();
-    expect(r.sunYi).toBeDefined();
+    expect(r.timeEnergy).toBeNull();
+  });
+
+  it("有 hourBranch → timeEnergy 含 dominantWuxing 和 alignment", () => {
+    const r = meihuaV2({
+      numbers: [3, 6, 9],
+      hourBranch: "午",
+      userQuestion: "q",
+      profile: mockProfile,
+    });
+    expect(r.timeEnergy).not.toBeNull();
+    expect(r.timeEnergy!.dominantWuxing).toBe("火");
+    expect(["aligned", "neutral", "conflict"]).toContain(r.timeEnergy!.alignment);
+  });
+
+  it("sunYi 含 6 维度 adjustments + relation", () => {
+    const r = meihuaV2({ numbers: [3, 6, 9], userQuestion: "q", profile: mockProfile });
+    expect(r.sunYi.adjustments).toHaveLength(6);
+    expect(["support", "drain", "clash", "unrelated"]).toContain(r.sunYi.yongShenRelation);
   });
 
   it("profile=null 不抛错（M3.20 才用 profile）", () => {

@@ -4,6 +4,7 @@ import { castByNumbers, castByTime, type CastResult } from "@/lib/meihua/cast";
 import { interpretMeihua, type MeihuaResult } from "@/lib/meihua/interpret";
 import { findGuaByTrigrams, type Trigram as Gua64Trigram } from "@/db/seed/gua64";
 import { computeTimeEnergy, type TimeEnergyResult } from "./time-energy";
+import { computeSunYi, type SunYiResult } from "./sunyi";
 import { TRIGRAM_WUXING } from "@/lib/meihua/trigrams";
 
 /**
@@ -39,8 +40,8 @@ export interface MeihuaV2Result extends MeihuaResult {
   bianDict: GuaDictView;
   /** M3.19 时辰能量场（hourBranch 缺省 → null） */
   timeEnergy: TimeEnergyResult | null;
-  /** M3.20 五行损益 — 现为 stub */
-  sunYi: SunYiStub;
+  /** M3.20 五行损益（profile.yongShen 缺则 unrelated + 全 0） */
+  sunYi: SunYiResult;
 }
 
 export interface GuaDictView {
@@ -52,25 +53,20 @@ export interface GuaDictView {
   dongYaoCi?: string;
 }
 
-export interface SunYiStub {
-  /** profile.yongShen 与卦象主五行的关系（M3.20 实现） */
-  yongShenSupported?: boolean;
-  /** 各维度 +/- 调整（M3.20 实现） */
-  adjustments?: ReadonlyArray<{ dim: string; delta: number }>;
-}
-
 export function meihuaV2(args: MeihuaV2Args): MeihuaV2Result {
   const cast = pickCast(args);
   const base = interpretMeihua(cast, args.hourBranch);
 
+  const guaWuxing = TRIGRAM_WUXING[base.tiYong.ti] as Wuxing;
+  const yongShen = pickYongShen(args.profile);
+
   // M3.19 时辰能量场（仅在传入 hourBranch 时计算）
   const timeEnergy: TimeEnergyResult | null = args.hourBranch
-    ? computeTimeEnergy({
-        hourBranch: args.hourBranch,
-        guaWuxing: TRIGRAM_WUXING[base.tiYong.ti] as Wuxing,
-        yongShen: pickYongShen(args.profile),
-      })
+    ? computeTimeEnergy({ hourBranch: args.hourBranch, guaWuxing, yongShen })
     : null;
+
+  // M3.20 五行损益
+  const sunYi = computeSunYi({ guaWuxing, yongShen });
 
   return {
     ...base,
@@ -78,7 +74,7 @@ export function meihuaV2(args: MeihuaV2Args): MeihuaV2Result {
     huDict: buildDictView(base.hu.upper, base.hu.lower, undefined),
     bianDict: buildDictView(base.bian.upper, base.bian.lower, undefined),
     timeEnergy,
-    sunYi: {}, // M3.20 stub
+    sunYi,
   };
 }
 
