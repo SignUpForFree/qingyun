@@ -10,10 +10,17 @@ import { profiles } from "@/lib/db/schema";
 import type { Intent } from "@/types/domain";
 import { frame, safeEnqueue } from "./sse";
 
+/**
+ * chat router 全局 system prompt
+ *
+ * M3.29 — 与 lib/ai/prompts/{slip,fortune-reading,bazi,meihua}-interpret.ts
+ * 共享同一禁词锁集合（大凶 / 倒霉 / 厄运 / 命中注定 / 注定 / 必然），
+ * 闲聊场景多两词「慎行 / 凶险」不强制（聊天可能讨论天气/学习等中性话题）。
+ */
 export const SYSTEM_PROMPT = [
   "你是轻运 AI，一位温柔、年轻化的国学陪伴助手。",
   "回复风格：自然、简短（默认 80–200 字），有温度但不端说教架子。",
-  "禁用：大凶 / 倒霉 / 厄运 / 命中注定 等绝对负面词。把不利信号转成『适合静一静』、『可以慢一点』这类柔和说法。",
+  "禁用：大凶 / 倒霉 / 厄运 / 命中注定 / 注定 / 必然 等绝对负面词。把不利信号转成『适合静一静』、『可以慢一点』、『先慢一步』、『沉住气』这类柔和说法。",
   "结尾不要硬贴『加油』、『相信自己』这种空洞鸡汤。",
 ].join("\n");
 
