@@ -3,37 +3,24 @@ import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/layout";
 import { GlassCard, Sparkle, WatercolorDot, Divider } from "@/components/su";
 import { Button } from "@/components/ui/button";
+import { DailyFortuneCardV2 } from "@/components/fortune/DailyFortuneCardV2";
 import { requireUserId, UnauthenticatedError } from "@/lib/auth/session";
 import { listProfiles } from "@/lib/profile/repository";
-import type { Profile } from "@/lib/db/schema";
+import {
+  fetchTodayFortune,
+  NoDefaultProfileError,
+} from "@/lib/fortune/fetch-today";
 
 /**
- * 首页（V2.0 占位 — M1.12）
+ * 首页 (M4.4, image2)
  *
- * V1.0 的 DailyFortuneCard / HomeQuickEntries 依赖已被 M1.1 wipe 掉的 schema 列
- * (baziCharts / fortunes / birth_province / calendar_type 等)，运行会崩。这里
- * 用最小占位替代，保证 OAuth → onboarding → 首页 端到端流程可走通。
- *
- * M2/M3/M4 会在此基础上重建：
- *   - M2: 真实今日运势卡片
- *   - M3: 5 大功能入口（运势/抽签/八字/梅花/解梦）
- *   - M4: 多档案切换头
- *
- * 三种页面状态：
- *   1. 未认证 → middleware 已经把它跳到 /api/auth/wechat；这里 try/catch 兜底再跳一次
- *   2. 未建档 / 默认档丢失 → /onboarding（理论上 M1.7 已经建了占位档，所以是兜底）
- *   3. 默认档为占位（birth_place="未填" / gender="other"）→ 显示 "继续完善" CTA
- *   4. 默认档已填 → 显示问候卡 + 5 个 disabled 功能占位
+ * 4 种页面状态：
+ *   1. 未认证 → middleware 已经把它跳到 /api/auth/wechat；这里 try/catch 兜底
+ *   2. 未建档 / 默认档丢失 → /onboarding（理论上 M1.7 已建占位档）
+ *   3. 默认档为占位（birth_place="未填" / gender="other"）→ "继续完善" CTA
+ *   4. 默认档已填 → DailyFortuneCardV2 完整运势卡（7 维度 + 8 lucky + 4 launcher）
  */
 export const dynamic = "force-dynamic";
-
-const FEATURES: ReadonlyArray<{ key: string; label: string; emoji: string }> = [
-  { key: "fortune", label: "运势", emoji: "运" },
-  { key: "qianwen", label: "抽签", emoji: "签" },
-  { key: "bazi", label: "八字", emoji: "八" },
-  { key: "meihua", label: "梅花", emoji: "梅" },
-  { key: "dream", label: "解梦", emoji: "梦" },
-];
 
 export default async function HomePage() {
   let userId: string;
@@ -46,14 +33,11 @@ export default async function HomePage() {
     throw e;
   }
 
-  const profiles = await listProfiles(userId);
-  const def = profiles.find((p) => p.is_default);
-
-  // 理论上 M1.7 已建占位默认档，这里是 defense-in-depth
+  const profileList = await listProfiles(userId);
+  const def = profileList.find((p) => p.is_default);
   if (!def) redirect("/onboarding");
 
-  const isPlaceholder =
-    def.birth_place === "未填" || def.gender === "other";
+  const isPlaceholder = def.birth_place === "未填" || def.gender === "other";
 
   return (
     <>
@@ -65,32 +49,46 @@ export default async function HomePage() {
           <WatercolorDot color="blue" size={140} className="absolute bottom-[18%] left-[35%]" />
         </div>
 
-        <div className="relative z-10 mt-8 w-full max-w-md space-y-4">
+        <div className="relative z-10 mt-6 w-full max-w-md space-y-4">
           {isPlaceholder ? (
             <CompleteProfileCard nickname={def.nickname} />
           ) : (
-            <GreetingCard profile={def} />
+            <FortuneSection userId={userId} nickname={def.nickname} />
           )}
-          <FeaturePlaceholders />
         </div>
       </div>
     </>
   );
 }
 
-function GreetingCard({ profile }: { profile: Profile }) {
+async function FortuneSection({
+  userId,
+  nickname,
+}: {
+  userId: string;
+  nickname: string;
+}) {
+  let fortune;
+  try {
+    fortune = fetchTodayFortune({ userId });
+  } catch (e) {
+    if (e instanceof NoDefaultProfileError) {
+      redirect("/onboarding");
+    }
+    throw e;
+  }
+
   return (
-    <GlassCard className="space-y-3 p-6 text-center">
-      <h1 className="font-[family-name:var(--font-serif)] text-[22px] tracking-ritual2 text-[var(--color-ink-plum)]">
-        {profile.nickname || "朋友"} <Sparkle size={12} />
-      </h1>
-      <Divider />
-      <p className="text-xs leading-relaxed text-[var(--color-ink-fade)]">
-        生辰 · {profile.birth_date} {profile.birth_time}
-        <br />
-        {profile.birth_calendar === "lunar" ? "农历" : "公历"} · {profile.birth_place}
-      </p>
-    </GlassCard>
+    <DailyFortuneCardV2
+      fortune={{
+        date: fortune.date,
+        overall: fortune.overall,
+        scores: fortune.scores,
+        oneLiner: fortune.oneLiner,
+        attributes: fortune.attributes,
+      }}
+      nickname={nickname}
+    />
   );
 }
 
@@ -114,35 +112,6 @@ function CompleteProfileCard({ nickname }: { nickname: string }) {
           继续完善信息
         </Button>
       </Link>
-    </GlassCard>
-  );
-}
-
-function FeaturePlaceholders() {
-  return (
-    <GlassCard className="space-y-3 p-5">
-      <p className="text-center font-[family-name:var(--font-serif)] text-sm tracking-ritual text-[var(--color-ink-plum)]">
-        功能入口 <Sparkle size={10} />
-      </p>
-      <div className="grid grid-cols-5 gap-2">
-        {FEATURES.map((f) => (
-          <div
-            key={f.key}
-            className="flex cursor-not-allowed flex-col items-center gap-1.5 rounded-[10px] border border-[var(--color-accent-lavender)]/30 bg-white/40 p-3 opacity-60"
-            title="敬请期待"
-          >
-            <span className="font-[family-name:var(--font-serif)] text-[15px] text-[var(--color-ink-plum)]">
-              {f.emoji}
-            </span>
-            <span className="text-[10px] text-[var(--color-ink-mist)]">
-              {f.label}
-            </span>
-          </div>
-        ))}
-      </div>
-      <p className="text-center text-[10px] text-[var(--color-ink-fade)]">
-        敬请期待
-      </p>
     </GlassCard>
   );
 }
