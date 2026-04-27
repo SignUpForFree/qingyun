@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { GlassCard, Sparkle, Divider } from "@/components/su";
+import { GlassCard, Sparkle, Divider, WatercolorDot } from "@/components/su";
 import { ScoreRing } from "./ScoreRing";
 import { DimensionBars7 } from "./DimensionBars7";
 import { AttributesGrid8 } from "./AttributesGrid8";
 import { LauncherGrid } from "./LauncherGrid";
 import type { DimensionScores7 } from "@/lib/fortune/daily-7dim";
 import type { Attributes } from "@/lib/fortune/attributes";
+import { getLunarToday } from "@/lib/util/lunar-date";
 
 interface FortunePayload {
   date: string;
@@ -34,23 +35,39 @@ interface DailyFortuneCardV2Props {
  *   7. 详细解读链接 → /fortune/[date]
  */
 export function DailyFortuneCardV2({ fortune, nickname }: DailyFortuneCardV2Props) {
+  const { greeting } = getLunarToday();
   return (
     <GlassCard className="w-full max-w-md space-y-5 p-6">
       <div className="text-center">
-        <p className="text-xs tracking-ritual2 text-[var(--color-ink-fade)]">
-          哈喽{nickname ? `，${nickname}` : ""} <Sparkle size={9} />
+        <p
+          className="font-[family-name:var(--font-serif)] text-[13px] tracking-ritual text-[var(--color-ink-mist)]"
+          data-testid="hero-greeting"
+        >
+          {greeting}
+          {nickname ? `, ${nickname}` : ""} <Sparkle size={10} />
         </p>
-      </div>
-
-      <div className="flex justify-center">
-        <ScoreRing score={fortune.overall} size={170} />
       </div>
 
       {fortune.oneLiner && (
-        <p className="px-2 text-center text-[13px] leading-relaxed text-[var(--color-ink-mist)]">
+        <p
+          className="px-2 text-center font-[family-name:var(--font-serif)] text-[15px] leading-relaxed tracking-ritual text-[var(--color-ink-plum)]"
+          data-testid="hero-one-liner"
+        >
           {fortune.oneLiner}
         </p>
       )}
+
+      {/* 水彩晕染氛围底（design prompts §1 第 118 行：A single watercolor glow dot above the gauge） */}
+      <div className="relative flex justify-center">
+        <WatercolorDot
+          color="lavender"
+          size={120}
+          className="absolute -top-4 left-1/2 -translate-x-1/2"
+        />
+        <div className="relative">
+          <ScoreRing score={fortune.overall} size={170} caption="综 合 运 势" />
+        </div>
+      </div>
 
       <Divider />
 

@@ -46,14 +46,18 @@ const FORTUNE = {
 };
 
 describe("DailyFortuneCardV2 (M4.1)", () => {
-  it("渲染问候 哈喽，<nickname>", () => {
+  it("渲染时辰问候 + nickname", () => {
     render(<DailyFortuneCardV2 fortune={FORTUNE} nickname="老王" />);
-    expect(screen.getByText(/哈喽.*老王/)).toBeInTheDocument();
+    const greet = screen.getByTestId("hero-greeting");
+    expect(greet.textContent ?? "").toMatch(/(清晨好|上午好|午安|下午好|晚上好|夜深了)/);
+    expect(greet.textContent).toContain("老王");
   });
 
-  it("无 nickname 时仅显示 哈喽", () => {
+  it("无 nickname 时仅显示时辰问候", () => {
     render(<DailyFortuneCardV2 fortune={FORTUNE} />);
-    expect(screen.getByText(/哈喽/)).toBeInTheDocument();
+    const greet = screen.getByTestId("hero-greeting");
+    expect(greet.textContent ?? "").toMatch(/(清晨好|上午好|午安|下午好|晚上好|夜深了)/);
+    expect(greet.textContent).not.toContain(",");
   });
 
   it("渲染 7 个维度 label", () => {

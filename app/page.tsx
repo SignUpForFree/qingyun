@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/layout";
-import { GlassCard, Sparkle, WatercolorDot, Divider } from "@/components/su";
+import { GlassCard, Sparkle, WatercolorDot, Divider, LogoMark } from "@/components/su";
 import { Button } from "@/components/ui/button";
 import { DailyFortuneCardV2 } from "@/components/fortune/DailyFortuneCardV2";
 import { requireUserId, UnauthenticatedError } from "@/lib/auth/session";
@@ -10,6 +10,7 @@ import {
   fetchTodayFortune,
   NoDefaultProfileError,
 } from "@/lib/fortune/fetch-today";
+import { getLunarToday } from "@/lib/util/lunar-date";
 
 /**
  * 首页 (M4.4, image2)
@@ -38,10 +39,22 @@ export default async function HomePage() {
   if (!def) redirect("/onboarding");
 
   const isPlaceholder = def.birth_place === "未填" || def.gender === "other";
+  const { headerText } = getLunarToday();
 
   return (
     <>
-      <AppHeader title="轻运 AI" />
+      <AppHeader
+        left={<LogoMark size={26} />}
+        title={
+          <span
+            className="font-[family-name:var(--font-serif)] text-[12px] tracking-ritual text-[var(--color-ink-mist)]"
+            data-testid="home-lunar-date"
+          >
+            {headerText}
+          </span>
+        }
+        right={<HomeAvatar nickname={def.nickname} />}
+      />
       <div className="relative flex flex-1 flex-col items-center gap-5 overflow-hidden p-4 pb-20">
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <WatercolorDot color="lavender" size={140} className="absolute left-[8%] top-[14%]" />
@@ -58,6 +71,19 @@ export default async function HomePage() {
         </div>
       </div>
     </>
+  );
+}
+
+function HomeAvatar({ nickname }: { nickname: string }) {
+  const initial = (nickname || "我").slice(0, 1);
+  return (
+    <Link
+      href="/me"
+      aria-label="我的"
+      className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-accent-lavender)]/30 font-[family-name:var(--font-serif)] text-[13px] text-[var(--color-ink-plum)] shadow-[0_1px_4px_rgba(160,140,210,0.25)]"
+    >
+      {initial}
+    </Link>
   );
 }
 

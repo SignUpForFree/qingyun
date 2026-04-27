@@ -32,6 +32,14 @@ declare module "lunar-javascript" {
     getDay(): number;
     getHour(): number;
     getMinute(): number;
+    /** 例：丙午 */
+    getYearInGanZhi(): string;
+    /** 例：三 / 闰二 */
+    getMonthInChinese(): string;
+    /** 例：初七 / 廿五 */
+    getDayInChinese(): string;
+    /** 节气 → Solar map（如 {"立春": Solar(...), "雨水": Solar(...) ...}） */
+    getJieQiTable(): Record<string, Solar>;
   }
 
   export interface Solar {
