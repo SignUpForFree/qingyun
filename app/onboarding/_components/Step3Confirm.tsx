@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { GlassCard, Divider } from "@/components/su";
 import { StepShell } from "./StepShell";
-import type { OnboardingForm } from "./schema";
+import { toProfilePatch, type OnboardingForm } from "./schema";
 
 interface Step3Props {
   form: OnboardingForm;
@@ -13,6 +13,12 @@ interface Step3Props {
   editing?: boolean;
 }
 
+/**
+ * V2.0 提交：
+ *   1. GET /api/me/profiles —— 找当前用户的默认档（M1.7 已在 OAuth callback 创建占位）
+ *   2. PUT /api/me/profiles/[defaultId] —— 用 onboarding 表单的字段覆盖占位
+ *   3. 成功后跳 /（不再去 /me；首次引导完成回首页）
+ */
 export function Step3Confirm({ form, onPrev, editing }: Step3Props) {
   const router = useRouter();
   const [submitting, setSubmitting] = React.useState(false);
@@ -20,18 +26,33 @@ export function Step3Confirm({ form, onPrev, editing }: Step3Props) {
   async function submit() {
     setSubmitting(true);
     try {
-      const res = await fetch("/api/profile", {
-        method: "POST",
+      const listRes = await fetch("/api/me/profiles");
+      if (!listRes.ok) {
+        toast.error(`加载档案失败 (${listRes.status})`);
+        return;
+      }
+      const listJson = (await listRes.json()) as {
+        data: Array<{ id: string; is_default: boolean }>;
+      };
+      const defaultProfile = listJson.data.find((p) => p.is_default);
+      if (!defaultProfile) {
+        toast.error("默认档案缺失，请重新登录");
+        return;
+      }
+
+      const patch = toProfilePatch(form);
+      const res = await fetch(`/api/me/profiles/${defaultProfile.id}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(patch),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         toast.error(err?.error ?? `提交失败 (${res.status})`);
         return;
       }
-      toast.success(editing ? "档案已更新 · 八字已重排" : "档案已建好 · 八字排盘已生成");
-      router.replace(editing ? "/me" : "/");
+      toast.success(editing ? "档案已更新" : "档案已建好");
+      router.replace("/");
     } catch (e) {
       toast.error(`网络异常：${e instanceof Error ? e.message : "未知错误"}`);
     } finally {
@@ -50,7 +71,7 @@ export function Step3Confirm({ form, onPrev, editing }: Step3Props) {
         String(form.birth.rawDate.day).padStart(2, "0");
   const hourLabel =
     form.birth.hour === null
-      ? "时辰不知道（按子时）"
+      ? "时辰不知道（按正午占位）"
       : `${String(form.birth.hour).padStart(2, "0")}:00 起`;
   const districtLabel = form.region.district ? ` ${form.region.district}` : "";
 
@@ -59,8 +80,8 @@ export function Step3Confirm({ form, onPrev, editing }: Step3Props) {
       step={3}
       total={3}
       title={editing ? "确认更新" : "确认信息"}
-      desc={editing ? "改完就替换默认档案，八字会重排" : "信息无误即可建档；八字会自动排盘"}
-      nextLabel={editing ? "保存并重排" : "提交并建档"}
+      desc={editing ? "改完就替换默认档案" : "信息无误即可建档"}
+      nextLabel={editing ? "保存" : "提交并建档"}
       onPrev={onPrev}
       onNext={submit}
       loading={submitting}
