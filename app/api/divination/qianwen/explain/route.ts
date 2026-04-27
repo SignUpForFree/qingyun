@@ -7,6 +7,7 @@ import { checkRateLimit } from "@/lib/ai/check-rate-limit";
 import { chat } from "@/lib/ai/client";
 import { frame, heartbeat, safeEnqueue, SSE_HEADERS } from "@/lib/chat/sse";
 import { serializeJson } from "@/lib/db/json";
+import { buildSlipPrompt } from "@/lib/ai/prompts/slip-interpret";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -27,14 +28,6 @@ const HEARTBEAT_MS = 25_000;
 const bodySchema = z.object({
   messageId: z.string().min(1),
 });
-
-const SYSTEM_PROMPT = [
-  "你是轻运 AI 的资深解签师。",
-  "解签风格：温和、具体、不空泛；从签诗 4 句逐句意象出发，结合用户问的问题给出建议。",
-  "结构：开场一句呼应问题 + 4 段（按签诗 4 句）+ 收尾一句行动建议。",
-  "禁词：大凶 / 倒霉 / 厄运 / 命中注定。负面信号转柔和说法（先慢一步、沉住气）。",
-  "字数：300-500 字。",
-].join("\n");
 
 interface SlipImageMeta {
   ui: "slip_image";
@@ -136,17 +129,15 @@ export async function POST(req: Request) {
     }
   }
 
-  // 构造 prompt
-  const userPrompt = [
-    `第 ${meta.slipNumber} 签 · ${meta.level} · 《${meta.title}》`,
-    `签诗：`,
-    ...meta.poemLines.map((l, i) => `${i + 1}. ${l}`),
-    "",
-    `问的方向：${meta.category}`,
-    `静态解签词参考：${meta.reading}`,
-    "",
-    "请按 [开场→4 段意象→收尾] 结构生成 300-500 字解读。",
-  ].join("\n");
+  // 构造 prompt（M3.4 抽到 lib/ai/prompts/slip-interpret.ts）
+  const { systemPrompt, userPrompt } = buildSlipPrompt({
+    slipNumber: meta.slipNumber,
+    level: meta.level,
+    title: meta.title,
+    poemLines: meta.poemLines,
+    category: meta.category,
+    reading: meta.reading,
+  });
 
   const sse = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -176,7 +167,7 @@ export async function POST(req: Request) {
 
       try {
         const stream = await chat({
-          systemPrompt: SYSTEM_PROMPT,
+          systemPrompt,
           messages: [{ role: "user", content: userPrompt }],
           stream: true,
           meta: { conversationId, userId },
