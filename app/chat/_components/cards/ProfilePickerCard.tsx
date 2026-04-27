@@ -62,9 +62,12 @@ export function ProfilePickerCard({
     [profiles],
   );
 
+  // M4.11-21 多档案 wizard 推迟（依赖 china-division/COS/OTP 外部服务）。
+  // 临时跳到 /onboarding 让用户用现有 wizard 建一个新档案——onboarding 写完会
+  // 把新档置为 default，回 chat 后再换回原默认即可（用户可在 /me 切回）。
   const addNewHref = conversationId
-    ? `/me/profiles/new?return=${encodeURIComponent(`/chat?cid=${conversationId}`)}`
-    : "/me/profiles/new";
+    ? `/onboarding?return=${encodeURIComponent(`/chat?cid=${conversationId}`)}`
+    : "/onboarding";
 
   return (
     <GlassCard className={cn("space-y-3 p-4", className)}>

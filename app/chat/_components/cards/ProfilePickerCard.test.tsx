@@ -70,7 +70,8 @@ describe("ProfilePickerCard (M2.6)", () => {
       />,
     );
     const link = screen.getByText("+ 添加新档案").closest("a");
-    expect(link?.getAttribute("href")).toMatch(/\/me\/profiles\/new\?return=/);
+    // M4.QA fix: /me/profiles/new 还没实装，临时跳 /onboarding wizard
+    expect(link?.getAttribute("href")).toMatch(/\/onboarding\?return=/);
     expect(decodeURIComponent(link?.getAttribute("href") ?? "")).toContain(
       "/chat?cid=conv-abc",
     );

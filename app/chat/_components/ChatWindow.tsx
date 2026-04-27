@@ -492,10 +492,13 @@ export function ChatWindow({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {/* 隐藏内嵌 trigger，左 ☰ 已被 AppHeader right 的 HistoryDrawer 接管。
+          这里只保留受控 open state（M2.X 自动打开 drawer 流程依赖）。 */}
       <HistoryDrawer
         currentId={convId ?? undefined}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
+        hideTrigger
       />
       <DreamPreciseModal
         open={dreamModalOpen}

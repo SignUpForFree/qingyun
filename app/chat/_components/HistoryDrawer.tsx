@@ -53,6 +53,8 @@ interface HistoryDrawerProps {
   /** 受控 open（可选；不传则内部 state） */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** 隐藏触发按钮（M4.QA fix：避免 ChatWindow 内嵌 + AppHeader right 双 ☰ 重复） */
+  hideTrigger?: boolean;
 }
 
 const GROUP_LABEL: Record<GroupKey, string> = {
@@ -63,7 +65,7 @@ const GROUP_LABEL: Record<GroupKey, string> = {
 };
 const GROUP_ORDER: GroupKey[] = ["today", "yesterday", "7days", "older"];
 
-export function HistoryDrawer({ currentId, open: controlledOpen, onOpenChange }: HistoryDrawerProps) {
+export function HistoryDrawer({ currentId, open: controlledOpen, onOpenChange, hideTrigger }: HistoryDrawerProps) {
   const [internalOpen, setInternalOpen] = React.useState(false);
   const open = controlledOpen ?? internalOpen;
   const setOpen = (v: boolean) => {
@@ -77,12 +79,14 @@ export function HistoryDrawer({ currentId, open: controlledOpen, onOpenChange }:
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetTrigger
-        aria-label="历史会话"
-        className="text-[var(--color-ink-mist)] hover:text-[var(--color-ink-plum)]"
-      >
-        <Menu className="h-5 w-5" />
-      </SheetTrigger>
+      {!hideTrigger && (
+        <SheetTrigger
+          aria-label="历史会话"
+          className="text-[var(--color-ink-mist)] hover:text-[var(--color-ink-plum)]"
+        >
+          <Menu className="h-5 w-5" />
+        </SheetTrigger>
+      )}
       <SheetContent side="left" className="w-[80vw] max-w-sm">
         <SheetHeader>
           <SheetTitle className="font-[family-name:var(--font-serif)] tracking-ritual2">
