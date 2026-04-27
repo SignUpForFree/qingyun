@@ -240,6 +240,33 @@ describe("updateProfile", () => {
     );
   });
 
+  it("PUT is_default=true on a non-existent id throws ProfileNotFoundError without disturbing existing default", async () => {
+    const db = getDb();
+    await db.insert(profiles).values({
+      id: "p-a",
+      user_id: USER_A,
+      is_default: true,
+      nickname: "原默认",
+      gender: "other",
+      birth_date: "1990-01-01",
+      birth_time: "00:00",
+      birth_calendar: "solar",
+      birth_place: "未填",
+      created_at: NOW,
+      updated_at: NOW,
+    });
+
+    await expect(
+      updateProfile(USER_A, "id-that-does-not-exist", { is_default: true }),
+    ).rejects.toBeInstanceOf(ProfileNotFoundError);
+
+    // 原默认档仍是默认，且唯一
+    const list = await listProfiles(USER_A);
+    const defaults = list.filter((p) => p.is_default);
+    expect(defaults).toHaveLength(1);
+    expect(defaults[0].id).toBe("p-a");
+  });
+
   it("atomically swaps is_default to a different profile", async () => {
     const db = getDb();
     await db.insert(profiles).values({

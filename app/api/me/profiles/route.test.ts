@@ -146,6 +146,7 @@ describe("POST /api/me/profiles", () => {
   });
 
   it.each([
+    ["nickname", { ...VALID_BODY, nickname: undefined }],
     ["gender", { ...VALID_BODY, gender: undefined }],
     ["birth_date", { ...VALID_BODY, birth_date: undefined }],
     ["birth_time", { ...VALID_BODY, birth_time: undefined }],

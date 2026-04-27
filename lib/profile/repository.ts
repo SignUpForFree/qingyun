@@ -32,7 +32,7 @@ export interface CreateProfileInput {
 }
 
 export type UpdateProfileInput = Partial<
-  CreateProfileInput & { is_default: boolean }
+  CreateProfileInput & { is_default: true }
 >;
 
 export async function listProfiles(userId: string): Promise<Profile[]> {
@@ -87,22 +87,24 @@ export async function updateProfile(
   patch: UpdateProfileInput,
 ): Promise<Profile> {
   const db = getDb();
-  const [existing] = await db
-    .select()
-    .from(profiles)
-    .where(and(eq(profiles.id, profileId), eq(profiles.user_id, userId)))
-    .limit(1);
-  if (!existing) throw new ProfileNotFoundError();
-
   const { is_default, ...rest } = patch;
   const now = new Date().toISOString();
 
   if (is_default === true) {
-    // Atomic default swap:
-    //   1. 把当前用户所有档 is_default=false
-    //   2. 把目标档 is_default=true 同时应用其他字段
-    // sync transaction（better-sqlite3）— 不能返回 Promise，每条 .run()。
+    // Atomic default swap — read+write inside one tx so concurrent default-swaps
+    // are serialised by better-sqlite3's single-connection sync semantics:
+    //   1. 校验目标档存在且属于当前 user（含 ownership 防越权）
+    //   2. 把当前用户所有档 is_default=false
+    //   3. 把目标档 is_default=true 同时应用其他字段
+    // sync transaction（better-sqlite3）— callback 不能返回 Promise，每条 .run() / .all()。
     db.transaction((tx) => {
+      const found = tx
+        .select()
+        .from(profiles)
+        .where(and(eq(profiles.id, profileId), eq(profiles.user_id, userId)))
+        .limit(1)
+        .all();
+      if (found.length === 0) throw new ProfileNotFoundError();
       tx.update(profiles)
         .set({ is_default: false, updated_at: now })
         .where(eq(profiles.user_id, userId))
@@ -114,6 +116,13 @@ export async function updateProfile(
     });
   } else {
     // 非默认切换的普通字段更新；is_default=false 不接受（避免误把唯一默认档清掉）
+    const [existing] = await db
+      .select()
+      .from(profiles)
+      .where(and(eq(profiles.id, profileId), eq(profiles.user_id, userId)))
+      .limit(1);
+    if (!existing) throw new ProfileNotFoundError();
+
     if (Object.keys(rest).length > 0) {
       await db
         .update(profiles)
@@ -122,10 +131,11 @@ export async function updateProfile(
     }
   }
 
+  // Final fetch with full ownership filter (review HIGH 1)
   const [updated] = await db
     .select()
     .from(profiles)
-    .where(eq(profiles.id, profileId))
+    .where(and(eq(profiles.id, profileId), eq(profiles.user_id, userId)))
     .limit(1);
   if (!updated) throw new ProfileNotFoundError();
   return updated;
