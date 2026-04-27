@@ -107,3 +107,57 @@ describe("buildChart - 不变性", () => {
     expect(t.toISOString()).toBe(originalIso);
   });
 });
+
+import { buildChartV2 } from "./chart";
+
+describe("buildChartV2 - 整合 神煞 + 流年 + 用神 (M3.11)", () => {
+  const chart = buildChartV2({
+    birthTime: new Date("1990-06-15T14:30:00+08:00"),
+    longitude: 120.1551,
+    latitude: 30.2741,
+    gender: "male",
+    calendarType: "solar",
+  });
+
+  it("继承 BaziComputed 字段", () => {
+    expect(chart.pillars.year).toEqual({ gan: "庚", zhi: "午" });
+    expect(chart.dayMaster).toBe(chart.pillars.day.gan);
+    expect(chart.luckPillars).toHaveLength(8);
+  });
+
+  it("shensha 数组（V2.0 任意命局至少命中数条）", () => {
+    expect(Array.isArray(chart.shensha)).toBe(true);
+    expect(chart.shensha.length).toBeGreaterThan(0);
+    for (const s of chart.shensha) {
+      expect(["吉", "凶", "中"]).toContain(s.polarity);
+      expect(s.categories.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("yongShen 字段完整", () => {
+    expect(["金", "木", "水", "火", "土"]).toContain(chart.yongShen.yongShen);
+    expect(["身强", "身弱", "中和", "从弱", "从强"]).toContain(chart.yongShen.gejuType);
+    expect(chart.yongShen.strength).toBeGreaterThanOrEqual(0);
+    expect(chart.yongShen.strength).toBeLessThanOrEqual(100);
+  });
+
+  it("liunian 5 年（前 2 当 1 后 2）", () => {
+    expect(chart.liunian).toHaveLength(5);
+    const center = chart.liunian[2];
+    expect(center.offset).toBe(0);
+  });
+
+  it("centerYear 自定义", () => {
+    const c2 = buildChartV2(
+      {
+        birthTime: new Date("1990-06-15T14:30:00+08:00"),
+        longitude: 120.1551,
+        latitude: 30.2741,
+        gender: "male",
+        calendarType: "solar",
+      },
+      { centerYear: 2030 },
+    );
+    expect(c2.liunian[2].year).toBe(2030);
+  });
+});

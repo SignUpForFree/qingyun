@@ -15,6 +15,9 @@ import {
   type Wuxing,
 } from "./stems-branches";
 import { toSolarTrueTime } from "./solar-time";
+import { detectAllShensha, type ShenshaRule } from "./shensha-rules";
+import { computeLiunian, type LiunianStep } from "./dayun";
+import { determineYongShen, type YongShenResult } from "./yong-shen";
 
 const { Solar, Lunar } = lunar;
 
@@ -122,6 +125,43 @@ function countFiveElements(p: BaziPillars): Record<Wuxing, number> {
     init[wuxingOf(pillar.zhi)] += 1;
   }
   return init;
+}
+
+/**
+ * V2 升级：在 BaziComputed 之上叠加 神煞 + 流年 + 用神 (M3.11)
+ */
+export interface BaziChartV2 extends BaziComputed {
+  shensha: ReadonlyArray<{
+    name: string;
+    interpretation: string;
+    polarity: "吉" | "凶" | "中";
+    categories: readonly string[];
+  }>;
+  yongShen: YongShenResult;
+  liunian: ReadonlyArray<LiunianStep>;
+}
+
+export function buildChartV2(input: BuildChartInput, opts?: { centerYear?: number }): BaziChartV2 {
+  const base = buildChart(input);
+  const centerYear = opts?.centerYear ?? new Date().getUTCFullYear();
+  const shenshaRules = detectAllShensha(base.pillars);
+  const yongShen = determineYongShen({
+    pillars: base.pillars,
+    fiveElements: base.fiveElements,
+  });
+  const liunian = computeLiunian({ centerYear, span: 5 });
+
+  return {
+    ...base,
+    shensha: shenshaRules.map((r: ShenshaRule) => ({
+      name: r.name,
+      interpretation: r.interpretation,
+      polarity: r.polarity,
+      categories: r.categories,
+    })),
+    yongShen,
+    liunian,
+  };
 }
 
 function buildLuckPillars(
