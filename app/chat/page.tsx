@@ -27,6 +27,8 @@ interface PageProps {
     intent?: string;
     /** M2.24: ?open=history → mount 时打开历史抽屉 */
     open?: string;
+    /** M4.10: ?prefill=xxx → 预填到输入框（不自动 send） */
+    prefill?: string;
   }>;
 }
 
@@ -40,6 +42,7 @@ export default async function ChatPage({ searchParams }: PageProps) {
     ? (sp.intent as "divination" | "dream" | "bazi" | "meihua")
     : null;
   const openHistory = sp.open === "history";
+  const prefill = sp.prefill && sp.prefill.length > 0 ? sp.prefill : undefined;
 
   let initialMessages: DisplayMessage[] = [];
   let resolvedConvId: string | null = null;
@@ -80,6 +83,7 @@ export default async function ChatPage({ searchParams }: PageProps) {
         autoSendText={initial}
         initialIntent={intent}
         openHistoryOnMount={openHistory}
+        prefillText={prefill}
       />
     </>
   );

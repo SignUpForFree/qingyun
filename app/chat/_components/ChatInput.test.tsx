@@ -77,4 +77,18 @@ describe("ChatInput", () => {
     expect(ta).toBeDisabled();
     expect(screen.getByRole("button", { name: "发送" })).toBeDisabled();
   });
+
+  it("initialText 预填到输入框（M4.10）", () => {
+    render(<ChatInput onSend={vi.fn()} initialText="针对今日运势深入聊聊：" />);
+    const ta = screen.getByPlaceholderText("把想问的写给我…") as HTMLTextAreaElement;
+    expect(ta.value).toBe("针对今日运势深入聊聊：");
+  });
+
+  it("initialText 不自动 send，需用户点发送", () => {
+    const onSend = vi.fn();
+    render(<ChatInput onSend={onSend} initialText="预填" />);
+    expect(onSend).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+    expect(onSend).toHaveBeenCalledWith("预填");
+  });
 });

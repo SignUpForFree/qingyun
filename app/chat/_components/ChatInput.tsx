@@ -14,6 +14,8 @@ interface ChatInputProps {
   busy?: boolean;
   /** 显示意图 chip 行（M2.25, 招呼页 / 空对话页用） */
   showQuickChips?: boolean;
+  /** M4.10 ?prefill= 预填初始文本（不自动 send，让用户改后再发） */
+  initialText?: string;
 }
 
 /**
@@ -31,8 +33,9 @@ export function ChatInput({
   placeholder,
   busy,
   showQuickChips,
+  initialText,
 }: ChatInputProps) {
-  const [text, setText] = React.useState("");
+  const [text, setText] = React.useState(initialText ?? "");
   const taRef = React.useRef<HTMLTextAreaElement | null>(null);
 
   // 简易自适应高度

@@ -7,6 +7,7 @@ import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
 import { IntentChips } from "./IntentChips";
 import { HistoryDrawer } from "./HistoryDrawer";
+import { DreamPreciseModal, type DreamPreciseFormData } from "./DreamPreciseModal";
 import { GlassCard, Sparkle } from "@/components/su";
 import type { DisplayMessage } from "./MessageBubble";
 
@@ -19,6 +20,8 @@ interface ChatWindowProps {
   initialIntent?: "divination" | "dream" | "bazi" | "meihua" | null;
   /** ?open=history → mount 时打开历史抽屉（M2.24） */
   openHistoryOnMount?: boolean;
+  /** ?prefill=xxx → 预填到输入框（不自动发送，M4.10 / DeepAskButton 入口） */
+  prefillText?: string;
 }
 
 const INTENT_AUTO_TEXT: Record<NonNullable<ChatWindowProps["initialIntent"]>, string> = {
@@ -59,6 +62,7 @@ export function ChatWindow({
   autoSendText,
   initialIntent,
   openHistoryOnMount,
+  prefillText,
 }: ChatWindowProps) {
   const router = useRouter();
   const [convId, setConvId] = React.useState<string | null>(initialConvId);
@@ -67,6 +71,9 @@ export function ChatWindow({
   const [progressHint, setProgressHint] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [drawerOpen, setDrawerOpen] = React.useState<boolean>(Boolean(openHistoryOnMount));
+  /** M4.9: dream precise modal 仪式特化 fullscreen */
+  const [dreamModalOpen, setDreamModalOpen] = React.useState(false);
+  const dreamModalSeenRef = React.useRef<Set<string>>(new Set());
   const abortRef = React.useRef<AbortController | null>(null);
   const autoSentRef = React.useRef(false);
   const sendRef = React.useRef<(t: string) => Promise<void>>(() => Promise.resolve());
@@ -444,12 +451,57 @@ export function ChatWindow({
     return () => abortRef.current?.abort();
   }, []);
 
+  // M4.9: 当列表新增 dream_precise_form 卡 → 自动开 modal（每张卡只开一次）
+  React.useEffect(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]!;
+      if (m.role !== "assistant" || !m.metadata) continue;
+      try {
+        const meta = JSON.parse(m.metadata) as { ui?: string };
+        if (meta.ui === "dream_precise_form" && !dreamModalSeenRef.current.has(m.id)) {
+          dreamModalSeenRef.current.add(m.id);
+          setDreamModalOpen(true);
+        }
+      } catch {
+        /* skip 坏 JSON */
+      }
+      break; // 只看最新一条
+    }
+  }, [messages]);
+
+  const handleDreamModalSubmit = React.useCallback(
+    async (data: DreamPreciseFormData) => {
+      if (!convId) {
+        toast.error("会话尚未建立，请先与轻运打个招呼");
+        return;
+      }
+      setDreamModalOpen(false);
+      await postSubAction("/api/divination/dream", "解梦", {
+        conversationId: convId,
+        mode: "precise",
+        payload: {
+          core: data.core,
+          emotion: data.emotion,
+          reality: data.reality || undefined,
+          special: data.special || undefined,
+        },
+      });
+    },
+    [convId, postSubAction],
+  );
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <HistoryDrawer
         currentId={convId ?? undefined}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
+      />
+      <DreamPreciseModal
+        open={dreamModalOpen}
+        onClose={() => setDreamModalOpen(false)}
+        onSubmit={handleDreamModalSubmit}
+        busy={busy}
       />
       <MessageList
         messages={messages}
@@ -480,7 +532,11 @@ export function ChatWindow({
         </p>
       )}
       <IntentChips onPick={(t) => void send(t)} busy={streaming !== null || busy} />
-      <ChatInput onSend={send} busy={streaming !== null || busy} />
+      <ChatInput
+        onSend={send}
+        busy={streaming !== null || busy}
+        initialText={prefillText}
+      />
     </div>
   );
 }
