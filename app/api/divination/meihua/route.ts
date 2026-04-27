@@ -10,6 +10,7 @@ import { frame, heartbeat, safeEnqueue, SSE_HEADERS } from "@/lib/chat/sse";
 import { serializeJson } from "@/lib/db/json";
 import { meihuaV2 } from "@/lib/divination/meihua-v2";
 import { buildMeihuaPrompt } from "@/lib/ai/prompts/meihua-interpret";
+import { sanitizeAiOutput } from "@/lib/ai/output-sanitizer";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -260,6 +261,16 @@ export async function POST(req: Request) {
           /* usage 不致命 */
         }
 
+        // M3.34: 持久化前禁词兜底
+        const sanitized = sanitizeAiOutput(aiText, "divination");
+        const finalText = sanitized.cleaned || aiText || "(AI 卦辞未生成)";
+        if (sanitized.hitCount > 0 && process.env.NODE_ENV !== "production") {
+          console.warn(
+            `[meihua] sanitizer hit ${sanitized.hitCount} forbidden words:`,
+            sanitized.hitWords,
+          );
+        }
+
         const cardMeta = {
           ui: "meihua_result" as const,
           profileId,
@@ -284,8 +295,8 @@ export async function POST(req: Request) {
           benDict: v2.benDict,
           huDict: v2.huDict,
           bianDict: v2.bianDict,
-          verdict: aiText.slice(0, 60) || "(AI 卦辞未生成)",
-          aiText,
+          verdict: finalText.slice(0, 60) || "(AI 卦辞未生成)",
+          aiText: finalText,
         };
 
         const [card] = await db
@@ -293,7 +304,7 @@ export async function POST(req: Request) {
           .values({
             conversation_id: data.conversationId,
             role: "assistant",
-            content: aiText || "(AI 卦辞未生成)",
+            content: finalText,
             intent: "meihua",
             metadata: serializeJson(cardMeta),
             tokens_used: tokens,
@@ -306,7 +317,7 @@ export async function POST(req: Request) {
           frame("card", {
             id: card?.id,
             role: "assistant",
-            content: aiText,
+            content: finalText,
             metadata: serializeJson(cardMeta),
           }),
         );

@@ -6,6 +6,7 @@ import { ensureUserId } from "@/lib/auth/session";
 import { checkRateLimit } from "@/lib/ai/check-rate-limit";
 import { guardTexts } from "@/lib/safety/guard";
 import { chat } from "@/lib/ai/client";
+import { sanitizeAiOutput } from "@/lib/ai/output-sanitizer";
 import { frame, heartbeat, safeEnqueue, SSE_HEADERS } from "@/lib/chat/sse";
 import { serializeJson } from "@/lib/db/json";
 
@@ -167,14 +168,24 @@ export async function POST(req: Request) {
           /* usage 不致命 */
         }
 
+        // M3.34: 持久化前禁词兜底（含解梦专属"凶兆/不祥"）
+        const sanitized = sanitizeAiOutput(aiText, "divination");
+        const finalText = sanitized.cleaned || aiText || "(AI 解梦未生成)";
+        if (sanitized.hitCount > 0 && process.env.NODE_ENV !== "production") {
+          console.warn(
+            `[dream] sanitizer hit ${sanitized.hitCount} forbidden words:`,
+            sanitized.hitWords,
+          );
+        }
+
         const cardMeta =
           data.mode === "fast"
-            ? { ui: "dream_result_fast" as const, summary: aiText }
+            ? { ui: "dream_result_fast" as const, summary: finalText }
             : {
                 ui: "dream_result_precise" as const,
-                threeViews: extractThreeViews(aiText),
-                summary: aiText.slice(0, 200),
-                suggestions: extractSuggestions(aiText),
+                threeViews: extractThreeViews(finalText),
+                summary: finalText.slice(0, 200),
+                suggestions: extractSuggestions(finalText),
               };
 
         const [card] = await db
@@ -182,7 +193,7 @@ export async function POST(req: Request) {
           .values({
             conversation_id: data.conversationId,
             role: "assistant",
-            content: aiText || "(AI 解梦未生成)",
+            content: finalText,
             intent: "dream",
             metadata: serializeJson(cardMeta),
             tokens_used: tokens,
@@ -194,7 +205,7 @@ export async function POST(req: Request) {
           frame("card", {
             id: card?.id,
             role: "assistant",
-            content: aiText,
+            content: finalText,
             metadata: serializeJson(cardMeta),
           }),
         );

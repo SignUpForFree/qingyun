@@ -10,6 +10,7 @@ import { frame, heartbeat, safeEnqueue, SSE_HEADERS } from "@/lib/chat/sse";
 import { serializeJson } from "@/lib/db/json";
 import { buildChartV2 } from "@/lib/bazi/chart";
 import { buildBaziPrompt, type V2DivinationDim } from "@/lib/ai/prompts/bazi-interpret";
+import { sanitizeAiOutput } from "@/lib/ai/output-sanitizer";
 import { parsePillarsCache, serializePillars } from "@/lib/profile/bazi-pillars";
 
 export const runtime = "nodejs";
@@ -364,6 +365,16 @@ export async function POST(req: Request) {
           /* usage 不致命 */
         }
 
+        // M3.34: 持久化前禁词兜底
+        const sanitized = sanitizeAiOutput(aiText, "divination");
+        const finalText = sanitized.cleaned || aiText || "(AI 解读未生成)";
+        if (sanitized.hitCount > 0 && process.env.NODE_ENV !== "production") {
+          console.warn(
+            `[bazi] sanitizer hit ${sanitized.hitCount} forbidden words:`,
+            sanitized.hitWords,
+          );
+        }
+
         const cardMeta = {
           ui: "bazi_result" as const,
           profileId,
@@ -381,7 +392,7 @@ export async function POST(req: Request) {
               ? `${chartV2.luckPillars[0].gan}${chartV2.luckPillars[0].zhi}`
               : "",
           },
-          aiText,
+          aiText: finalText,
         };
 
         const [card] = await db
@@ -389,7 +400,7 @@ export async function POST(req: Request) {
           .values({
             conversation_id: data.conversationId,
             role: "assistant",
-            content: aiText || "(AI 解读未生成)",
+            content: finalText,
             intent: "bazi",
             metadata: serializeJson(cardMeta),
             tokens_used: tokens,
@@ -402,7 +413,7 @@ export async function POST(req: Request) {
           frame("card", {
             id: card?.id,
             role: "assistant",
-            content: aiText,
+            content: finalText,
             metadata: serializeJson(cardMeta),
           }),
         );

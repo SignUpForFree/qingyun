@@ -8,6 +8,7 @@ import { chat } from "@/lib/ai/client";
 import { frame, heartbeat, safeEnqueue, SSE_HEADERS } from "@/lib/chat/sse";
 import { serializeJson } from "@/lib/db/json";
 import { buildSlipPrompt } from "@/lib/ai/prompts/slip-interpret";
+import { sanitizeAiOutput } from "@/lib/ai/output-sanitizer";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -183,6 +184,16 @@ export async function POST(req: Request) {
           /* usage 不致命 */
         }
 
+        // M3.34: 持久化前禁词兜底（解签场景含"慎行/凶险"古风词）
+        const sanitized = sanitizeAiOutput(aiText, "divination");
+        const finalText = sanitized.cleaned || aiText || "(AI 解读未生成)";
+        if (sanitized.hitCount > 0 && process.env.NODE_ENV !== "production") {
+          console.warn(
+            `[explain] sanitizer hit ${sanitized.hitCount} forbidden words:`,
+            sanitized.hitWords,
+          );
+        }
+
         // 写 slip_report 卡
         const reportMeta = {
           ui: "slip_report" as const,
@@ -192,7 +203,7 @@ export async function POST(req: Request) {
           poem: meta.poemLines.join("，"),
           dimension: meta.category,
           reading: meta.reading,
-          aiInterpretation: aiText || "(AI 解读未生成)",
+          aiInterpretation: finalText,
           sourceMessageId: messageId,
         };
 
@@ -201,7 +212,7 @@ export async function POST(req: Request) {
           .values({
             conversation_id: conversationId,
             role: "assistant",
-            content: aiText || "(AI 解读未生成)",
+            content: finalText,
             intent: "divination",
             metadata: serializeJson(reportMeta),
             tokens_used: tokens,
@@ -213,7 +224,7 @@ export async function POST(req: Request) {
           frame("card", {
             id: card?.id,
             role: "assistant",
-            content: aiText,
+            content: finalText,
             metadata: serializeJson(reportMeta),
           }),
         );
