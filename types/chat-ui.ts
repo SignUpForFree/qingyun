@@ -22,7 +22,7 @@ import { z } from "zod";
 const choiceOption = z.object({
   key: z.string().min(1),
   label: z.string().min(1),
-  description: z.string().optional(),
+  hint: z.string().optional(),
 });
 
 // ============ state / transient ============

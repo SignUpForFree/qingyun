@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ChoiceCard } from "./ChoiceCard";
+import { CardMetaSchema } from "@/types/chat-ui";
 
 describe("ChoiceCard", () => {
   it("渲染 title + 所有 options", () => {
@@ -45,5 +46,28 @@ describe("ChoiceCard", () => {
     expect(btn).toBeDisabled();
     fireEvent.click(btn);
     expect(onPick).not.toHaveBeenCalled();
+  });
+
+  it("M2.5: 从 choice_card CardMeta 渲染（schema 对齐 hint 字段）", () => {
+    const meta = {
+      ui: "choice_card" as const,
+      question: "你想做哪种解读？",
+      options: [
+        { key: "fast", label: "快速解梦", hint: "30 秒一句话" },
+        { key: "precise", label: "精准解梦", hint: "4 字段全场景" },
+      ],
+    };
+    expect(CardMetaSchema.parse(meta).ui).toBe("choice_card");
+
+    render(
+      <ChoiceCard
+        title={meta.question}
+        options={meta.options}
+        onPick={() => {}}
+      />,
+    );
+    expect(screen.getByText("快速解梦")).toBeInTheDocument();
+    expect(screen.getByText("30 秒一句话")).toBeInTheDocument();
+    expect(screen.getByText("精准解梦")).toBeInTheDocument();
   });
 });
