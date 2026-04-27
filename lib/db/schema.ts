@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  check,
   index,
   integer,
   primaryKey,
@@ -47,7 +48,7 @@ export const wechatBind = sqliteTable(
     user_id: text("user_id")
       .primaryKey()
       .references(() => users.id, { onDelete: "cascade" }),
-    openid: text("openid").notNull().unique(),
+    openid: text("openid").notNull(),
     unionid: text("unionid"),
     nickname: text("nickname"),
     avatar_url: text("avatar_url"),
@@ -57,7 +58,8 @@ export const wechatBind = sqliteTable(
     last_oa_error: text("last_oa_error"),
   },
   (t) => [
-    index("idx_wechat_bind_openid").on(t.openid),
+    // openid UNIQUE 用 uniqueIndex 命名（spec §2.4 / 避免 .unique() 自动生成 + 显式 index 重复建索引）
+    uniqueIndex("idx_wechat_bind_openid").on(t.openid),
     index("idx_wechat_bind_unionid").on(t.unionid),
   ],
 );
@@ -86,6 +88,8 @@ export const profiles = sqliteTable(
     user_id: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    // is_default：业务约束「每个 user_id 至多 1 行 is_default = 1」由应用层 setDefault() 在事务内保证
+    // （spec §2.2 #4 / §2.3 #2）；schema 层不加 partial unique index 是因为 SQLite 0.45 drizzle 没有简洁 DSL
     is_default: integer("is_default", { mode: "boolean" }).notNull().default(false),
     nickname: text("nickname").notNull(),
     avatar_url: text("avatar_url"),
@@ -101,7 +105,7 @@ export const profiles = sqliteTable(
     created_at: tsNow("created_at"),
     updated_at: tsNow("updated_at"),
   },
-  (t) => [index("idx_profiles_user_default").on(t.user_id, t.is_default)],
+  (t) => [index("idx_profiles_user_default").on(t.user_id, sql`${t.is_default} DESC`)],
 );
 
 // ---------- 5. conversations ----------
@@ -124,7 +128,7 @@ export const conversations = sqliteTable(
     last_message_at: text("last_message_at"),
     created_at: tsNow("created_at"),
   },
-  (t) => [index("idx_conversations_user_time").on(t.user_id, t.last_message_at)],
+  (t) => [index("idx_conversations_user_time").on(t.user_id, sql`${t.last_message_at} DESC`)],
 );
 
 // ---------- 6. messages ----------
@@ -149,7 +153,7 @@ export const messages = sqliteTable(
   },
   (t) => [
     index("idx_messages_conv_time").on(t.conversation_id, t.created_at),
-    index("idx_messages_intent_time").on(t.intent, t.created_at),
+    index("idx_messages_intent_time").on(t.intent, sql`${t.created_at} DESC`),
   ],
 );
 
@@ -168,7 +172,10 @@ export const fortunesDaily = sqliteTable(
     reading: text("reading").notNull(),
     generated_at: tsNow("generated_at"),
   },
-  (t) => [primaryKey({ columns: [t.profile_id, t.date] })],
+  (t) => [
+    primaryKey({ columns: [t.profile_id, t.date] }),
+    check("fortunes_daily_overall_range", sql`${t.overall} BETWEEN 0 AND 100`),
+  ],
 );
 
 // ---------- 8. fortunes_weekly ----------
@@ -241,7 +248,7 @@ export const cronRuns = sqliteTable(
     affected_rows: integer("affected_rows"),
     error: text("error"),
   },
-  (t) => [index("idx_cron_runs_task_time").on(t.task_name, t.started_at)],
+  (t) => [index("idx_cron_runs_task_time").on(t.task_name, sql`${t.started_at} DESC`)],
 );
 
 // ---------- 13. wechat_template_log ----------
@@ -260,7 +267,7 @@ export const wechatTemplateLog = sqliteTable(
     status: text("status", { enum: ["queued", "sent", "failed"] }).notNull(),
     raw_response: text("raw_response"),
   },
-  (t) => [index("idx_template_log_user_time").on(t.user_id, t.sent_at)],
+  (t) => [index("idx_template_log_user_time").on(t.user_id, sql`${t.sent_at} DESC`)],
 );
 
 // ---------- 14. wechat_token（单例缓存） ----------
@@ -313,5 +320,3 @@ export type WechatTemplateLogInsert = typeof wechatTemplateLog.$inferInsert;
 export type WechatToken = typeof wechatToken.$inferSelect;
 export type WechatTokenInsert = typeof wechatToken.$inferInsert;
 
-// 让 uniqueIndex 在编辑器里别报 "imported but not used"
-void uniqueIndex;
