@@ -44,4 +44,14 @@ describe("LauncherGrid (M4.3)", () => {
     const grid = container.querySelector('[data-testid="launcher-grid"]');
     expect(grid?.className).toContain("grid-cols-4");
   });
+
+  // ============ M4.27 自画 SVG icon ============
+
+  it("4 launcher 渲染对应 FunctionIcon SVG（替换 V1 单字 emoji）", () => {
+    render(<LauncherGrid />);
+    expect(screen.getByTestId("fn-icon-divination")).toBeInTheDocument();
+    expect(screen.getByTestId("fn-icon-dream")).toBeInTheDocument();
+    expect(screen.getByTestId("fn-icon-bazi")).toBeInTheDocument();
+    expect(screen.getByTestId("fn-icon-meihua")).toBeInTheDocument();
+  });
 });
