@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { SLIPS_V2 } from "@/db/seed/slips-v2";
 import { seedToSpecLevel, type SpecLevel } from "./slip-level";
+import type { YongShenResult } from "@/lib/bazi/yong-shen";
 
 /**
  * 灵签抽取（M3.2 加权 + 确定性 seed）
@@ -47,11 +48,41 @@ export const BASE_WEIGHTS: Record<SpecLevel, number> = {
   下下: 12,
 };
 
+/**
+ * M3.3 八字喜忌微调权重
+ *
+ * "弱用神"信号：profile 的 yongShen 关联格局是 身弱 / 从弱 / strength<30
+ *   → 命主能量偏弱，更需要慎行提醒，下下签权重 +5（绝对值，从 12 → 17）
+ *
+ * "强用神"信号：strength>70（身强/从强）
+ *   → 主动作为更利，上吉/中吉权重 +3（小幅）
+ *
+ * 中和不调整（30-70）。
+ *
+ * 设计目的：不替代 user 的 question 主体性，仅做微调，避免极端化。
+ */
+export function adjustWeights(
+  base: Record<SpecLevel, number>,
+  yongShen?: YongShenResult | null,
+): Record<SpecLevel, number> {
+  if (!yongShen) return { ...base };
+  const adjusted = { ...base };
+  if (yongShen.strength < 30) {
+    adjusted.下下 = base.下下 + 5;
+  } else if (yongShen.strength > 70) {
+    adjusted.上吉 = base.上吉 + 3;
+    adjusted.中吉 = base.中吉 + 3;
+  }
+  return adjusted;
+}
+
 export interface DrawSlipArgs {
   profileId: string;
   date: string;
   question: string;
   category: DivinationDim;
+  /** M3.3 可选：profile 的用神 / 格局，用于微调权重 */
+  yongShen?: YongShenResult | null;
 }
 
 export interface SlipFull {
@@ -77,7 +108,8 @@ export interface DrawnSlip {
  */
 export function drawSlip(args: DrawSlipArgs): DrawnSlip {
   const seed = `${args.profileId}:${args.date}:${args.question}:${args.category}`;
-  const slipNumber = pickWeighted(seed);
+  const weights = adjustWeights(BASE_WEIGHTS, args.yongShen);
+  const slipNumber = pickWeighted(seed, weights);
   const slip = getSlip(slipNumber);
   return {
     slipNumber,
@@ -87,12 +119,15 @@ export function drawSlip(args: DrawSlipArgs): DrawnSlip {
 }
 
 /**
- * 加权采样：每签一票，按 BASE_WEIGHTS[level] 倍数堆叠
+ * 加权采样：每签一票，按 weights[level] 倍数堆叠（默认 BASE_WEIGHTS）
  * 返回 1-100 的 slipNumber
  */
-export function pickWeighted(seed: string): number {
+export function pickWeighted(
+  seed: string,
+  weights: Record<SpecLevel, number> = BASE_WEIGHTS,
+): number {
   const totalWeight = SLIPS_V2.reduce(
-    (acc, s) => acc + BASE_WEIGHTS[seedToSpecLevel(s.level)],
+    (acc, s) => acc + weights[seedToSpecLevel(s.level)],
     0,
   );
 
@@ -104,7 +139,7 @@ export function pickWeighted(seed: string): number {
 
   let cursor = 0;
   for (const s of SLIPS_V2) {
-    const w = BASE_WEIGHTS[seedToSpecLevel(s.level)];
+    const w = weights[seedToSpecLevel(s.level)];
     cursor += w;
     if (target < cursor) return s.number;
   }

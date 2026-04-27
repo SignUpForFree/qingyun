@@ -7,7 +7,31 @@ import {
   getSlip,
   BASE_WEIGHTS,
   DIVINATION_DIMS,
+  adjustWeights,
 } from "./slips";
+import type { YongShenResult } from "@/lib/bazi/yong-shen";
+
+const WEAK_YONG: YongShenResult = {
+  gejuType: "身弱",
+  yongShen: "水",
+  jiShen: "土",
+  strength: 22,
+  reason: "身弱用印",
+};
+const STRONG_YONG: YongShenResult = {
+  gejuType: "身强",
+  yongShen: "土",
+  jiShen: "水",
+  strength: 80,
+  reason: "身强用财",
+};
+const NEUTRAL_YONG: YongShenResult = {
+  gejuType: "中和",
+  yongShen: "金",
+  jiShen: null,
+  strength: 50,
+  reason: "中和调候",
+};
 
 describe("pickSlip", () => {
   it("number 在 [1, MAX] 范围", () => {
@@ -126,6 +150,64 @@ describe("pickWeighted 分布", () => {
       else if (lvl === "下下") xiaXia++;
     }
     expect(zhongJi).toBeGreaterThan(xiaXia);
+  });
+});
+
+describe("adjustWeights (M3.3 八字喜忌微调)", () => {
+  it("无 yongShen → 返回 BASE 浅拷贝", () => {
+    const r = adjustWeights(BASE_WEIGHTS);
+    expect(r).toEqual(BASE_WEIGHTS);
+    expect(r).not.toBe(BASE_WEIGHTS); // 浅拷贝
+  });
+
+  it("身弱（strength<30）→ 下下 +5", () => {
+    const r = adjustWeights(BASE_WEIGHTS, WEAK_YONG);
+    expect(r.下下).toBe(BASE_WEIGHTS.下下 + 5);
+    expect(r.中吉).toBe(BASE_WEIGHTS.中吉);
+    expect(r.上吉).toBe(BASE_WEIGHTS.上吉);
+  });
+
+  it("身强（strength>70）→ 上吉/中吉 +3", () => {
+    const r = adjustWeights(BASE_WEIGHTS, STRONG_YONG);
+    expect(r.上吉).toBe(BASE_WEIGHTS.上吉 + 3);
+    expect(r.中吉).toBe(BASE_WEIGHTS.中吉 + 3);
+    expect(r.下下).toBe(BASE_WEIGHTS.下下);
+  });
+
+  it("中和（30-70）→ 不调整", () => {
+    const r = adjustWeights(BASE_WEIGHTS, NEUTRAL_YONG);
+    expect(r).toEqual(BASE_WEIGHTS);
+  });
+
+  it("身弱 1000 次抽样：下下命中频率比中和明显高", () => {
+    let weakXia = 0;
+    let neutralXia = 0;
+    for (let i = 0; i < 1000; i++) {
+      const wWeak = adjustWeights(BASE_WEIGHTS, WEAK_YONG);
+      const wNeu = adjustWeights(BASE_WEIGHTS, NEUTRAL_YONG);
+      if (getSlip(pickWeighted(`seed-weak-${i}`, wWeak)).level === "下下") weakXia++;
+      if (getSlip(pickWeighted(`seed-neu-${i}`, wNeu)).level === "下下") neutralXia++;
+    }
+    expect(weakXia).toBeGreaterThan(neutralXia);
+  });
+});
+
+describe("drawSlip 接 yongShen", () => {
+  it("身弱 profile：相同输入下，weak vs no-yongshen 抽到的 slip 可能不同", () => {
+    const argsBase = {
+      profileId: "p1",
+      date: "2026-04-27",
+      question: "事业如何",
+      category: "事业学业" as const,
+    };
+    const a = drawSlip({ ...argsBase });
+    const b = drawSlip({ ...argsBase, yongShen: WEAK_YONG });
+    // 各自确定性
+    expect(drawSlip({ ...argsBase })).toEqual(a);
+    expect(drawSlip({ ...argsBase, yongShen: WEAK_YONG })).toEqual(b);
+    // 至少 a/b 任意一个能正常走通
+    expect(a.slipNumber).toBeGreaterThan(0);
+    expect(b.slipNumber).toBeGreaterThan(0);
   });
 });
 
