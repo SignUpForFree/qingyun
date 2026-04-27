@@ -10,6 +10,7 @@ import { frame, heartbeat, safeEnqueue, SSE_HEADERS } from "@/lib/chat/sse";
 import { serializeJson } from "@/lib/db/json";
 import { buildChartV2 } from "@/lib/bazi/chart";
 import { buildBaziPrompt, type V2DivinationDim } from "@/lib/ai/prompts/bazi-interpret";
+import { parsePillarsCache, serializePillars } from "@/lib/profile/bazi-pillars";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -309,6 +310,28 @@ export async function POST(req: Request) {
           },
           { centerYear: new Date().getUTCFullYear() },
         );
+
+        // M3.15: 把 pillars + 真太阳时写回 profile.bazi_pillars 缓存（fire-and-forget）
+        // 仅在缓存空 / 非法时写，避免无谓 update
+        if (!parsePillarsCache(profile.bazi_pillars)) {
+          try {
+            db.update(profiles)
+              .set({
+                bazi_pillars: serializePillars({
+                  pillars: chartV2.pillars,
+                  solarTrueTime: chartV2.solarTrueTime,
+                }),
+                updated_at: new Date().toISOString(),
+              })
+              .where(eq(profiles.id, profileId))
+              .run();
+          } catch (cacheErr) {
+            // 缓存写失败不阻塞主路径
+            if (process.env.NODE_ENV !== "production") {
+              console.error("写 bazi_pillars 缓存失败", cacheErr);
+            }
+          }
+        }
 
         const { systemPrompt, userPrompt } = buildBaziPrompt({
           chart: chartV2,
