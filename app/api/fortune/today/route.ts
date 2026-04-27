@@ -1,137 +1,171 @@
 import { NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { fortunes, baziCharts } from "@/lib/db/schema";
-import { getCurrentProfile } from "@/lib/profile/current";
+import { profiles, fortunesDaily } from "@/lib/db/schema";
+import { ensureUserId } from "@/lib/auth/session";
+import { buildChartV2 } from "@/lib/bazi/chart";
 import { getDayPillar } from "@/lib/bazi/today";
-import { computeDailyScores } from "@/lib/fortune/scorer";
+import { computeDaily7 } from "@/lib/fortune/daily-7dim";
 import { computeAttributes } from "@/lib/fortune/attributes";
 import { pickOneLiner } from "@/lib/fortune/one-liner";
-import { parseJson, serializeJson } from "@/lib/db/json";
-import type { Wuxing } from "@/lib/bazi/stems-branches";
+import { buildReadingFallback } from "@/lib/fortune/reading-fallback";
+import { computeDailyScores } from "@/lib/fortune/scorer";
+import { parsePillarsCache, serializePillars } from "@/lib/profile/bazi-pillars";
+
+export const runtime = "nodejs";
 
 /**
- * GET /api/fortune/today — 当前用户当前档案的今日运势
+ * GET /api/fortune/today (M3.27)
  *
- * 流程：
- *   1. 取当前 profile + bazi_charts
- *   2. 算今日干支 dayPillar
- *   3. fortunes 表查 (profile_id, fortune_date) 命中 → 直接返回缓存
- *   4. miss → 跑 scorer + attributes + one-liner，落库后返回
+ * 默认拿当前用户的默认 profile，算今日 7 维度运势 + 8 lucky 属性 + one-liner +
+ * reading（先用本地 fallback，M3.28 接入 AI prompt 后再走 AI）；
+ * 命中 fortunes_daily 缓存（按 profile_id+date 唯一）则直接返回。
  *
- * 没建档 → 200 { fortune: null }，前端引导 onboarding
+ * Query string:
+ *   ?date=YYYY-MM-DD（可选，默认今日 UTC+8）
+ *
+ * 缺默认 profile → 404 + needs_profile，让前端走建档引导。
  */
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const requestedDate = url.searchParams.get("date") ?? undefined;
+  const today = getDayPillar(requestedDate ? new Date(`${requestedDate}T12:00:00+08:00`) : undefined);
 
-export async function GET() {
-  const profile = await getCurrentProfile();
-  if (!profile) {
-    return NextResponse.json({ fortune: null, reason: "no_profile" });
-  }
-
+  const userId = await ensureUserId();
   const db = getDb();
 
-  const chartRow = await db
+  // 默认 profile（spec §2.2 A3 模式：每个用户至多 1 个 is_default）
+  const [defaultProfile] = await db
     .select()
-    .from(baziCharts)
-    .where(eq(baziCharts.profile_id, profile.id))
+    .from(profiles)
+    .where(and(eq(profiles.user_id, userId), eq(profiles.is_default, true)))
+    .orderBy(asc(profiles.created_at))
     .limit(1);
-  const chart = chartRow[0];
-  if (!chart) {
-    return NextResponse.json({ fortune: null, reason: "no_bazi" });
+  if (!defaultProfile) {
+    return NextResponse.json(
+      { error: "needs_profile", message: "请先建档" },
+      { status: 404 },
+    );
   }
 
-  const dayPillar = getDayPillar();
-
-  // 缓存命中？
-  const cached = await db
+  // 缓存命中
+  const [cached] = await db
     .select()
-    .from(fortunes)
-    .where(and(eq(fortunes.profile_id, profile.id), eq(fortunes.fortune_date, dayPillar.date)))
+    .from(fortunesDaily)
+    .where(
+      and(
+        eq(fortunesDaily.profile_id, defaultProfile.id),
+        eq(fortunesDaily.date, today.date),
+      ),
+    )
     .limit(1);
-
-  if (cached[0]) {
+  if (cached) {
     return NextResponse.json({
-      fortune: hydrate(cached[0]),
+      cached: true,
+      date: cached.date,
+      overall: cached.overall,
+      scores: JSON.parse(cached.scores),
+      attributes: JSON.parse(cached.attributes),
+      one_liner: cached.one_liner,
+      reading: cached.reading,
     });
   }
 
-  // 计算
-  const fiveElements = parseJson<Record<Wuxing, number>>(chart.five_elements, {
-    金: 0,
-    木: 0,
-    水: 0,
-    火: 0,
-    土: 0,
-  });
-  const scores = computeDailyScores(
-    {
-      dayMaster: chart.day_master,
-      fiveElements,
-    },
-    dayPillar,
-  );
-  const attributes = computeAttributes(dayPillar);
-  const oneLiner = pickOneLiner(scores);
+  // 计算 chart（缓存优先）
+  let pillars = parsePillarsCache(defaultProfile.bazi_pillars);
+  let chartV2;
+  if (pillars) {
+    chartV2 = buildChartV2(
+      {
+        birthTime: new Date(`${defaultProfile.birth_date}T${(defaultProfile.birth_time || "12:00").slice(0, 5)}:00+08:00`),
+        longitude: 121.47,
+        latitude: 31.23,
+        gender: (defaultProfile.gender ?? "male") as "male" | "female",
+        calendarType: defaultProfile.birth_calendar,
+      },
+      { centerYear: new Date().getUTCFullYear() },
+    );
+  } else {
+    chartV2 = buildChartV2(
+      {
+        birthTime: new Date(`${defaultProfile.birth_date}T${(defaultProfile.birth_time || "12:00").slice(0, 5)}:00+08:00`),
+        longitude: 121.47,
+        latitude: 31.23,
+        gender: (defaultProfile.gender ?? "male") as "male" | "female",
+        calendarType: defaultProfile.birth_calendar,
+      },
+      { centerYear: new Date().getUTCFullYear() },
+    );
+    pillars = { pillars: chartV2.pillars, solarTrueTime: chartV2.solarTrueTime };
+    // fire-and-forget 写缓存
+    try {
+      db.update(profiles)
+        .set({
+          bazi_pillars: serializePillars(pillars),
+          updated_at: new Date().toISOString(),
+        })
+        .where(eq(profiles.id, defaultProfile.id))
+        .run();
+    } catch (e) {
+      console.error("写 bazi_pillars 缓存失败", e);
+    }
+  }
 
-  // 落库
-  const [inserted] = await db
-    .insert(fortunes)
-    .values({
-      profile_id: profile.id,
-      fortune_date: dayPillar.date,
-      score_overall: scores.overall,
-      scores: serializeJson(scores.scores),
-      one_liner: oneLiner,
-      readings: serializeJson({ meta: scores.meta }),
-      attributes: serializeJson(attributes),
-      model: "static-fallback",
-      tokens_used: 0,
-    })
-    .returning();
+  // 7 维度评分 + 8 属性 + one-liner（用 6 维度 scorer 拿 meta 给 one-liner）
+  const daily7 = computeDaily7({
+    chart: {
+      dayMaster: chartV2.dayMaster,
+      fiveElements: chartV2.fiveElements,
+    },
+    day: today,
+  });
+  const attributes = computeAttributes(today);
+  const dailyV1 = computeDailyScores(
+    {
+      dayMaster: chartV2.dayMaster,
+      fiveElements: chartV2.fiveElements,
+    },
+    today,
+  );
+  const oneLiner = pickOneLiner(dailyV1);
+  const reading = buildReadingFallback(today.date, daily7.scores);
+
+  // upsert fortunes_daily
+  try {
+    db.insert(fortunesDaily)
+      .values({
+        profile_id: defaultProfile.id,
+        date: today.date,
+        overall: daily7.overall,
+        scores: JSON.stringify(daily7.scores),
+        one_liner: oneLiner,
+        attributes: JSON.stringify(attributes),
+        reading,
+        generated_at: sql`CURRENT_TIMESTAMP`,
+      })
+      .onConflictDoUpdate({
+        target: [fortunesDaily.profile_id, fortunesDaily.date],
+        set: {
+          overall: daily7.overall,
+          scores: JSON.stringify(daily7.scores),
+          one_liner: oneLiner,
+          attributes: JSON.stringify(attributes),
+          reading,
+          generated_at: sql`CURRENT_TIMESTAMP`,
+        },
+      })
+      .run();
+  } catch (e) {
+    console.error("upsert fortunes_daily 失败", e);
+  }
 
   return NextResponse.json({
-    fortune: hydrate(inserted ?? {
-      id: "tmp",
-      profile_id: profile.id,
-      fortune_date: dayPillar.date,
-      score_overall: scores.overall,
-      scores: serializeJson(scores.scores),
-      one_liner: oneLiner,
-      readings: serializeJson({ meta: scores.meta }),
-      attributes: serializeJson(attributes),
-      model: "static-fallback",
-      tokens_used: 0,
-      created_at: new Date().toISOString(),
-    }),
+    cached: false,
+    date: today.date,
+    overall: daily7.overall,
+    scores: daily7.scores,
+    attributes,
+    one_liner: oneLiner,
+    reading,
   });
-}
-
-interface FortuneRowLike {
-  id: string;
-  profile_id: string;
-  fortune_date: string;
-  score_overall: number | null;
-  scores: string | null;
-  one_liner: string | null;
-  readings: string | null;
-  attributes: string | null;
-  model: string | null;
-  tokens_used: number | null;
-  created_at: string;
-}
-
-function hydrate(row: FortuneRowLike) {
-  return {
-    id: row.id,
-    date: row.fortune_date,
-    overall: row.score_overall,
-    scores: parseJson(row.scores, {}),
-    oneLiner: row.one_liner,
-    readings: parseJson(row.readings, {}),
-    attributes: parseJson(row.attributes, {}),
-    model: row.model,
-    tokensUsed: row.tokens_used,
-  };
 }
