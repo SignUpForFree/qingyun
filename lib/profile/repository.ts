@@ -1,0 +1,165 @@
+import "server-only";
+import { and, asc, desc, eq } from "drizzle-orm";
+import { getDb } from "@/lib/db/client";
+import { profiles, type Profile } from "@/lib/db/schema";
+
+/**
+ * M1.9 多档案 Repository（spec §3.3 A3 / plan §M1.9）
+ *
+ * - 每个用户至少 1 个档案；默认档由 M1.7 OAuth callback 自动创建（占位数据），
+ *   M1.11 onboarding 覆盖。本模块负责后续的多档案 CRUD（增 / 查 / 改 / 删 / 切默认）。
+ * - is_default 业务约束「每个 user_id 至多 1 行 is_default = 1」由 setDefault 在事务内保证。
+ * - 删除默认档：拒绝（CannotDeleteDefaultProfileError）。用户必须先 PUT 另一档为默认。
+ * - 删除非默认档：profiles 行被删，FK 级联：
+ *     fortunes_daily / weekly / monthly  ON DELETE CASCADE
+ *     conversations.profile_id           ON DELETE SET NULL（保留聊天历史）
+ *     messages.profile_id_used           ON DELETE SET NULL
+ *
+ * 注意：drizzle better-sqlite3 的 transaction 是同步的，callback 不能返 Promise。
+ *       所以 atomic swap 用 db.transaction((tx) => { ... .run() ... })，
+ *       不要在 callback 内 await。
+ */
+
+export interface CreateProfileInput {
+  nickname: string;
+  avatar_url?: string;
+  gender: "male" | "female" | "other";
+  birth_date: string; // "YYYY-MM-DD"
+  birth_time: string; // "HH:mm"
+  birth_calendar?: "solar" | "lunar";
+  birth_place: string;
+  current_address?: string;
+}
+
+export type UpdateProfileInput = Partial<
+  CreateProfileInput & { is_default: boolean }
+>;
+
+export async function listProfiles(userId: string): Promise<Profile[]> {
+  const db = getDb();
+  // 默认档优先；同 is_default 下按 created_at 升序（旧档先列）
+  return db
+    .select()
+    .from(profiles)
+    .where(eq(profiles.user_id, userId))
+    .orderBy(desc(profiles.is_default), asc(profiles.created_at));
+}
+
+export async function createProfile(
+  userId: string,
+  input: CreateProfileInput,
+): Promise<Profile> {
+  const db = getDb();
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+
+  await db.insert(profiles).values({
+    id,
+    user_id: userId,
+    is_default: false, // 新增档案默认非默认；改默认走 updateProfile({ is_default: true })
+    nickname: input.nickname,
+    avatar_url: input.avatar_url,
+    gender: input.gender,
+    birth_date: input.birth_date,
+    birth_time: input.birth_time,
+    birth_calendar: input.birth_calendar ?? "solar",
+    birth_place: input.birth_place,
+    current_address: input.current_address,
+    created_at: now,
+    updated_at: now,
+  });
+
+  const [created] = await db
+    .select()
+    .from(profiles)
+    .where(eq(profiles.id, id))
+    .limit(1);
+  if (!created) {
+    // 极度罕见 — 插入成功但 select 不到（并发删除）
+    throw new Error("createProfile: failed to load created row");
+  }
+  return created;
+}
+
+export async function updateProfile(
+  userId: string,
+  profileId: string,
+  patch: UpdateProfileInput,
+): Promise<Profile> {
+  const db = getDb();
+  const [existing] = await db
+    .select()
+    .from(profiles)
+    .where(and(eq(profiles.id, profileId), eq(profiles.user_id, userId)))
+    .limit(1);
+  if (!existing) throw new ProfileNotFoundError();
+
+  const { is_default, ...rest } = patch;
+  const now = new Date().toISOString();
+
+  if (is_default === true) {
+    // Atomic default swap:
+    //   1. 把当前用户所有档 is_default=false
+    //   2. 把目标档 is_default=true 同时应用其他字段
+    // sync transaction（better-sqlite3）— 不能返回 Promise，每条 .run()。
+    db.transaction((tx) => {
+      tx.update(profiles)
+        .set({ is_default: false, updated_at: now })
+        .where(eq(profiles.user_id, userId))
+        .run();
+      tx.update(profiles)
+        .set({ ...rest, is_default: true, updated_at: now })
+        .where(and(eq(profiles.id, profileId), eq(profiles.user_id, userId)))
+        .run();
+    });
+  } else {
+    // 非默认切换的普通字段更新；is_default=false 不接受（避免误把唯一默认档清掉）
+    if (Object.keys(rest).length > 0) {
+      await db
+        .update(profiles)
+        .set({ ...rest, updated_at: now })
+        .where(and(eq(profiles.id, profileId), eq(profiles.user_id, userId)));
+    }
+  }
+
+  const [updated] = await db
+    .select()
+    .from(profiles)
+    .where(eq(profiles.id, profileId))
+    .limit(1);
+  if (!updated) throw new ProfileNotFoundError();
+  return updated;
+}
+
+export async function deleteProfile(
+  userId: string,
+  profileId: string,
+): Promise<void> {
+  const db = getDb();
+  const [target] = await db
+    .select()
+    .from(profiles)
+    .where(and(eq(profiles.id, profileId), eq(profiles.user_id, userId)))
+    .limit(1);
+  if (!target) throw new ProfileNotFoundError();
+  if (target.is_default) throw new CannotDeleteDefaultProfileError();
+
+  await db
+    .delete(profiles)
+    .where(and(eq(profiles.id, profileId), eq(profiles.user_id, userId)));
+  // FK 自动处理：fortunes_* CASCADE / conversations.profile_id 与 messages.profile_id_used SET NULL
+}
+
+export class ProfileNotFoundError extends Error {
+  constructor() {
+    super("profile not found");
+    this.name = "ProfileNotFoundError";
+  }
+}
+
+export class CannotDeleteDefaultProfileError extends Error {
+  constructor() {
+    super("cannot delete default profile");
+    this.name = "CannotDeleteDefaultProfileError";
+  }
+}
