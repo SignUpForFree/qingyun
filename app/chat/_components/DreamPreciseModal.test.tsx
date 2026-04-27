@@ -115,4 +115,32 @@ describe("DreamPreciseModal (M2.10)", () => {
     expect(dialog.getAttribute("aria-modal")).toBe("true");
     expect(dialog.getAttribute("aria-label")).toBe("精准解梦");
   });
+
+  // ============ M4.25 仪式特化 ============
+
+  it("整 modal 紫蓝夜空渐变背景", () => {
+    render(<DreamPreciseModal open onSubmit={vi.fn()} onClose={vi.fn()} />);
+    const modal = screen.getByTestId("dream-precise-modal");
+    // jsdom 把 #1a1535 转 rgb(26, 21, 53)
+    expect(modal.style.background).toContain("rgb(26, 21, 53)");
+  });
+
+  it("右上角渲染月亮 SVG", () => {
+    render(<DreamPreciseModal open onSubmit={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByTestId("dream-moon")).toBeInTheDocument();
+  });
+
+  it("散布星点 SVG（多个 star circle）", () => {
+    render(<DreamPreciseModal open onSubmit={vi.fn()} onClose={vi.fn()} />);
+    const stars = screen.getByTestId("dream-stars");
+    const circles = stars.querySelectorAll("circle");
+    // 至少 10 颗星
+    expect(circles.length).toBeGreaterThanOrEqual(10);
+  });
+
+  it("左下角红朱方框「梦」落款印章", () => {
+    render(<DreamPreciseModal open onSubmit={vi.fn()} onClose={vi.fn()} />);
+    const seal = screen.getByTestId("dream-seal");
+    expect(seal).toHaveTextContent("梦");
+  });
 });
