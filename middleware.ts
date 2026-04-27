@@ -23,6 +23,7 @@ const PUBLIC_PREFIXES = [
   "/legal/", // privacy / terms (M0.5)
   "/_next/", // Next internals
   "/favicon", // favicon.ico / .png
+  "/api/dev-login", // M3.14: dev/test-only 登录捷径（route 内 NODE_ENV gate）
 ];
 
 function isPublic(path: string): boolean {
