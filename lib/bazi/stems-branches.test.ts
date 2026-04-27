@@ -139,3 +139,107 @@ describe("生克循环闭合", () => {
     expect(Object.keys(KE_CYCLE)).toHaveLength(5);
   });
 });
+
+import {
+  JIAZI,
+  jiaziAt,
+  HIDDEN_STEMS,
+  mainHiddenStem,
+  stemHe,
+  isLiuHe,
+  isChong,
+  findSanHe,
+  findSanHui,
+} from "./stems-branches";
+
+describe("JIAZI 60 甲子 (M3.6)", () => {
+  it("枚举 60 项", () => {
+    expect(JIAZI).toHaveLength(60);
+  });
+
+  it("第 1 项 = 甲子", () => {
+    expect(JIAZI[0].name).toBe("甲子");
+    expect(JIAZI[0].stem).toBe("甲");
+    expect(JIAZI[0].branch).toBe("子");
+  });
+
+  it("第 60 项 = 癸亥", () => {
+    expect(JIAZI[59].name).toBe("癸亥");
+  });
+
+  it("天干循环 10 / 地支循环 12", () => {
+    expect(JIAZI[10].stem).toBe("甲"); // 第 11 项重新到甲
+    expect(JIAZI[12].branch).toBe("子"); // 第 13 项重新到子
+  });
+
+  it("jiaziAt(1) = 甲子, jiaziAt(60) = 癸亥, 越界抛错", () => {
+    expect(jiaziAt(1).name).toBe("甲子");
+    expect(jiaziAt(60).name).toBe("癸亥");
+    expect(() => jiaziAt(0)).toThrow();
+    expect(() => jiaziAt(61)).toThrow();
+  });
+});
+
+describe("HIDDEN_STEMS 藏干", () => {
+  it("子藏癸（仅本气）", () => {
+    expect(HIDDEN_STEMS.子).toEqual(["癸"]);
+  });
+
+  it("寅藏甲丙戊", () => {
+    expect(HIDDEN_STEMS.寅).toEqual(["甲", "丙", "戊"]);
+  });
+
+  it("申藏庚壬戊", () => {
+    expect(HIDDEN_STEMS.申).toEqual(["庚", "壬", "戊"]);
+  });
+
+  it("辰戌丑未（四库）各藏 3 个", () => {
+    expect(HIDDEN_STEMS.辰).toHaveLength(3);
+    expect(HIDDEN_STEMS.戌).toHaveLength(3);
+    expect(HIDDEN_STEMS.丑).toHaveLength(3);
+    expect(HIDDEN_STEMS.未).toHaveLength(3);
+  });
+
+  it("mainHiddenStem 取本气", () => {
+    expect(mainHiddenStem("寅")).toBe("甲");
+    expect(mainHiddenStem("申")).toBe("庚");
+    expect(mainHiddenStem("子")).toBe("癸");
+  });
+});
+
+describe("干合 / 支合 / 三合 / 三会 / 支冲", () => {
+  it("甲己合化土", () => {
+    expect(stemHe("甲", "己")).toBe("土");
+    expect(stemHe("己", "甲")).toBe("土");
+  });
+
+  it("乙庚合化金", () => {
+    expect(stemHe("乙", "庚")).toBe("金");
+  });
+
+  it("非合伴 → null", () => {
+    expect(stemHe("甲", "乙")).toBe(null);
+  });
+
+  it("子丑六合", () => {
+    expect(isLiuHe("子", "丑")).not.toBe(null);
+  });
+
+  it("子午冲", () => {
+    expect(isChong("子", "午")).toBe(true);
+    expect(isChong("子", "丑")).toBe(false);
+  });
+
+  it("申子辰三合化水", () => {
+    expect(findSanHe(["申", "子", "辰"])).toBe("水");
+    expect(findSanHe(["申", "子"])).toBe(null);
+  });
+
+  it("亥卯未三合化木", () => {
+    expect(findSanHe(["亥", "卯", "未"])).toBe("木");
+  });
+
+  it("寅卯辰三会化木", () => {
+    expect(findSanHui(["寅", "卯", "辰"])).toBe("木");
+  });
+});
