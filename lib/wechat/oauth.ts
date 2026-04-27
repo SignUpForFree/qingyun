@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { getEnv } from "@/lib/env";
+import { wechatFetch } from "./client";
 
 /**
  * 微信 OAuth 网页授权（snsapi_userinfo）—— state 签名 + authorize URL
@@ -82,4 +83,59 @@ export function buildAuthorizeUrl(nonce: string): string {
   url.searchParams.set("scope", "snsapi_userinfo");
   url.searchParams.set("state", signState(nonce));
   return url.toString() + "#wechat_redirect";
+}
+
+/**
+ * OAuth code → access_token（per-user，one-shot，2h TTL）
+ *
+ * 注意：这里的 access_token 是用户级、一次性的，与 M1.5 的全局 cgi-bin/token 不同
+ * （Defense #15）。不缓存。
+ *
+ * 常见 errcode：
+ *   - 40029: code been used / invalid（需重新走 OAuth）
+ *   - 40163: code reused
+ *   - 41008: missing code
+ * caller (M1.7) 用 /errcode (\d+)/ 匹配判定具体错误。
+ */
+export interface OAuthTokenResp {
+  access_token: string;
+  openid: string;
+  unionid?: string;
+  expires_in: number;
+  refresh_token?: string;
+}
+
+export async function exchangeCodeForToken(code: string): Promise<OAuthTokenResp> {
+  const env = getEnv();
+  const url = new URL("https://api.weixin.qq.com/sns/oauth2/access_token");
+  url.searchParams.set("appid", env.WECHAT_APPID);
+  url.searchParams.set("secret", env.WECHAT_APPSECRET);
+  url.searchParams.set("code", code);
+  url.searchParams.set("grant_type", "authorization_code");
+  return wechatFetch<OAuthTokenResp>(url.toString());
+}
+
+/**
+ * 拉取用户 userinfo（snsapi_userinfo scope）。
+ *
+ * sex/province/city/country 是可选的，部分用户隐私设置会隐藏。
+ * unionid 仅当公众号绑定开放平台时返回。
+ */
+export interface UserinfoResp {
+  openid: string;
+  nickname: string;
+  headimgurl: string;
+  unionid?: string;
+  sex?: number;
+  province?: string;
+  city?: string;
+  country?: string;
+}
+
+export async function fetchUserinfo(accessToken: string, openid: string): Promise<UserinfoResp> {
+  const url = new URL("https://api.weixin.qq.com/sns/userinfo");
+  url.searchParams.set("access_token", accessToken);
+  url.searchParams.set("openid", openid);
+  url.searchParams.set("lang", "zh_CN");
+  return wechatFetch<UserinfoResp>(url.toString());
 }

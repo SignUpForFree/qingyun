@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { signState, verifyState, buildAuthorizeUrl } from "./oauth";
+import { signState, verifyState, buildAuthorizeUrl, exchangeCodeForToken, fetchUserinfo } from "./oauth";
 import { resetEnvCache } from "@/lib/env";
 
 const ENV_BASELINE = {
@@ -102,5 +102,84 @@ describe("buildAuthorizeUrl", () => {
     const stateB = new URL(b.replace(/#.*$/, "")).searchParams.get("state")!;
     // timestamp differs → signature differs → states differ
     expect(stateA).not.toBe(stateB);
+  });
+});
+
+describe("exchangeCodeForToken", () => {
+  let originalFetch: typeof globalThis.fetch;
+  beforeEach(() => { originalFetch = globalThis.fetch; });
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it("calls correct endpoint with required params", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ access_token: "at", openid: "ox", expires_in: 7200 }),
+    });
+    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
+    const r = await exchangeCodeForToken("CODE-x");
+    expect(r.access_token).toBe("at");
+    expect(r.openid).toBe("ox");
+    expect(r.expires_in).toBe(7200);
+    const calledUrl = String(fetchMock.mock.calls[0][0]);
+    expect(calledUrl).toContain("api.weixin.qq.com/sns/oauth2/access_token");
+    expect(calledUrl).toContain("appid=wx-test-appid");
+    expect(calledUrl).toContain("secret=secret-x");
+    expect(calledUrl).toContain("code=CODE-x");
+    expect(calledUrl).toContain("grant_type=authorization_code");
+  });
+
+  it("throws on errcode 40029 (code reused)", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ errcode: 40029, errmsg: "code been used" }),
+    }) as unknown as typeof globalThis.fetch;
+    await expect(exchangeCodeForToken("CODE-x")).rejects.toThrow(/40029/);
+  });
+
+  it("throws on http 503", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false, status: 503, json: async () => ({}),
+    }) as unknown as typeof globalThis.fetch;
+    await expect(exchangeCodeForToken("CODE-x")).rejects.toThrow(/503/);
+  });
+});
+
+describe("fetchUserinfo", () => {
+  let originalFetch: typeof globalThis.fetch;
+  beforeEach(() => { originalFetch = globalThis.fetch; });
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it("calls correct endpoint with access_token + openid + lang=zh_CN", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ openid: "ox", nickname: "测试用户", headimgurl: "https://example.com/avatar.jpg" }),
+    });
+    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
+    const r = await fetchUserinfo("AT", "OX");
+    expect(r.openid).toBe("ox");
+    expect(r.nickname).toBe("测试用户");
+    expect(r.headimgurl).toBe("https://example.com/avatar.jpg");
+    const calledUrl = String(fetchMock.mock.calls[0][0]);
+    expect(calledUrl).toContain("api.weixin.qq.com/sns/userinfo");
+    expect(calledUrl).toContain("access_token=AT");
+    expect(calledUrl).toContain("openid=OX");
+    expect(calledUrl).toContain("lang=zh_CN");
+  });
+
+  it("throws on errcode 40003 (invalid openid)", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ errcode: 40003, errmsg: "invalid openid" }),
+    }) as unknown as typeof globalThis.fetch;
+    await expect(fetchUserinfo("AT", "X")).rejects.toThrow(/40003/);
+  });
+
+  it("includes optional unionid when present", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ openid: "ox", nickname: "n", headimgurl: "h", unionid: "uu" }),
+    }) as unknown as typeof globalThis.fetch;
+    const r = await fetchUserinfo("AT", "OX");
+    expect(r.unionid).toBe("uu");
   });
 });
