@@ -40,6 +40,7 @@ export function Step1Identity({
       title={editing ? "编辑档案" : "你是谁"}
       desc={editing ? "改任意一项后到 Step 3 提交，会替换默认档案" : "先认识一下，简单两步"}
       nextDisabled={!valid}
+      centerContent
       onNext={() => {
         if (!valid || !gender) return;
         onNext({ nickname: nickname.trim(), gender });
@@ -69,8 +70,18 @@ export function Step1Identity({
       </div>
 
       <div className="space-y-2">
-        <Label>性别（影响大运排法）</Label>
-        <div className="grid grid-cols-2 gap-2">
+        <Label id="gender-label">性别（影响大运排法）</Label>
+        <div
+          role="radiogroup"
+          aria-labelledby="gender-label"
+          className="grid grid-cols-2 gap-2"
+          onKeyDown={(e) => {
+            if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+              e.preventDefault();
+              setGender(gender === "male" ? "female" : "male");
+            }
+          }}
+        >
           <GenderTile
             label="男"
             active={gender === "male"}
@@ -99,9 +110,13 @@ function GenderTile({
   return (
     <button
       type="button"
+      role="radio"
+      aria-checked={active}
+      tabIndex={active ? 0 : -1}
       onClick={onClick}
       className={cn(
         "h-12 rounded-[8px] border text-sm transition-all duration-300",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-lavender)]",
         active
           ? "border-transparent bg-gradient-to-br from-[#F0B8C8]/40 to-[#C9A1D9]/40 text-[var(--color-ink-plum)] shadow-pill"
           : "border-[var(--color-accent-lavender)]/30 bg-white/40 text-[var(--color-ink-mist)] hover:bg-white/60",

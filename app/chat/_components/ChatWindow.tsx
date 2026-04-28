@@ -77,7 +77,20 @@ export function ChatWindow({
   const [streaming, setStreaming] = React.useState<string | null>(null);
   const [progressHint, setProgressHint] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
-  const [drawerOpen, setDrawerOpen] = React.useState<boolean>(Boolean(openHistoryOnMount));
+  const [drawerOpen, setDrawerOpenRaw] = React.useState<boolean>(Boolean(openHistoryOnMount));
+  // 抽屉关闭时把焦点恢复到打开它的元素（AppHeader 那个真触发器或 ?openHistory= 入口）
+  const prevFocusRef = React.useRef<HTMLElement | null>(null);
+  const setDrawerOpen = React.useCallback((next: boolean) => {
+    if (next) {
+      prevFocusRef.current = (document.activeElement as HTMLElement | null) ?? null;
+    } else if (prevFocusRef.current) {
+      // requestAnimationFrame 让 Radix close transition 跑完再 focus，避免被覆盖
+      const target = prevFocusRef.current;
+      requestAnimationFrame(() => target.focus());
+      prevFocusRef.current = null;
+    }
+    setDrawerOpenRaw(next);
+  }, []);
   /** M4.9: dream precise modal 仪式特化 fullscreen */
   const [dreamModalOpen, setDreamModalOpen] = React.useState(false);
   const dreamModalSeenRef = React.useRef<Set<string>>(new Set());
@@ -128,14 +141,15 @@ export function ChatWindow({
           signal: abortRef.current.signal,
         });
       } catch (e) {
-        toast.error(`网络异常：${e instanceof Error ? e.message : "请稍后再试"}`);
+        if (process.env.NODE_ENV !== "production") console.error("/api/chat fetch failed", e);
+        toast.error("网络一时不通，稍候再试");
         setStreaming(null);
         return;
       }
 
       if (!res.ok || !res.body) {
-        // 优先读 errorCard（M2.28），fallback 文本
-        let friendly = `AI 暂时无响应 (${res.status})`;
+        // 优先读 errorCard / error 字段，剩下统一温柔兜底
+        let friendly = "轻运一时走神，请再说一次";
         try {
           const j = (await res.clone().json()) as {
             errorCard?: { message?: string };
@@ -144,8 +158,10 @@ export function ChatWindow({
           if (j.errorCard?.message) friendly = j.errorCard.message;
           else if (j.error) friendly = j.error;
         } catch {
-          const errBody = await res.text().catch(() => "");
-          if (errBody) friendly += "：" + errBody.slice(0, 80);
+          /* 静默 — 不把 raw text 暴露给用户 */
+        }
+        if (process.env.NODE_ENV !== "production") {
+          console.warn(`/api/chat ${res.status}`);
         }
         toast.error(friendly);
         setStreaming(null);
@@ -226,14 +242,15 @@ export function ChatWindow({
               const msg =
                 typeof data === "string"
                   ? data
-                  : (data?.message ?? "AI 出错");
+                  : (data?.message ?? "轻运一时走神，请再说一次");
               toast.error(msg);
             }
           }
         }
       } catch (e) {
         if ((e as Error).name !== "AbortError") {
-          toast.error("流式中断，请重新发送");
+          if (process.env.NODE_ENV !== "production") console.error("chat sse aborted", e);
+          toast.error("信号断了，请再发一次");
         }
       } finally {
         cancelPendingFlush();
@@ -277,18 +294,21 @@ export function ChatWindow({
           body: JSON.stringify(body),
         });
       } catch (e) {
-        toast.error(`${label}失败：${e instanceof Error ? e.message : "网络异常"}`);
+        if (process.env.NODE_ENV !== "production") console.error(`${label} fetch failed`, e);
+        toast.error("网络一时不通，稍候再试");
         setBusy(false);
         return;
       }
       if (!res.ok) {
-        let friendly = `${label}失败 (${res.status})`;
+        let friendly = `${label}一时走神，请再试一次`;
         try {
           const j = (await res.clone().json()) as { error?: string };
-          if (j.error) friendly = `${label}：${j.error}`;
+          if (j.error) friendly = j.error;
         } catch {
-          const t = await res.text().catch(() => "");
-          if (t) friendly += "：" + t.slice(0, 80);
+          /* 静默 — 不把 raw text 给用户看 */
+        }
+        if (process.env.NODE_ENV !== "production") {
+          console.warn(`${label} ${res.status}`);
         }
         toast.error(friendly);
         setBusy(false);
@@ -359,14 +379,15 @@ export function ChatWindow({
                 const msg =
                   typeof data === "string"
                     ? data
-                    : (data?.message ?? `${label}出错`);
+                    : (data?.message ?? `${label}一时走神，请再试一次`);
                 toast.error(msg);
               }
             }
           }
         } catch (e) {
           if ((e as Error).name !== "AbortError") {
-            toast.error(`${label}流式中断，请重试`);
+            if (process.env.NODE_ENV !== "production") console.error(`${label} sse aborted`, e);
+            toast.error("信号断了，请再试一次");
           }
         } finally {
           if (rafId !== null) cancelAnimationFrame(rafId);
@@ -396,7 +417,7 @@ export function ChatWindow({
       try {
         data = (await res.json()) as SubActionJsonResponse;
       } catch {
-        toast.error(`${label}返回格式异常`);
+        toast.error(`${label}一时走神，请再试一次`);
         setBusy(false);
         return;
       }

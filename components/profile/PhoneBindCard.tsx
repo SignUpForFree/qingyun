@@ -98,7 +98,14 @@ export function PhoneBindCard({ currentPhone, onBound }: PhoneBindCardProps) {
   }
 
   return (
-    <GlassCard className="space-y-4 p-5" data-testid="phone-bind-card">
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void bindPhone();
+      }}
+      data-testid="phone-bind-card"
+    >
+      <GlassCard className="space-y-4 p-5">
       <header className="flex items-center justify-center gap-2">
         <Sparkle size={9} variant="asterisk" />
         <h2 className="font-[family-name:var(--font-serif)] text-[14px] tracking-ritual2 text-[var(--color-ink-plum)]">
@@ -159,9 +166,8 @@ export function PhoneBindCard({ currentPhone, onBound }: PhoneBindCardProps) {
       </div>
 
       <Button
-        type="button"
+        type="submit"
         disabled={!phoneValid || !codeValid || verifying}
-        onClick={bindPhone}
         className="h-12 w-full rounded-[14px] bg-gradient-to-r from-[#F0B8C8] to-[#C9A1D9] font-[family-name:var(--font-serif)] text-[15px] tracking-ritual text-white shadow-pill hover:opacity-90 disabled:opacity-50"
         data-testid="phone-bind-submit"
       >
@@ -171,6 +177,7 @@ export function PhoneBindCard({ currentPhone, onBound }: PhoneBindCardProps) {
       <p className="text-center text-[10px] leading-relaxed text-[var(--color-ink-fade)]">
         手机号仅用于账号找回 · 不会用于营销 · 也不会展示给其他用户
       </p>
-    </GlassCard>
+      </GlassCard>
+    </form>
   );
 }

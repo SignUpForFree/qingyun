@@ -620,8 +620,13 @@ function TextBubble({
           {streaming && (
             <span
               aria-hidden
-              className="ml-0.5 inline-block h-3.5 w-[2px] translate-y-0.5 animate-pulse bg-[var(--color-accent-lavender)] align-middle"
-            />
+              className={cn(
+                "ml-1 inline-flex h-3.5 w-3.5 translate-y-[1px] items-center justify-center align-middle",
+                "animate-pulse text-[13px] leading-none text-[var(--color-accent-lavender)]",
+              )}
+            >
+              ✦
+            </span>
           )}
         </div>
       </div>

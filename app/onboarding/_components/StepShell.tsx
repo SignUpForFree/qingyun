@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { GlassCard, Sparkle, WatercolorDot } from "@/components/su";
+import { cn } from "@/lib/utils";
 import { StepIndicator } from "./StepIndicator";
 
 interface StepShellProps {
@@ -18,6 +19,8 @@ interface StepShellProps {
   /** 跳过精准时间等次链接（design §2 第 198 行） */
   skipLabel?: string;
   onSkip?: () => void;
+  /** 内容垂直居中（step1 内容少时用，step2/3 用默认顶部对齐自然撑开） */
+  centerContent?: boolean;
 }
 
 /**
@@ -43,6 +46,7 @@ export function StepShell({
   loading,
   skipLabel,
   onSkip,
+  centerContent,
 }: StepShellProps) {
   return (
     <div
@@ -93,7 +97,14 @@ export function StepShell({
             </div>
           </header>
 
-          <div className="flex flex-col gap-4">{children}</div>
+          <div
+            className={cn(
+              "flex flex-col gap-4",
+              centerContent && "my-auto",
+            )}
+          >
+            {children}
+          </div>
 
           <footer className="mt-auto space-y-2">
             <div className="flex gap-2">

@@ -65,7 +65,7 @@ export function PhoneLoginForm({ redirectTo }: PhoneLoginFormProps) {
           setCooldown(sec);
           return;
         }
-        toast.error(err?.error ?? `发送失败 (${res.status})`);
+        toast.error(err?.error ?? "验证码送不出去，稍候再试");
         return;
       }
       const ok = (await res.json().catch(() => ({}))) as { mock?: boolean };
@@ -76,7 +76,8 @@ export function PhoneLoginForm({ redirectTo }: PhoneLoginFormProps) {
       );
       setCooldown(60);
     } catch (e) {
-      toast.error(`网络异常：${e instanceof Error ? e.message : "未知错误"}`);
+      if (process.env.NODE_ENV !== "production") console.error("phone login fetch failed", e);
+      toast.error("网络一时不通，稍候再试");
     } finally {
       setSending(false);
     }
@@ -102,7 +103,7 @@ export function PhoneLoginForm({ redirectTo }: PhoneLoginFormProps) {
               ? "验证码不对"
               : reason === "too_many_attempts"
                 ? "尝试次数过多，请重新发送"
-                : reason ?? `登录失败 (${res.status})`;
+                : reason ?? "登录一时不通，请再试一次";
         toast.error(msg);
         return;
       }
@@ -111,14 +112,22 @@ export function PhoneLoginForm({ redirectTo }: PhoneLoginFormProps) {
       const target = data.isNew ? "/onboarding" : redirectTo ?? "/";
       router.replace(target);
     } catch (e) {
-      toast.error(`网络异常：${e instanceof Error ? e.message : "未知错误"}`);
+      if (process.env.NODE_ENV !== "production") console.error("phone login fetch failed", e);
+      toast.error("网络一时不通，稍候再试");
     } finally {
       setVerifying(false);
     }
   }
 
   return (
-    <GlassCard className="space-y-4 p-5" data-testid="phone-login-form">
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void login();
+      }}
+      data-testid="phone-login-form"
+    >
+      <GlassCard className="space-y-4 p-5">
       <header className="flex items-center justify-center gap-2">
         <Sparkle size={9} variant="asterisk" />
         <h2 className="font-[family-name:var(--font-serif)] text-[14px] tracking-ritual2 text-[var(--color-ink-plum)]">
@@ -173,9 +182,8 @@ export function PhoneLoginForm({ redirectTo }: PhoneLoginFormProps) {
       </div>
 
       <Button
-        type="button"
+        type="submit"
         disabled={!phoneValid || !codeValid || verifying}
-        onClick={login}
         className="h-12 w-full rounded-[14px] bg-gradient-to-r from-[#F0B8C8] to-[#C9A1D9] font-[family-name:var(--font-serif)] text-[15px] tracking-ritual text-white shadow-pill hover:opacity-90 disabled:opacity-50"
         data-testid="login-submit"
       >
@@ -187,6 +195,7 @@ export function PhoneLoginForm({ redirectTo }: PhoneLoginFormProps) {
         <br />
         微信内打开走微信授权，浏览器走手机号验证码
       </p>
-    </GlassCard>
+      </GlassCard>
+    </form>
   );
 }

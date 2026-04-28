@@ -53,6 +53,9 @@ export const viewport: Viewport = {
   // a11y：允许用户缩放（视障用户 + lighthouse 要求 maximumScale≥5 / userScalable=true）
   maximumScale: 5,
   userScalable: true,
+  // iPhone safe-area：让 env(safe-area-inset-*) 实际生效（cover 让 viewport
+  // 延伸到刘海/Home Bar 边缘，再用 padding 让内容退避）
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

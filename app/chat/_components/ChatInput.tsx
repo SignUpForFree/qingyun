@@ -4,6 +4,7 @@ import * as React from "react";
 import { Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
+import { useVisualViewportInset } from "@/lib/util/use-visual-viewport-inset";
 import { IntentChips } from "./IntentChips";
 
 interface ChatInputProps {
@@ -43,6 +44,7 @@ export function ChatInput({
 }: ChatInputProps) {
   const [text, setText] = React.useState(initialText ?? "");
   const taRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const keyboardInset = useVisualViewportInset();
 
   // 简易自适应高度
   React.useEffect(() => {
@@ -74,11 +76,15 @@ export function ChatInput({
       className={cn(
         "sticky bottom-0 z-20 flex flex-col gap-1 px-0 py-0",
         "border-t border-[var(--color-accent-lavender)]/30",
+        // iOS Home Bar / 刘海 — 让 sticky 底栏始终多出一段安全区
+        "pb-[env(safe-area-inset-bottom,0px)]",
         solid
           ? "bg-[var(--color-bg-paper)]"
           : "glass hairline",
         busy && "opacity-70",
       )}
+      // iOS Safari 键盘弹起时 visualViewport 收缩 → 把 sticky 整体顶上去
+      style={keyboardInset > 0 ? { transform: `translateY(-${keyboardInset}px)` } : undefined}
     >
       {progressHint && (
         <p
