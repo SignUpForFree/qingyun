@@ -216,8 +216,8 @@ interface MenuItem {
 }
 
 const MENU: ReadonlyArray<MenuItem> = [
-  { label: "编辑档案", href: "/onboarding" },
-  { label: "多档案管理", href: "/me/profiles", disabled: true, note: "M4 实装" },
+  { label: "编辑档案", href: "/me/edit" },
+  { label: "多档案管理", href: "/me/profiles" },
   { label: "隐私政策", href: "/legal/privacy" },
   { label: "用户协议", href: "/legal/terms" },
 ];
