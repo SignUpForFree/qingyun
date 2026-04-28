@@ -55,10 +55,11 @@ describe("MeihuaResultCard (M2.13)", () => {
     expect(elContent).toContain("兑");
   });
 
-  it("渲染动爻 + 应期 + 时辰", () => {
+  it("渲染动爻 + 应期 + 时辰（动爻数字 → 中文）", () => {
     render(<MeihuaResultCard {...baseProps} />);
     const text = document.body.textContent ?? "";
-    expect(text).toContain("3");
+    // dongYao=3 → "三" 爻
+    expect(text).toContain("第 三 爻");
     expect(text).toContain("三日内");
     expect(text).toContain("卯时");
   });

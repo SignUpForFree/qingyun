@@ -1,4 +1,4 @@
-import { GlassCard, Sparkle, Divider } from "@/components/su";
+import { GlassCard, Sparkle } from "@/components/su";
 import { cn } from "@/lib/utils";
 
 /**
@@ -67,6 +67,11 @@ interface MeihuaResultCardProps {
   className?: string;
 }
 
+// 动爻数字→中文（design mockup "第 二 爻"）
+const YAO_CN: Record<number, string> = {
+  1: "一", 2: "二", 3: "三", 4: "四", 5: "五", 6: "六",
+};
+
 export function MeihuaResultCard({
   ben,
   hu,
@@ -81,51 +86,92 @@ export function MeihuaResultCard({
   branchHour,
   className,
 }: MeihuaResultCardProps) {
+  const tiWx = TRIGRAM_WUXING[ti] ?? "?";
+  const yongWx = TRIGRAM_WUXING[yong] ?? "?";
+  const yaoCn = YAO_CN[dongYao] ?? String(dongYao);
+
   return (
-    <GlassCard className={cn("space-y-4 p-5", className)}>
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-[10px] tracking-ritual2 text-[var(--color-ink-fade)]">
-          梅 花 易 数 · V 1.0
-        </span>
-        <span
-          className={cn(
-            "rounded-full px-3 py-1 text-[11px] tracking-ritual2 text-[var(--color-ink-plum)]",
-            "border border-[var(--color-accent-lavender)]/40",
-            relationChipBg(relation),
-          )}
+    <GlassCard
+      className={cn("space-y-4 p-5", className)}
+      data-testid="meihua-result-card"
+    >
+      {/* TITLE：✧ 你 抽 到 的 梅 花 卦 ✧（mockup m-title） */}
+      <div className="flex items-center justify-center gap-2">
+        <Sparkle size={10} variant="asterisk" />
+        <h2
+          className="font-[family-name:var(--font-serif)] text-[16px] tracking-ritual2 text-[var(--color-ink-plum)]"
+          data-testid="meihua-title"
         >
-          {verdict}
-        </span>
-        <Sparkle size={10} variant="diamond" />
+          你 抽 到 的 梅 花 卦
+        </h2>
+        <Sparkle size={10} variant="asterisk" />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      {/* 4 卦 grid */}
+      <div className="grid grid-cols-2 gap-3" data-testid="meihua-grid">
         <Cell label="本 卦" view={ben} />
         <Cell label="互 卦" view={hu} />
         <Cell label="变 卦" view={bian} />
         <Cell label="卦 中 卦" view={guaZhongGua} />
       </div>
 
-      <Divider />
+      {/* ✦ Divider */}
+      <div className="flex items-center justify-center gap-2">
+        <span
+          aria-hidden
+          className="h-px flex-1 bg-gradient-to-r from-transparent via-[var(--color-accent-lavender)]/30 to-transparent"
+        />
+        <Sparkle size={10} variant="diamond" />
+        <span
+          aria-hidden
+          className="h-px flex-1 bg-gradient-to-r from-transparent via-[var(--color-accent-lavender)]/30 to-transparent"
+        />
+      </div>
 
-      <div className="space-y-1.5 text-center text-[12px] text-[var(--color-ink-mist)]">
+      {/* META rows（动爻 / 体·上卦 / 用·下卦），mockup 风格 */}
+      <div className="space-y-1.5 text-center text-[12px]" data-testid="meihua-meta">
         <p>
-          体 ={" "}
-          <span className="tracking-ritual text-[var(--color-accent-plum)]">
-            {ti}（{TRIGRAM_WUXING[ti] ?? "?"}）
-          </span>
-          ，用 ={" "}
-          <span className="tracking-ritual text-[var(--color-accent-plum)]">
-            {yong}（{TRIGRAM_WUXING[yong] ?? "?"}）
+          <span className="tracking-ritual2 text-[var(--color-ink-fade)]">动 爻</span>{" "}
+          <span className="font-[family-name:var(--font-serif)] text-[var(--color-ink-plum)]">
+            第 {yaoCn} 爻
           </span>
         </p>
         <p>
-          动 爻 第{" "}
-          <span className="num-mono text-[var(--color-ink-plum)]">{dongYao}</span> 爻 ·
-          应 期 {timeHint}
-          {branchHour ? ` · ${branchHour}` : ""}
+          <span className="tracking-ritual2 text-[var(--color-ink-fade)]">体 · 上卦</span>{" "}
+          <span className="font-[family-name:var(--font-serif)] text-[var(--color-accent-plum)]">
+            {ti}（{tiWx}）
+          </span>
+          <span className="mx-2 text-[var(--color-ink-fade)]">·</span>
+          <span className="tracking-ritual2 text-[var(--color-ink-fade)]">用 · 下卦</span>{" "}
+          <span className="font-[family-name:var(--font-serif)] text-[var(--color-accent-plum)]">
+            {yong}（{yongWx}）
+          </span>
         </p>
       </div>
+
+      {/* VERDICT 居中（mockup m-verdict-wrap） */}
+      <div className="flex justify-center">
+        <span
+          className={cn(
+            "rounded-full px-4 py-1.5 font-[family-name:var(--font-serif)] text-[13px] tracking-ritual text-[var(--color-ink-plum)]",
+            "border border-[var(--color-accent-lavender)]/40 shadow-[0_2px_8px_rgba(200,170,220,0.15)]",
+            relationChipBg(relation),
+          )}
+          data-testid="meihua-verdict"
+        >
+          {verdict}
+        </span>
+      </div>
+
+      {/* TIMING ☷ 应期 */}
+      <p
+        className="text-center text-[11px] tracking-ritual2 text-[var(--color-ink-mist)]"
+        data-testid="meihua-timing"
+      >
+        <span className="mr-1.5 text-[var(--color-accent-lavender)]">☷</span>
+        应 期 · {timeHint}
+        {branchHour ? ` · ${branchHour}` : ""}
+      </p>
     </GlassCard>
   );
 }
