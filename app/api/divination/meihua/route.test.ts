@@ -130,7 +130,7 @@ describe("POST /api/divination/meihua — Branch A (list profiles)", () => {
     expect(j.card.metadata).toContain("bazi_quick_form");
   });
 
-  it("有 profile → profile_picker 卡", async () => {
+  it("仅 1 个 profile → 跳过 picker 直接 number_input（fast-path）", async () => {
     const { getDb } = await import("@/lib/db/client");
     (getDb as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue(
       makeFakeDb({ profiles: [PROFILE_ROW] }),
@@ -143,9 +143,34 @@ describe("POST /api/divination/meihua — Branch A (list profiles)", () => {
       }),
     );
     expect(r.status).toBe(200);
+    const j = (await r.json()) as {
+      step: string;
+      profileId?: string;
+      card: { metadata: string };
+    };
+    expect(j.step).toBe("number_input");
+    expect(j.profileId).toBe(PROFILE_ROW.id);
+    expect(j.card.metadata).toContain("meihua_number_input");
+  });
+
+  it("2+ profile → profile_picker 卡（A3 显式选择）", async () => {
+    const { getDb } = await import("@/lib/db/client");
+    const second = { ...PROFILE_ROW, id: "p-2", nickname: "我爸" };
+    (getDb as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue(
+      makeFakeDb({ profiles: [PROFILE_ROW, second] }),
+    );
+    const r = await POST(
+      new Request("http://test", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ conversationId: "conv-1" }),
+      }),
+    );
+    expect(r.status).toBe(200);
     const j = (await r.json()) as { step: string; card: { metadata: string } };
     expect(j.step).toBe("profile_picker");
     expect(j.card.metadata).toContain("profile_picker");
+    expect(j.card.metadata).toContain('"intent":"meihua"');
   });
 });
 

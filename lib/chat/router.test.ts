@@ -84,23 +84,49 @@ describe("buildGuideCard (M2.15 dispatch)", () => {
   });
 });
 
+// router 现在用 listUserProfiles（.from().where() 不带 .limit）
+function mockProfiles(rows: typeof profilesFixture) {
+  dbMock.select.mockImplementation(() => ({
+    from: vi.fn().mockReturnValue({
+      where: vi.fn().mockResolvedValue(rows),
+    }),
+  }));
+}
+
 describe("buildGuideCard intent=bazi - profile branches", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it("无任何 profile → bazi_quick_form", async () => {
-    profilesFixture = [];
-    dbMock.select.mockImplementation(() => ({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([]),
-        }),
-      }),
-    }));
-
+    mockProfiles([]);
     const card = await buildGuideCard("bazi", "u-1", "c-1");
     expect(card.meta.ui).toBe("bazi_quick_form");
+  });
+
+  it("仅 1 个 profile → 跳过 picker 直接 bazi_focus_picker", async () => {
+    mockProfiles([
+      {
+        id: "p-1",
+        nickname: "我",
+        isDefault: true,
+        gender: "male",
+        birthDate: "1990-01-01",
+      },
+    ]);
+    const card = await buildGuideCard("bazi", "u-1", "c-1");
+    expect(card.meta.ui).toBe("bazi_focus_picker");
+    expect(card.meta.profileId).toBe("p-1");
+  });
+
+  it("2+ profile → profile_picker 含 intent=bazi", async () => {
+    mockProfiles([
+      { id: "p-1", nickname: "我", isDefault: true, gender: "male", birthDate: null },
+      { id: "p-2", nickname: "我妈", isDefault: false, gender: "female", birthDate: null },
+    ]);
+    const card = await buildGuideCard("bazi", "u-1", "c-1");
+    expect(card.meta.ui).toBe("profile_picker");
+    expect(card.meta.intent).toBe("bazi");
   });
 });
 
@@ -110,16 +136,34 @@ describe("buildGuideCard intent=meihua - profile branches", () => {
   });
 
   it("无任何 profile → bazi_quick_form (引导先建档)", async () => {
-    dbMock.select.mockImplementation(() => ({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([]),
-        }),
-      }),
-    }));
-
+    mockProfiles([]);
     const card = await buildGuideCard("meihua", "u-1", "c-1");
     expect(card.meta.ui).toBe("bazi_quick_form");
+  });
+
+  it("仅 1 个 profile → 跳过 picker 直接 meihua_number_input", async () => {
+    mockProfiles([
+      {
+        id: "p-1",
+        nickname: "我",
+        isDefault: true,
+        gender: "male",
+        birthDate: "1990-01-01",
+      },
+    ]);
+    const card = await buildGuideCard("meihua", "u-1", "c-1");
+    expect(card.meta.ui).toBe("meihua_number_input");
+    expect(card.meta.profileId).toBe("p-1");
+  });
+
+  it("2+ profile → profile_picker 含 intent=meihua", async () => {
+    mockProfiles([
+      { id: "p-1", nickname: "我", isDefault: true, gender: "male", birthDate: null },
+      { id: "p-2", nickname: "我爸", isDefault: false, gender: "male", birthDate: null },
+    ]);
+    const card = await buildGuideCard("meihua", "u-1", "c-1");
+    expect(card.meta.ui).toBe("profile_picker");
+    expect(card.meta.intent).toBe("meihua");
   });
 });
 

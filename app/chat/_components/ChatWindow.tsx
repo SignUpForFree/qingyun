@@ -366,9 +366,48 @@ export function ChatWindow({
             metadata: JSON.stringify({ ui: "meihua_number_input" }),
           },
         ]);
+      } else if (ui === "profile_picker") {
+        if (!convId) {
+          toast.error("会话尚未建立，请先与轻运打个招呼");
+          return;
+        }
+        // 从 message.metadata 读 intent 决定下一步走 bazi 还是 meihua
+        const msg = messages.find((m) => m.id === msgId);
+        let intent: "bazi" | "meihua" = "bazi";
+        if (msg?.metadata) {
+          try {
+            const meta = JSON.parse(msg.metadata) as { intent?: string };
+            if (meta.intent === "meihua") intent = "meihua";
+          } catch {
+            /* 忽略，按默认 bazi 兜底 */
+          }
+        }
+        const profileId = key;
+        void (async () => {
+          try {
+            await fetch("/api/chat/set-profile", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ conversationId: convId, profileId }),
+            });
+          } catch {
+            // set-profile 仅做记忆，失败不阻塞下一步
+          }
+          if (intent === "meihua") {
+            await postSubAction("/api/divination/meihua", "梅花", {
+              conversationId: convId,
+              profileId,
+            });
+          } else {
+            await postSubAction("/api/divination/bazi", "八字", {
+              conversationId: convId,
+              profileId,
+            });
+          }
+        })();
       }
     },
-    [convId, postSubAction],
+    [convId, postSubAction, messages],
   );
 
   const handleCardSubmit = React.useCallback(

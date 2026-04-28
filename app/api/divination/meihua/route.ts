@@ -114,8 +114,39 @@ export async function POST(req: Request) {
       });
     }
 
+    // 单档案 fast-path：直接进报数环节
+    if (userProfiles.length === 1) {
+      const onlyId = userProfiles[0]!.id;
+      const cardMeta = {
+        ui: "meihua_number_input" as const,
+        profileId: onlyId,
+        numberCount: 3,
+      };
+      const [card] = await db
+        .insert(messages)
+        .values({
+          conversation_id: data.conversationId,
+          role: "assistant",
+          content: "请报 3 个 1-999 之间的随机数（也可只报 1-2 个）",
+          intent: "meihua",
+          metadata: serializeJson(cardMeta),
+        })
+        .returning();
+      return Response.json({
+        step: "number_input",
+        profileId: onlyId,
+        card: {
+          id: card?.id,
+          role: "assistant",
+          content: "请报 3 个 1-999 之间的随机数（也可只报 1-2 个）",
+          metadata: serializeJson(cardMeta),
+        },
+      });
+    }
+
     const cardMeta = {
       ui: "profile_picker" as const,
+      intent: "meihua" as const,
       profiles: userProfiles.map((p) => ({
         id: p.id,
         nickname: p.nickname,

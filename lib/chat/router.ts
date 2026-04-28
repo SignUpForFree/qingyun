@@ -40,18 +40,7 @@ const SLIP_TYPE_OPTIONS = [
 
 const BAZI_FOCUS_OPTIONS = SLIP_TYPE_OPTIONS;
 
-/** 用户是否有任意 profile（A3 模式：八字/梅花需要显式选） */
-async function userHasAnyProfile(userId: string): Promise<boolean> {
-  const db = getDb();
-  const hit = await db
-    .select({ id: profiles.id })
-    .from(profiles)
-    .where(eq(profiles.user_id, userId))
-    .limit(1);
-  return Boolean(hit[0]);
-}
-
-/** 列出用户档案（profile_picker 卡用） */
+/** 列出用户档案（profile_picker 卡用 / 单档案 fast-path 检测用） */
 async function listUserProfiles(userId: string) {
   const db = getDb();
   return db
@@ -91,16 +80,28 @@ export async function buildGuideCard(
       };
 
     case "bazi": {
-      const has = await userHasAnyProfile(userId);
-      if (!has) {
+      const userProfiles = await listUserProfiles(userId);
+      if (userProfiles.length === 0) {
         return { contentText: "请填写八字信息", meta: { ui: "bazi_quick_form" } };
       }
-      // A3 模式：先选档案
-      const userProfiles = await listUserProfiles(userId);
+      // 单档案 fast-path：直接进 focus_picker，不强制弹档案选择
+      if (userProfiles.length === 1) {
+        const onlyId = userProfiles[0]!.id;
+        return {
+          contentText: "您想从哪个角度看八字？",
+          meta: {
+            ui: "bazi_focus_picker",
+            profileId: onlyId,
+            options: BAZI_FOCUS_OPTIONS,
+          },
+        };
+      }
+      // 2+ 档案 → A3 模式显式选档案
       return {
         contentText: "用谁的档案算八字？",
         meta: {
           ui: "profile_picker",
+          intent: "bazi",
           profiles: userProfiles.map((p) => ({
             id: p.id,
             nickname: p.nickname,
@@ -115,15 +116,27 @@ export async function buildGuideCard(
     }
 
     case "meihua": {
-      const has = await userHasAnyProfile(userId);
-      if (!has) {
+      const userProfiles = await listUserProfiles(userId);
+      if (userProfiles.length === 0) {
         return { contentText: "请先填写八字信息", meta: { ui: "bazi_quick_form" } };
       }
-      const userProfiles = await listUserProfiles(userId);
+      // 单档案 fast-path：直接进报数环节
+      if (userProfiles.length === 1) {
+        const onlyId = userProfiles[0]!.id;
+        return {
+          contentText: "请报 3 个 1-999 之间的随机数（也可只报 1-2 个）",
+          meta: {
+            ui: "meihua_number_input",
+            profileId: onlyId,
+            numberCount: 3,
+          },
+        };
+      }
       return {
         contentText: "用谁的档案起卦？",
         meta: {
           ui: "profile_picker",
+          intent: "meihua",
           profiles: userProfiles.map((p) => ({
             id: p.id,
             nickname: p.nickname,

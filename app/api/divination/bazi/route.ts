@@ -189,8 +189,39 @@ export async function POST(req: Request) {
       });
     }
 
+    // 单档案 fast-path：直接进 focus_picker，不弹档案选择
+    if (userProfiles.length === 1) {
+      const onlyId = userProfiles[0]!.id;
+      const cardMeta = {
+        ui: "bazi_focus_picker" as const,
+        profileId: onlyId,
+        options: VALID_CATEGORIES.map((k) => ({ key: k, label: k })),
+      };
+      const [card] = await db
+        .insert(messages)
+        .values({
+          conversation_id: data.conversationId,
+          role: "assistant",
+          content: "您想从哪个角度看八字？",
+          intent: "bazi",
+          metadata: serializeJson(cardMeta),
+        })
+        .returning();
+      return Response.json({
+        step: "focus_picker",
+        profileId: onlyId,
+        card: {
+          id: card?.id,
+          role: "assistant",
+          content: "您想从哪个角度看八字？",
+          metadata: serializeJson(cardMeta),
+        },
+      });
+    }
+
     const cardMeta = {
       ui: "profile_picker" as const,
+      intent: "bazi" as const,
       profiles: userProfiles.map((p) => ({
         id: p.id,
         nickname: p.nickname,
