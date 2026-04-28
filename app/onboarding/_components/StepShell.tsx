@@ -59,7 +59,7 @@ export function StepShell({
       <div className="relative z-10 flex flex-1 flex-col">
         <StepIndicator current={step} total={total} className="mb-6" />
 
-        <GlassCard className="flex flex-col gap-5 p-6">
+        <GlassCard className="flex min-h-[calc(100dvh-9rem)] flex-col gap-5 p-6">
           <header className="space-y-1.5 text-center">
             <p
               className="font-[family-name:var(--font-serif)] text-[11px] uppercase tracking-ritual3 text-[var(--color-accent-lavender)]"
@@ -95,7 +95,7 @@ export function StepShell({
 
           <div className="flex flex-col gap-4">{children}</div>
 
-          <footer className="space-y-2">
+          <footer className="mt-auto space-y-2">
             <div className="flex gap-2">
               {onPrev && (
                 <Button
