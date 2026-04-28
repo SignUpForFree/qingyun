@@ -5,6 +5,7 @@ import { ChevronRight } from "lucide-react";
 import { AppHeader } from "@/components/layout";
 import { GlassCard, Sparkle } from "@/components/su";
 import { Button } from "@/components/ui/button";
+import { AvatarPicker } from "@/components/profile/AvatarPicker";
 import { requireUserId, UnauthenticatedError } from "@/lib/auth/session";
 import { listProfiles } from "@/lib/profile/repository";
 import { getDb } from "@/lib/db/client";
@@ -111,21 +112,14 @@ function ProfileHero({ profile }: { profile: Profile }) {
         }}
       />
       <div className="relative flex items-center gap-4 p-5">
-        {/* avatar 72px */}
-        <div className="flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/60 shadow-[0_4px_12px_rgba(200,170,220,0.25)]">
-          {profile.avatar_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={profile.avatar_url}
-              alt={profile.nickname}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <span className="font-[family-name:var(--font-serif)] text-[28px] text-[var(--color-ink-plum)]">
-              {initial}
-            </span>
-          )}
-        </div>
+        {/* avatar 72px：可点击上传，相机角标 + camera 图标 */}
+        <AvatarPicker
+          currentUrl={profile.avatar_url}
+          nickname={profile.nickname}
+          profileId={profile.id}
+          size={72}
+        />
+        <span className="sr-only">{initial}</span>
 
         <div className="flex-1 space-y-1">
           <h2 className="font-[family-name:var(--font-serif)] text-[18px] tracking-ritual text-[var(--color-ink-plum)]">
@@ -218,6 +212,7 @@ interface MenuItem {
 const MENU: ReadonlyArray<MenuItem> = [
   { label: "编辑档案", href: "/me/edit" },
   { label: "多档案管理", href: "/me/profiles" },
+  { label: "手机绑定", href: "/me/phone" },
   { label: "隐私政策", href: "/legal/privacy" },
   { label: "用户协议", href: "/legal/terms" },
 ];
