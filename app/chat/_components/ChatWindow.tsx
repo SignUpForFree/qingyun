@@ -454,20 +454,19 @@ export function ChatWindow({
           },
         });
       } else if (ui === "bazi_quick_form") {
-        const place = (values.birth_place ?? "").split(/\s+/).filter(Boolean);
+        // bazi route schema 字段是 quickFormData{gender,birth_time,birth_place}，
+        // 不是 profileSnapshot；focus 不在这里传，等用户在 focus_picker 选
+        // (硬编码 "综合运势" 不在 VALID_CATEGORIES 6 维度里 → zod enum 直接 400)
+        if (!values.gender || !values.birth_time || !values.birth_place) {
+          toast.error("请填完八字三项再提交");
+          return;
+        }
         await postSubAction("/api/divination/bazi", "八字", {
           conversationId: convId,
-          focus: "综合运势",
-          userQuestion: "请帮我看看",
-          profileSnapshot: {
+          quickFormData: {
             gender: values.gender,
             birth_time: values.birth_time,
-            calendar_type: "solar",
-            birth_province: place[0] ?? "",
-            birth_city: place[1] ?? place[0] ?? "",
-            birth_district: place[2] ?? null,
-            longitude: 0,
-            latitude: 0,
+            birth_place: values.birth_place,
           },
         });
       } else if (ui === "meihua_number_input") {
