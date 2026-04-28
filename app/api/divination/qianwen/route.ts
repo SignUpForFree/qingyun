@@ -136,13 +136,31 @@ export async function POST(req: Request) {
     );
   }
 
-  // 解析 category_readings JSON 拿到对应维度的 reading
+  // 解析 category_readings JSON 拿到对应维度的 reading + 全 6 维（design §7 6 tabs）
   let reading = slip.default_reading;
+  let allReadings: Record<string, string> = {};
   try {
-    const readings = JSON.parse(slip.category_readings) as Record<string, string>;
-    reading = readings[category] ?? slip.default_reading;
+    allReadings = JSON.parse(slip.category_readings) as Record<string, string>;
+    reading = allReadings[category] ?? slip.default_reading;
   } catch {
-    /* JSON 坏的话 fallback default_reading */
+    /* JSON 坏的话 fallback default_reading；allReadings 保持空对象 */
+  }
+
+  // 抽签 6 维 vs 首页 7 维不同，spec 决策：抽签是 综合/事业/财运/感情/人际/健康
+  // category_readings 的 key 来自 slips-v2 seed（V1.0 是 "综合运势/事业学业/财运/
+  // 感情姻缘/人际贵人/平安健康"），把它映射回设计 6 字 tab key。
+  const SLIP_DIM_MAP: Record<string, string> = {
+    综合运势: "综合",
+    事业学业: "事业",
+    财运: "财运",
+    感情姻缘: "感情",
+    人际贵人: "人际",
+    平安健康: "健康",
+  };
+  const readings: Record<string, string> = {};
+  for (const [k, v] of Object.entries(allReadings)) {
+    const short = SLIP_DIM_MAP[k] ?? k;
+    if (typeof v === "string" && v.trim()) readings[short] = v;
   }
 
   // 拆 poem 4 句（slip.poem 用 \n 或 ， 分隔）
@@ -161,6 +179,7 @@ export async function POST(req: Request) {
     imageUrl: `/api/divination/slip-image/${slip.number}`,
     category,
     reading,
+    readings,
   };
 
   const [card] = await db

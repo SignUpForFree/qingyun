@@ -99,6 +99,8 @@ interface SlipImageMeta {
   dimension?: string;
   reading?: string;
   category?: string;
+  /** design §7 6 dim tabs：综合/事业/财运/感情/人际/健康 → reading 文本 */
+  readings?: Partial<Record<"综合" | "事业" | "财运" | "感情" | "人际" | "健康", string>>;
 }
 
 interface BaziResultMeta {
@@ -416,9 +418,10 @@ export function MessageBubble({
             number={m.slipNumber}
             level={m.level}
             title={m.title}
-            poem={m.poem ?? ""}
+            poem={m.poem ?? (m.poemLines ?? []).join("\n")}
             reading={m.reading ?? ""}
-            dimension={m.dimension ?? ""}
+            dimension={m.dimension ?? m.category ?? ""}
+            readings={m.readings}
           />
         </CardWrap>
       );
