@@ -4,6 +4,7 @@ import { AppHeader } from "@/components/layout";
 import { GlassCard, Sparkle, WatercolorDot, Divider, LogoMark } from "@/components/su";
 import { Button } from "@/components/ui/button";
 import { DailyFortuneCardV2 } from "@/components/fortune/DailyFortuneCardV2";
+import { ProfileSwitcher, type ProfileSwitcherItem } from "@/components/profile/ProfileSwitcher";
 import { requireUserId, UnauthenticatedError } from "@/lib/auth/session";
 import { listProfiles } from "@/lib/profile/repository";
 import {
@@ -63,6 +64,11 @@ export default async function HomePage() {
         </div>
 
         <div className="relative z-10 mt-6 w-full max-w-md space-y-4">
+          {profileList.length >= 2 && (
+            <div className="flex justify-center">
+              <ProfileSwitcher profiles={toSwitcherItems(profileList)} />
+            </div>
+          )}
           {isPlaceholder ? (
             <CompleteProfileCard nickname={def.nickname} />
           ) : (
@@ -116,6 +122,19 @@ async function FortuneSection({
       nickname={nickname}
     />
   );
+}
+
+function toSwitcherItems(
+  list: Awaited<ReturnType<typeof listProfiles>>,
+): ProfileSwitcherItem[] {
+  return list.map((p) => ({
+    id: p.id,
+    nickname: p.nickname,
+    is_default: p.is_default,
+    birth_date: p.birth_date,
+    birth_calendar: p.birth_calendar,
+    avatar_url: p.avatar_url,
+  }));
 }
 
 function CompleteProfileCard({ nickname }: { nickname: string }) {
