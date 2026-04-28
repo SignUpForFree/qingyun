@@ -349,8 +349,25 @@ export function ChatWindow({
           toast.error("会话尚未建立，请先与轻运打个招呼");
           return;
         }
+        // 从卡片 metadata 拿 profileId — bazi route Branch D 必填
+        // (没传会落 404 "档案不存在或无权限")
+        const focusMsg = messages.find((m) => m.id === msgId);
+        let bazProfileId: string | undefined;
+        if (focusMsg?.metadata) {
+          try {
+            const meta = JSON.parse(focusMsg.metadata) as { profileId?: string };
+            bazProfileId = meta.profileId;
+          } catch {
+            /* 忽略，下面会 toast */
+          }
+        }
+        if (!bazProfileId) {
+          toast.error("档案信息丢失，请重新点八字按钮");
+          return;
+        }
         void postSubAction("/api/divination/bazi", "八字", {
           conversationId: convId,
+          profileId: bazProfileId,
           focus: key,
           userQuestion: `请帮我看看${key}方面`,
         });
