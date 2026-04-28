@@ -31,13 +31,21 @@ const INTENT_AUTO_TEXT: Record<NonNullable<ChatWindowProps["initialIntent"]>, st
   meihua: "我要测算",
 };
 
-interface SubActionResponse {
-  conversationId: string;
-  userMessage: DisplayMessage;
-  // 抽签返回 cardMessage / 八字 dream / meihua 返回 resultMessage / qianwen 还有 aiReadingMessage
-  cardMessage?: DisplayMessage;
-  resultMessage?: DisplayMessage;
-  aiReadingMessage?: DisplayMessage | null;
+/**
+ * sub-action route Branch A/B/C 的 JSON 形态
+ *   { step: string, card: {id,role,content,metadata}, profileId? }
+ * Branch D 走 SSE，由 Content-Type: text/event-stream 判定后另走流式分支。
+ */
+interface SubActionJsonResponse {
+  step: string;
+  card?: {
+    id?: string;
+    role: "assistant";
+    content: string;
+    metadata?: string | null;
+  };
+  conversationId?: string;
+  profileId?: string;
 }
 
 /**
@@ -275,26 +283,137 @@ export function ChatWindow({
         return;
       }
       if (!res.ok) {
-        const t = await res.text().catch(() => "");
-        toast.error(`${label}失败 (${res.status})${t ? "：" + t.slice(0, 80) : ""}`);
+        let friendly = `${label}失败 (${res.status})`;
+        try {
+          const j = (await res.clone().json()) as { error?: string };
+          if (j.error) friendly = `${label}：${j.error}`;
+        } catch {
+          const t = await res.text().catch(() => "");
+          if (t) friendly += "：" + t.slice(0, 80);
+        }
+        toast.error(friendly);
         setBusy(false);
         return;
       }
-      let data: SubActionResponse;
+
+      // Branch D: SSE 流式（meta / progress / token / card / done / error）
+      // — 八字/梅花/解梦的最终生成都走这里，token 逐字显示在 streaming 气泡
+      const ct = res.headers.get("content-type") ?? "";
+      if (ct.includes("text/event-stream") && res.body) {
+        setStreaming("");
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let assistantText = "";
+        const cardMessages: DisplayMessage[] = [];
+        let rafId: number | null = null;
+        const flush = () => {
+          rafId = null;
+          setStreaming(assistantText);
+        };
+        const sched = () => {
+          if (rafId !== null) return;
+          rafId = requestAnimationFrame(flush);
+        };
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const events = buffer.split("\n\n");
+            buffer = events.pop() ?? "";
+            for (const evt of events) {
+              const parsed = parseSseFrame(evt);
+              if (!parsed) continue;
+              if (parsed.event === "token") {
+                const chunk = typeof parsed.data === "string" ? parsed.data : "";
+                assistantText += chunk;
+                sched();
+              } else if (parsed.event === "card") {
+                const data = parsed.data as DisplayMessage & {
+                  metadata: string | null;
+                };
+                if (data?.id) {
+                  cardMessages.push({
+                    id: data.id,
+                    role: "assistant",
+                    content: data.content,
+                    created_at: new Date().toISOString(),
+                    metadata: data.metadata,
+                  });
+                }
+              } else if (parsed.event === "progress") {
+                const data = parsed.data as
+                  | { stage?: string; percent?: number }
+                  | string;
+                if (typeof data === "object" && data !== null) {
+                  const stage = String(data.stage ?? "");
+                  const pct = typeof data.percent === "number" ? data.percent : 0;
+                  setProgressHint(stage ? `${stageLabel(stage)} ${pct}%` : null);
+                }
+              } else if (parsed.event === "done") {
+                setProgressHint(null);
+              } else if (parsed.event === "error") {
+                const data = parsed.data as
+                  | { message?: string }
+                  | string;
+                const msg =
+                  typeof data === "string"
+                    ? data
+                    : (data?.message ?? `${label}出错`);
+                toast.error(msg);
+              }
+            }
+          }
+        } catch (e) {
+          if ((e as Error).name !== "AbortError") {
+            toast.error(`${label}流式中断，请重试`);
+          }
+        } finally {
+          if (rafId !== null) cancelAnimationFrame(rafId);
+          setProgressHint(null);
+        }
+
+        setMessages((m) => {
+          const next = [...m];
+          if (assistantText) {
+            next.push({
+              id: `tmp-asst-${Date.now()}`,
+              role: "assistant",
+              content: assistantText,
+              created_at: new Date().toISOString(),
+            });
+          }
+          for (const cm of cardMessages) next.push(cm);
+          return next;
+        });
+        setStreaming(null);
+        setBusy(false);
+        return;
+      }
+
+      // Branch A/B/C: JSON 引导卡（quick_form / focus_picker / profile_picker / number_input ...）
+      let data: SubActionJsonResponse;
       try {
-        data = (await res.json()) as SubActionResponse;
+        data = (await res.json()) as SubActionJsonResponse;
       } catch {
         toast.error(`${label}返回格式异常`);
         setBusy(false);
         return;
       }
-      setMessages((m) => {
-        const next = [...m, data.userMessage];
-        if (data.cardMessage) next.push(data.cardMessage);
-        if (data.resultMessage) next.push(data.resultMessage);
-        if (data.aiReadingMessage) next.push(data.aiReadingMessage);
-        return next;
-      });
+      if (data.card) {
+        const card = data.card;
+        setMessages((m) => [
+          ...m,
+          {
+            id: card.id ?? `tmp-card-${Date.now()}`,
+            role: "assistant",
+            content: card.content,
+            created_at: new Date().toISOString(),
+            metadata: card.metadata ?? null,
+          },
+        ]);
+      }
       if (!convId && data.conversationId) {
         setConvId(data.conversationId);
         router.replace(`/chat?cid=${data.conversationId}`);
