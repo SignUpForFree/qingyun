@@ -1,7 +1,48 @@
 import { NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { users } from "@/lib/db/schema";
+import { profiles, users } from "@/lib/db/schema";
 import { setSessionCookie } from "@/lib/auth/session";
+
+/**
+ * 幂等地保证 user + 默认 profile 占位都存在。
+ * Onboarding step3 的 PUT /api/me/profiles/[id] 依赖默认档案存在，
+ * 否则会报 "默认档案缺失"。OAuth callback 已在 transaction 里建占位
+ * (app/api/auth/wechat/callback/route.ts)，dev-login 必须对齐。
+ */
+function ensureUserWithPlaceholderProfile(userId: string): void {
+  const db = getDb();
+  const now = new Date().toISOString();
+  db.transaction((tx) => {
+    tx.insert(users)
+      .values({ id: userId, created_at: now, updated_at: now })
+      .onConflictDoNothing()
+      .run();
+    const existing = tx
+      .select({ id: profiles.id })
+      .from(profiles)
+      .where(eq(profiles.user_id, userId))
+      .limit(1)
+      .all();
+    if (existing.length === 0) {
+      tx.insert(profiles)
+        .values({
+          id: crypto.randomUUID(),
+          user_id: userId,
+          is_default: true,
+          nickname: "我",
+          gender: "other",
+          birth_date: "1990-01-01",
+          birth_time: "12:00",
+          birth_calendar: "solar",
+          birth_place: "未填",
+          created_at: now,
+          updated_at: now,
+        })
+        .run();
+    }
+  });
+}
 
 /**
  * Dev/test-only 登录捷径 (M3.14)
@@ -33,14 +74,7 @@ export async function POST(req: Request) {
     /* 没 body 也允许 */
   }
   const userId = uid && uid.length > 0 ? uid : crypto.randomUUID();
-
-  const db = getDb();
-  const now = new Date().toISOString();
-  // 幂等：已存在则跳过
-  db.insert(users)
-    .values({ id: userId, created_at: now, updated_at: now })
-    .onConflictDoNothing()
-    .run();
+  ensureUserWithPlaceholderProfile(userId);
 
   const res = NextResponse.json({ userId });
   setSessionCookie(res, userId);
@@ -73,12 +107,7 @@ export async function GET(req: Request) {
     : "/";
 
   const userId = uid && uid.length > 0 ? uid : crypto.randomUUID();
-  const db = getDb();
-  const now = new Date().toISOString();
-  db.insert(users)
-    .values({ id: userId, created_at: now, updated_at: now })
-    .onConflictDoNothing()
-    .run();
+  ensureUserWithPlaceholderProfile(userId);
 
   // 直接用相对路径，避开 req.url 在容器里是 0.0.0.0 的坑（NextResponse.redirect
   // 要求绝对 URL，所以手工组 Response 加 Location 头）。
