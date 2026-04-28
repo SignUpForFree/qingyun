@@ -78,6 +78,18 @@ describe("SlipResultCard (design §7)", () => {
     expect(financeBtn.disabled).toBe(true);
   });
 
+  it("覆盖全部 9 种 level 都能正常渲染（不 undefined）", () => {
+    const allLevels = [
+      "上上", "上吉", "中吉", "吉", "平", "中平", "渐顺", "慎行", "下下",
+    ] as const;
+    for (const lv of allLevels) {
+      const { unmount } = render(<SlipResultCard {...BASE_PROPS} level={lv} />);
+      const pill = screen.getByTestId("slip-level-pill");
+      expect(pill.textContent?.replace(/\s/g, "")).toBe(lv);
+      unmount();
+    }
+  });
+
   it("dimension 含'事业学业' → tab 选中映射到'事业'", () => {
     const readings = { 综合: "g", 事业: "career" };
     render(

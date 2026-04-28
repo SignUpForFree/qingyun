@@ -41,6 +41,11 @@ const LEVEL_TONE: Record<
     label: "上 吉",
     glow: "rgba(232,181,160,0.45)",
   },
+  中吉: {
+    chip: "bg-gradient-to-br from-[#FBE9C2] to-[#F2D9A0] border-[#E0C880]/60",
+    label: "中 吉",
+    glow: "rgba(240,210,140,0.4)",
+  },
   吉: {
     chip: "bg-gradient-to-br from-[#FBE9C2] to-[#F2D9A0] border-[#E0C880]/60",
     label: "吉",
@@ -51,6 +56,11 @@ const LEVEL_TONE: Record<
     label: "平",
     glow: "rgba(201,161,217,0.45)",
   },
+  中平: {
+    chip: "bg-gradient-to-br from-[#E0DAE8] to-[#C0B8D0] border-[#A89CC0]/60",
+    label: "中 平",
+    glow: "rgba(176,168,200,0.4)",
+  },
   渐顺: {
     chip: "bg-gradient-to-br from-[#C9E0F0] to-[#A4B8E8] border-[#94A8D8]/60",
     label: "渐 顺",
@@ -60,6 +70,11 @@ const LEVEL_TONE: Record<
     chip: "bg-gradient-to-br from-[#E0CCC4] to-[#B8A8B8] border-[#A89AB0]/60",
     label: "慎 行",
     glow: "rgba(166,154,184,0.4)",
+  },
+  下下: {
+    chip: "bg-gradient-to-br from-[#D8C8B8] to-[#A89AA8] border-[#988894]/60",
+    label: "下 下",
+    glow: "rgba(152,136,148,0.4)",
   },
 };
 

@@ -1,7 +1,18 @@
 // 自动生成自 docs 文档章节 3.1.3 (轻运AI需求文档.docx)，请勿手改
 // 重新生成: pnpm tsx scripts/extract-slips.ts && (用 node 转 ts)
 
-export type SlipLevel = "上上" | "上吉" | "吉" | "平" | "渐顺" | "慎行";
+// 实际 seed 数据 5 级：上上 / 上吉 / 中吉 / 中平 / 下下（跟 docx 表一致）。
+// 历史 type 还留了 "吉/平/渐顺/慎行" 等同义/兼容值，UI tone map 都覆盖。
+export type SlipLevel =
+  | "上上"
+  | "上吉"
+  | "中吉"
+  | "吉"
+  | "平"
+  | "中平"
+  | "渐顺"
+  | "慎行"
+  | "下下";
 
 export interface SlipReadings {
   综合运势: string;
