@@ -88,9 +88,22 @@ describe("GET /api/chat/conversations/search", () => {
     expect(r.status).toBe(400);
   });
 
-  it("?q 长度 < 3 → 400", async () => {
-    const r = await GET(new Request("http://test/api/chat/conversations/search?q=ab"));
+  it("?q 长度 < 2 → 400（B2 修：放宽到 2 字以上）", async () => {
+    const r = await GET(new Request("http://test/api/chat/conversations/search?q=a"));
     expect(r.status).toBe(400);
+  });
+
+  it("?q 2 字 → 200 + 走 LIKE 兜底（B2 修）", async () => {
+    const fake = makeFakeDb();
+    const { getDb } = await import("@/lib/db/client");
+    (getDb as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue(fake);
+    const r = await GET(
+      new Request("http://test/api/chat/conversations/search?q=" + encodeURIComponent("梅花")),
+    );
+    expect(r.status).toBe(200);
+    // LIKE 兜底 SQL 不应含 messages_fts MATCH
+    expect(fake._sqlCalled()).not.toContain("MATCH");
+    expect(fake._sqlCalled()).toContain("m.content LIKE");
   });
 
   it("?q 长度 > 60 → 400", async () => {

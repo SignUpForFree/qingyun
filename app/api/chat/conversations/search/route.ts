@@ -5,18 +5,18 @@ import { ensureUserId } from "@/lib/auth/session";
 export const runtime = "nodejs";
 
 /**
- * /api/chat/conversations/search — FTS5 全文搜索 (M2.22, spec §4.6)
+ * /api/chat/conversations/search — 会话全文搜索 (M2.22, spec §4.6)
  *
- * GET ?q=<3+ chars>
- *   FTS5 trigram 分词需要 3+ 字才能命中，前端 UI 也只允许 3+ 字搜索。
- *   严格 user_id 隔离，避免跨用户泄漏。
- *   limit 固定 20。
+ * GET ?q=<2+ chars>
+ *   2 字（如 "梅花" / "八字"）走 LIKE %q% 兜底（FTS5 trigram 需 3+ 字才命中）。
+ *   3+ 字走 FTS5 trigram + snippet 高亮。
+ *   严格 user_id 隔离，避免跨用户泄漏。limit 固定 20。
  *
  * 返回 { items: [{ id, title, lastMessageAt, snippet }] }
  */
 
 const querySchema = z.object({
-  q: z.string().trim().min(3).max(60),
+  q: z.string().trim().min(2).max(60),
 });
 
 interface SearchHit {
@@ -30,15 +30,17 @@ export async function GET(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const parsed = querySchema.safeParse({ q: url.searchParams.get("q") ?? "" });
   if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message ?? "请输入 3 字以上关键词", 400);
+    return jsonError(parsed.error.issues[0]?.message ?? "请输入 2 字以上关键词", 400);
   }
   const { q } = parsed.data;
 
   const userId = await ensureUserId();
   const db = getDb();
 
-  // FTS5 query 接 trigram 分词；用 snippet() 取上下文段落
-  const sql = `
+  // 2 字 LIKE 兜底；3+ 字走 FTS5 trigram
+  const useFts = q.length >= 3;
+  const sql = useFts
+    ? `
     SELECT DISTINCT
       c.id AS id,
       c.title AS title,
@@ -50,14 +52,31 @@ export async function GET(req: Request): Promise<Response> {
     WHERE c.user_id = ? AND messages_fts MATCH ?
     ORDER BY c.last_message_at DESC
     LIMIT 20
+  `
+    : `
+    SELECT DISTINCT
+      c.id AS id,
+      c.title AS title,
+      c.last_message_at AS last_message_at,
+      substr(m.content, max(1, instr(m.content, ?) - 8), 64) AS snippet
+    FROM conversations c
+    JOIN messages m ON m.conversation_id = c.id
+    WHERE c.user_id = ? AND (m.content LIKE ? OR c.title LIKE ?)
+    ORDER BY c.last_message_at DESC
+    LIMIT 20
   `;
 
   let hits: SearchHit[];
   try {
-    hits = db.$client.prepare(sql).all(userId, q) as SearchHit[];
+    if (useFts) {
+      hits = db.$client.prepare(sql).all(userId, q) as SearchHit[];
+    } else {
+      const like = `%${q}%`;
+      hits = db.$client.prepare(sql).all(q, userId, like, like) as SearchHit[];
+    }
   } catch (e) {
     if (process.env.NODE_ENV !== "production") {
-      console.error("FTS5 search 失败", e);
+      console.error("search 失败", e);
     }
     return jsonError("搜索关键词非法（含特殊字符）", 400);
   }

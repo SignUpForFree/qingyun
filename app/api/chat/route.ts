@@ -66,10 +66,26 @@ export async function POST(req: Request) {
   if (safetyFail) return safetyFail;
 
   const userId = await ensureUserId();
-  const limit = await checkRateLimit(userId, "chat");
+
+  // B1 修：先分类再限额，按实际 intent 限额（之前写死 "chat" 让 bazi/meihua/dream/
+  // divination 都吃 chat 30/h 而不是各自 8/12/8/8 → 重消耗类型刷不住）
+  const overrideIntent = parseIntentQuery(req);
+  const cls = overrideIntent
+    ? { intent: overrideIntent, confidence: 1, source: "query" as const }
+    : await classifyIntent(text);
+  const intent: Intent = cls.intent;
+
+  const limit = await checkRateLimit(userId, intent);
   if (!limit.allowed) {
+    const intentLabel: Record<string, string> = {
+      chat: "聊天",
+      divination: "抽签",
+      bazi: "八字",
+      meihua: "梅花",
+      dream: "解梦",
+    };
     return jsonError(
-      `每小时聊天上限 ${limit.limit} 条，请稍后再试（已发 ${limit.used}）`,
+      `每小时${intentLabel[intent] ?? intent}上限 ${limit.limit} 次，请稍后再试（已发 ${limit.used}）`,
       429,
     );
   }
@@ -99,13 +115,6 @@ export async function POST(req: Request) {
     if (!convId) return jsonError("创建会话失败", 500);
   }
   const finalConvId: string = convId;
-
-  // ?intent= query 覆盖分类（用于按钮回流，省一次 LLM 调用）
-  const overrideIntent = parseIntentQuery(req);
-  const cls = overrideIntent
-    ? { intent: overrideIntent, confidence: 1, source: "query" as const }
-    : await classifyIntent(text);
-  const intent: Intent = cls.intent;
 
   await db.insert(messages).values({
     conversation_id: finalConvId,
