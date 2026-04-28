@@ -24,6 +24,7 @@ const PUBLIC_PREFIXES = [
   "/_next/", // Next internals
   "/favicon", // favicon.ico / .png
   "/api/dev-login", // M3.14: dev/test-only 登录捷径（route 内 NODE_ENV gate）
+  "/api/avatar/", // M4 头像静态 serve（hash 命名，公开访问）
 ];
 
 function isPublic(path: string): boolean {
