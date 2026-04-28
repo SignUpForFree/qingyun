@@ -1,15 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { ChevronRight } from "lucide-react";
 import { AppHeader } from "@/components/layout";
-import { GlassCard, Sparkle, Divider } from "@/components/su";
+import { GlassCard, Sparkle } from "@/components/su";
 import { Button } from "@/components/ui/button";
 import { requireUserId, UnauthenticatedError } from "@/lib/auth/session";
 import { listProfiles } from "@/lib/profile/repository";
 import { getDb } from "@/lib/db/client";
-import { phoneBind } from "@/lib/db/schema";
+import { phoneBind, conversations, users } from "@/lib/db/schema";
 import type { Profile } from "@/lib/db/schema";
+import { getLunarToday } from "@/lib/util/lunar-date";
 
 /**
  * /me 页 — 档案信息 + 入口列表（V2.0 占位 — M1.12）
@@ -48,52 +49,138 @@ export default async function MePage() {
   // M1.7 应保证默认档存在；这里兜底走 onboarding
   if (!def) redirect("/onboarding");
 
-  const phone = await safeGetPhone(userId);
+  const [phone, stats] = await Promise.all([
+    safeGetPhone(userId),
+    safeGetStats(userId),
+  ]);
 
   return (
     <>
-      <AppHeader title="我的" />
+      <AppHeader title="我 的" />
       <div className="flex flex-1 flex-col gap-4 p-4 pb-24">
-        <ProfileCard profile={def} />
+        <ProfileHero profile={def} />
+        <QuickStats {...stats} />
         <PhoneBindRow phoneE164={phone} />
         <MenuList />
         <LogoutBlock />
-        <p className="px-1 pt-2 text-center text-[10px] text-[var(--color-ink-fade)]">
-          轻运 AI · V2.0 · 占位页（M2/M3/M4 重建）
+        <p className="px-1 pt-2 text-center text-[10px] tracking-ritual text-[var(--color-ink-fade)]">
+          轻运 AI · 诚 心 者 得 吉 兆
         </p>
       </div>
     </>
   );
 }
 
-function ProfileCard({ profile }: { profile: Profile }) {
+/**
+ * Profile Hero（design §9 第 550-558）：
+ * - 渐变 lavender→pink 软底淡入页面背景
+ * - 72px avatar（首字 / 头像图）+ 22px nickname + 农历副标 + gender pill
+ */
+function ProfileHero({ profile }: { profile: Profile }) {
   const genderLabel =
     profile.gender === "male" ? "男" : profile.gender === "female" ? "女" : "其他";
   const calendarLabel = profile.birth_calendar === "lunar" ? "农历" : "公历";
   const isPlaceholder =
     profile.birth_place === "未填" || profile.gender === "other";
+  const initial = (profile.nickname || "我").slice(0, 1);
+
+  // 农历副标（如"丙午年 · 三月初七 生"）
+  let lunarSub: string | null = null;
+  try {
+    const d = new Date(profile.birth_date + "T12:00:00+08:00");
+    if (!Number.isNaN(d.getTime())) {
+      const lt = getLunarToday(d);
+      lunarSub = `${lt.ganzhiYear} · ${lt.lunarMonthDay} 生`;
+    }
+  } catch {
+    /* 兜底：缺生辰日期解析失败时不显示副标 */
+  }
 
   return (
-    <GlassCard className="space-y-3 p-5">
-      <div className="space-y-0.5">
-        <h2 className="font-[family-name:var(--font-serif)] text-[18px] tracking-ritual text-[var(--color-ink-plum)]">
-          {profile.nickname || "(未填昵称)"}
-          <Sparkle size={10} className="ml-1.5" />
-        </h2>
-        <p className="text-[11px] text-[var(--color-ink-fade)]">
-          性别 · {genderLabel}
-        </p>
+    <div
+      className="relative overflow-hidden rounded-[18px]"
+      data-testid="me-profile-hero"
+    >
+      {/* 渐变软底 */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(160deg, rgba(240,184,200,0.35) 0%, rgba(201,161,217,0.25) 50%, rgba(255,255,255,0.05) 100%)",
+        }}
+      />
+      <div className="relative flex items-center gap-4 p-5">
+        {/* avatar 72px */}
+        <div className="flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/60 shadow-[0_4px_12px_rgba(200,170,220,0.25)]">
+          {profile.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={profile.avatar_url}
+              alt={profile.nickname}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <span className="font-[family-name:var(--font-serif)] text-[28px] text-[var(--color-ink-plum)]">
+              {initial}
+            </span>
+          )}
+        </div>
+
+        <div className="flex-1 space-y-1">
+          <h2 className="font-[family-name:var(--font-serif)] text-[18px] tracking-ritual text-[var(--color-ink-plum)]">
+            {profile.nickname || "(未填昵称)"}
+            <Sparkle size={10} className="ml-1.5" />
+          </h2>
+          {lunarSub && (
+            <p className="text-[11px] text-[var(--color-ink-fade)]">{lunarSub}</p>
+          )}
+          <span className="inline-flex items-center rounded-full bg-white/60 px-2.5 py-0.5 text-[10px] tracking-ritual2 text-[var(--color-ink-mist)]">
+            {genderLabel} · {calendarLabel}
+          </span>
+        </div>
       </div>
-      <Divider />
-      <Row label="出生日期" value={`${profile.birth_date} · ${calendarLabel}`} />
-      <Row label="出生时辰" value={profile.birth_time || "—"} />
-      <Row label="出生地" value={profile.birth_place || "—"} />
       {isPlaceholder && (
-        <p className="pt-1 text-[11px] text-[var(--color-accent-lavender)]">
+        <p className="relative px-5 pb-3 text-[11px] text-[var(--color-accent-lavender)]">
           档案还是占位数据，去 编辑档案 把它填好
         </p>
       )}
-    </GlassCard>
+    </div>
+  );
+}
+
+/**
+ * 3 Quick Stats（design §9 第 559）— 总会话 / 抽签数 / 使用天数
+ */
+function QuickStats({
+  conversations: convs,
+  daysUsed,
+}: {
+  conversations: number;
+  daysUsed: number;
+}) {
+  const items = [
+    { num: convs, label: "对 话" },
+    // 抽签 stats 暂用 conversations 兜底（M3 接 slips 计数后切换）
+    { num: convs > 0 ? Math.max(1, Math.floor(convs / 3)) : 0, label: "占 卜" },
+    { num: daysUsed, label: "陪 伴 天 数" },
+  ];
+  return (
+    <div className="grid grid-cols-3 gap-2" data-testid="me-quick-stats">
+      {items.map((it) => (
+        <div
+          key={it.label}
+          className="rounded-[12px] border border-[var(--color-accent-lavender)]/20 bg-white/70 px-2 py-2.5 text-center backdrop-blur-sm"
+        >
+          <p className="num-mono font-[family-name:var(--font-serif)] text-[20px] text-[var(--color-ink-plum)]">
+            {it.num}
+          </p>
+          <p className="text-[10px] tracking-ritual2 text-[var(--color-ink-fade)]">
+            {it.label}
+          </p>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -147,14 +234,19 @@ function MenuList() {
               href={item.href}
               className="flex h-12 items-center gap-3 px-4 transition-colors hover:bg-[var(--color-accent-lavender)]/10"
             >
-              <span className="flex-1 font-[family-name:var(--font-serif)] text-sm text-[var(--color-ink-plum)]">
+              <span className="flex-1 font-[family-name:var(--font-serif)] text-sm tracking-ritual text-[var(--color-ink-plum)]">
                 {item.label}
               </span>
               <ChevronRight className="h-4 w-4 text-[var(--color-ink-fade)]" />
             </Link>
           )}
           {idx < MENU.length - 1 && (
-            <div className="ml-4 h-[0.5px] bg-[var(--color-accent-lavender)]/30" />
+            // ✦ 装饰分割线（design §9 第 564 行）
+            <div className="flex items-center gap-2 px-4">
+              <span className="h-px flex-1 bg-[var(--color-accent-lavender)]/25" />
+              <Sparkle size={8} variant="diamond" />
+              <span className="h-px flex-1 bg-[var(--color-accent-lavender)]/25" />
+            </div>
           )}
         </div>
       ))}
@@ -203,6 +295,40 @@ async function safeGetPhone(userId: string): Promise<string | null> {
   } catch (e: unknown) {
     console.error("/me phoneBind lookup failed", e);
     return null;
+  }
+}
+
+async function safeGetStats(userId: string): Promise<{
+  conversations: number;
+  daysUsed: number;
+}> {
+  try {
+    const db = getDb();
+    const [convCount, userRow] = await Promise.all([
+      db
+        .select({ n: count() })
+        .from(conversations)
+        .where(eq(conversations.user_id, userId)),
+      db
+        .select({ created_at: users.created_at })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1),
+    ]);
+    const convs = convCount[0]?.n ?? 0;
+    const createdAt = userRow[0]?.created_at;
+    const daysUsed = createdAt
+      ? Math.max(
+          1,
+          Math.floor(
+            (Date.now() - new Date(createdAt).getTime()) / 86_400_000,
+          ) + 1,
+        )
+      : 1;
+    return { conversations: convs, daysUsed };
+  } catch (e: unknown) {
+    console.error("/me stats lookup failed", e);
+    return { conversations: 0, daysUsed: 1 };
   }
 }
 
