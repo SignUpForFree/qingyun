@@ -49,7 +49,7 @@ describe("ChatWindow (M2.24)", () => {
   });
 
   it("initialIntent='divination' → mount 时自动 send 预设话术", async () => {
-    const fetchSpy = vi.fn(async () =>
+    const fetchSpy = vi.fn<typeof fetch>(async () =>
       makeSseResponse([
         frame("meta", { conversationId: "conv-new" }),
         frame("token", "你好"),
@@ -76,7 +76,7 @@ describe("ChatWindow (M2.24)", () => {
   });
 
   it("autoSendText 优先于 initialIntent", async () => {
-    const fetchSpy = vi.fn(async () =>
+    const fetchSpy = vi.fn<typeof fetch>(async () =>
       makeSseResponse([
         frame("meta", { conversationId: "c" }),
         frame("token", "x"),
@@ -100,7 +100,7 @@ describe("ChatWindow (M2.24)", () => {
   });
 
   it("无 autoSend / initialIntent → 不自动发送", async () => {
-    const fetchSpy = vi.fn(async () => new Response("nope", { status: 200 }));
+    const fetchSpy = vi.fn<typeof fetch>(async () => new Response("nope", { status: 200 }));
     vi.stubGlobal("fetch", fetchSpy);
 
     render(<ChatWindow conversationId={null} initialMessages={[]} />);
@@ -111,7 +111,7 @@ describe("ChatWindow (M2.24)", () => {
   });
 
   it("SSE progress 事件 → 渲染 progress hint", async () => {
-    const fetchSpy = vi.fn(async () =>
+    const fetchSpy = vi.fn<typeof fetch>(async () =>
       makeSseResponse([
         frame("meta", { conversationId: "c" }),
         frame("progress", { stage: "computing", percent: 30 }),
@@ -166,7 +166,7 @@ describe("ChatWindow (M2.24)", () => {
   });
 
   it("openHistoryOnMount=true → 历史抽屉 mount 时打开", async () => {
-    const fetchSpy = vi.fn(async () =>
+    const fetchSpy = vi.fn<typeof fetch>(async () =>
       new Response(JSON.stringify({ items: [] }), { status: 200 }),
     );
     vi.stubGlobal("fetch", fetchSpy);
@@ -178,8 +178,10 @@ describe("ChatWindow (M2.24)", () => {
         openHistoryOnMount
       />,
     );
+    // ChatWindow 用 hideTrigger，所以 trigger 的 aria-label 没渲染；
+    // 改判 Sheet 抽屉的 dialog role 出现。
     await waitFor(() => {
-      expect(screen.getByLabelText("历史会话")).toBeInTheDocument();
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
     });
   });
 });

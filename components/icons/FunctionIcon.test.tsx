@@ -46,7 +46,7 @@ describe("FunctionIcon (M4.27)", () => {
   it("className 透传到 svg", () => {
     render(<FunctionIcon name="health" className="text-red-500" />);
     const svg = screen.getByTestId("fn-icon-health");
-    expect(svg.className.baseVal).toContain("text-red-500");
+    expect(svg.getAttribute("class")).toContain("text-red-500");
   });
 
   it("4 个 launcher icon 可独立渲染", () => {

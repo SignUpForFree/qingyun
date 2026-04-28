@@ -97,11 +97,13 @@ export function BaziResultCard({
         <p className="font-[family-name:var(--font-serif)] text-[13px] tracking-ritual2 text-[var(--color-ink-plum)]">
           命 盘
         </p>
+        <p className="text-[11px] tracking-ritual text-[var(--color-accent-plum)]">
+          八字 · {focus}
+        </p>
         {(ownerLabel || birthSummary) && (
           <p className="text-[10px] text-[var(--color-ink-fade)]">
             {ownerLabel ?? "命 主"}
             {birthSummary ? ` · ${birthSummary}` : ""}
-            <span className="ml-1 text-[var(--color-accent-plum)]"> · {focus}</span>
           </p>
         )}
       </header>

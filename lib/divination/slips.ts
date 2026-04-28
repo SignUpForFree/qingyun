@@ -134,7 +134,8 @@ export function pickWeighted(
   // sha256 截前 8 字节 → 大整数 → mod totalWeight
   const hash = createHash("sha256").update(seed).digest();
   // 用前 8 字节构造一个 BigInt，再 % totalWeight
-  const u64 = (BigInt(hash.readUInt32BE(0)) << 32n) | BigInt(hash.readUInt32BE(4));
+  const u64 =
+    (BigInt(hash.readUInt32BE(0)) << BigInt(32)) | BigInt(hash.readUInt32BE(4));
   const target = Number(u64 % BigInt(totalWeight));
 
   let cursor = 0;
