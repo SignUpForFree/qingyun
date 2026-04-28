@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { sendOtp } from "@/lib/auth/phone-otp";
+import { sendOtp, isMockOtpBypass } from "@/lib/auth/phone-otp";
 
 /**
  * POST /api/auth/phone/send-otp — 浏览器登录前发码（公开，未登录可访问）
@@ -45,5 +45,6 @@ export async function POST(req: Request): Promise<Response> {
       { status: 429 },
     );
   }
-  return NextResponse.json({ ok: true });
+  // mock=true 让前端把 toast 文案换成"任意 6 位即可"
+  return NextResponse.json({ ok: true, mock: isMockOtpBypass() });
 }

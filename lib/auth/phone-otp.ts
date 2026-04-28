@@ -67,10 +67,22 @@ export interface VerifyOtpResult {
  * Promise is always truthy → bypass. With async-from-day-1 the missing
  * `await` is caught at type-check time.
  */
+/**
+ * 在 prod mock 阶段（MOCK_OTP_BYPASS=1）：任意 6 位数字都视为通过。
+ * 这样浏览器登录链路不需要看 docker 日志取真码就能跑通建档/抽签全流程。
+ * M5 接入真实 SMS gateway 时，删掉这个 env 即可。
+ */
+export function isMockOtpBypass(): boolean {
+  return process.env.MOCK_OTP_BYPASS === "1";
+}
+
 export async function verifyOtp(
   phone: string,
   code: string,
 ): Promise<VerifyOtpResult> {
+  if (isMockOtpBypass() && /^\d{6}$/.test(code)) {
+    return { ok: true };
+  }
   const entry = store.get(phone);
   if (!entry) return { ok: false, reason: "expired" };
   if (Date.now() - entry.createdAt > TTL_MS) {

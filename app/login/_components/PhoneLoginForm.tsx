@@ -68,7 +68,12 @@ export function PhoneLoginForm({ redirectTo }: PhoneLoginFormProps) {
         toast.error(err?.error ?? `发送失败 (${res.status})`);
         return;
       }
-      toast.success("验证码已发送 · 当前 mock 阶段，看服务器日志取码");
+      const ok = (await res.json().catch(() => ({}))) as { mock?: boolean };
+      toast.success(
+        ok.mock
+          ? "Mock 模式 · 输任意 6 位数字即可登录"
+          : "验证码已发送 · 当前 mock 阶段，看服务器日志取码",
+      );
       setCooldown(60);
     } catch (e) {
       toast.error(`网络异常：${e instanceof Error ? e.message : "未知错误"}`);
