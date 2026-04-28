@@ -25,39 +25,77 @@ interface Step3Props {
   form: OnboardingForm;
   onPrev: () => void;
   editing?: boolean;
+  /** 指定 PUT 目标档案 id（编辑非默认档案时使用）；未传走 GET list 找 default */
+  profileId?: string;
+  /** true → POST 新建一条非默认档案（A3 多档案）；忽略 profileId */
+  createMode?: boolean;
+  /** 提交成功后跳转路径，默认 "/" */
+  redirectTo?: string;
+  /** 自定义成功 toast 文案 */
+  successMessage?: string;
 }
 
 /**
  * V2.0 提交：
- *   1. GET /api/me/profiles —— 找当前用户的默认档（M1.7 已在 OAuth callback 创建占位）
- *   2. PUT /api/me/profiles/[defaultId] —— 用 onboarding 表单的字段覆盖占位
- *   3. 成功后跳 /（不再去 /me；首次引导完成回首页）
+ *   - createMode=true → POST /api/me/profiles 新建非默认档案
+ *   - profileId 已知 → PUT /api/me/profiles/[profileId] 覆盖
+ *   - 都未指定 → GET 列表找 default（onboarding 首次引导路径）
+ *   - 成功后 router.replace(redirectTo ?? "/")
  */
-export function Step3Confirm({ form, onPrev, editing }: Step3Props) {
+export function Step3Confirm({
+  form,
+  onPrev,
+  editing,
+  profileId,
+  createMode,
+  redirectTo,
+  successMessage,
+}: Step3Props) {
   const router = useRouter();
   const [submitting, setSubmitting] = React.useState(false);
 
   async function submit() {
     setSubmitting(true);
     try {
-      const listRes = await fetch("/api/me/profiles");
-      if (!listRes.ok) {
-        toast.error(`加载档案失败 (${listRes.status})`);
-        return;
-      }
-      const parsed = ProfileListResponse.safeParse(await listRes.json());
-      if (!parsed.success) {
-        toast.error("加载档案失败：响应格式异常");
-        return;
-      }
-      const defaultProfile = parsed.data.data.find((p) => p.is_default);
-      if (!defaultProfile) {
-        toast.error("默认档案缺失，请重新登录");
+      const patch = toProfilePatch(form);
+
+      if (createMode) {
+        const res = await fetch("/api/me/profiles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patch),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          toast.error(err?.error ?? `新建失败 (${res.status})`);
+          return;
+        }
+        toast.success(successMessage ?? "档案已新建");
+        router.replace(redirectTo ?? "/me/profiles");
         return;
       }
 
-      const patch = toProfilePatch(form);
-      const res = await fetch(`/api/me/profiles/${defaultProfile.id}`, {
+      let targetId = profileId;
+      if (!targetId) {
+        const listRes = await fetch("/api/me/profiles");
+        if (!listRes.ok) {
+          toast.error(`加载档案失败 (${listRes.status})`);
+          return;
+        }
+        const parsed = ProfileListResponse.safeParse(await listRes.json());
+        if (!parsed.success) {
+          toast.error("加载档案失败：响应格式异常");
+          return;
+        }
+        const defaultProfile = parsed.data.data.find((p) => p.is_default);
+        if (!defaultProfile) {
+          toast.error("默认档案缺失，请重新登录");
+          return;
+        }
+        targetId = defaultProfile.id;
+      }
+
+      const res = await fetch(`/api/me/profiles/${targetId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
@@ -67,8 +105,8 @@ export function Step3Confirm({ form, onPrev, editing }: Step3Props) {
         toast.error(err?.error ?? `提交失败 (${res.status})`);
         return;
       }
-      toast.success(editing ? "档案已更新" : "档案已建好");
-      router.replace("/");
+      toast.success(successMessage ?? (editing ? "档案已更新" : "档案已建好"));
+      router.replace(redirectTo ?? "/");
     } catch (e) {
       toast.error(`网络异常：${e instanceof Error ? e.message : "未知错误"}`);
     } finally {
