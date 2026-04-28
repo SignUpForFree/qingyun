@@ -33,8 +33,9 @@ const HEARTBEAT_MS = 25_000;
 
 const VALID_NUMBER = z.number().int().min(1).max(999);
 
+// CLAUDE.md 第 1 条：ChatWindow 首次会话 convId 为 null，必须 .nullish()
 const bodySchema = z.object({
-  conversationId: z.string().min(1),
+  conversationId: z.string().min(1).nullish(),
   profileId: z.string().min(1).optional(),
   numbers: z.array(VALID_NUMBER).min(1).max(3).optional(),
   userQuestion: z.string().trim().max(200).optional(),
@@ -56,6 +57,10 @@ export async function POST(req: Request) {
     return jsonError(parsed.error.issues[0]?.message ?? "校验失败", 400);
   }
   const data = parsed.data;
+  const conversationId = data.conversationId;
+  if (!conversationId) {
+    return jsonError("conversationId 必填（请先发起一条文本消息再使用梅花按钮）", 400);
+  }
 
   const userId = await ensureUserId();
   const limit = await checkRateLimit(userId, "meihua");
@@ -70,7 +75,7 @@ export async function POST(req: Request) {
   const owned = await db
     .select({ id: conversations.id })
     .from(conversations)
-    .where(and(eq(conversations.id, data.conversationId), eq(conversations.user_id, userId)))
+    .where(and(eq(conversations.id, conversationId), eq(conversations.user_id, userId)))
     .limit(1);
   if (!owned[0]) return jsonError("会话不存在", 404);
 
@@ -96,7 +101,7 @@ export async function POST(req: Request) {
       const [card] = await db
         .insert(messages)
         .values({
-          conversation_id: data.conversationId,
+          conversation_id: conversationId,
           role: "assistant",
           content: "起梅花卦先要您的档案，请填一下",
           intent: "meihua",
@@ -125,7 +130,7 @@ export async function POST(req: Request) {
       const [card] = await db
         .insert(messages)
         .values({
-          conversation_id: data.conversationId,
+          conversation_id: conversationId,
           role: "assistant",
           content: "请报 3 个 1-999 之间的随机数（也可只报 1-2 个）",
           intent: "meihua",
@@ -154,13 +159,13 @@ export async function POST(req: Request) {
         gender: (p.gender ?? "other") as "male" | "female" | "other",
         birthDate: p.birthDate ?? undefined,
       })),
-      conversationId: data.conversationId,
+      conversationId: conversationId,
       allowAddNew: true,
     };
     const [card] = await db
       .insert(messages)
       .values({
-        conversation_id: data.conversationId,
+        conversation_id: conversationId,
         role: "assistant",
         content: "用谁的档案起卦？",
         intent: "meihua",
@@ -196,7 +201,7 @@ export async function POST(req: Request) {
     const [card] = await db
       .insert(messages)
       .values({
-        conversation_id: data.conversationId,
+        conversation_id: conversationId,
         role: "assistant",
         content: "请报 3 个 1-999 之间的随机数（也可只报 1-2 个）",
         intent: "meihua",
@@ -254,7 +259,7 @@ export async function POST(req: Request) {
       safeEnqueue(
         controller,
         frame("meta", {
-          conversationId: data.conversationId,
+          conversationId: conversationId,
           intent: "meihua",
           profileId,
           numbers,
@@ -279,7 +284,7 @@ export async function POST(req: Request) {
           systemPrompt,
           messages: [{ role: "user", content: userPrompt }],
           stream: true,
-          meta: { conversationId: data.conversationId, userId },
+          meta: { conversationId: conversationId, userId },
         });
 
         for await (const chunk of stream.textStream) {
@@ -333,7 +338,7 @@ export async function POST(req: Request) {
         const [card] = await db
           .insert(messages)
           .values({
-            conversation_id: data.conversationId,
+            conversation_id: conversationId,
             role: "assistant",
             content: finalText,
             intent: "meihua",
@@ -356,7 +361,7 @@ export async function POST(req: Request) {
         await db
           .update(conversations)
           .set({ last_intent: "meihua", last_message_at: new Date().toISOString() })
-          .where(eq(conversations.id, data.conversationId));
+          .where(eq(conversations.id, conversationId));
 
         safeEnqueue(controller, frame("done", {}));
       } catch (e) {

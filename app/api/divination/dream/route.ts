@@ -30,14 +30,15 @@ const HEARTBEAT_MS = 25_000;
  * 三视角解读（precise）：心理学 / 周公 / 现代实用建议（在 prompt 内分段，AI 自由组织文本）
  */
 
+// CLAUDE.md 第 1 条：ChatWindow 首次会话 convId 为 null，必须 .nullish()
 const fastSchema = z.object({
-  conversationId: z.string().min(1),
+  conversationId: z.string().min(1).nullish(),
   mode: z.literal("fast"),
   dream: z.string().trim().min(1).max(1000),
 });
 
 const preciseSchema = z.object({
-  conversationId: z.string().min(1),
+  conversationId: z.string().min(1).nullish(),
   mode: z.literal("precise"),
   core: z.string().trim().min(1).max(500),
   emotion: z.string().trim().min(1).max(200),
@@ -76,6 +77,10 @@ export async function POST(req: Request) {
     return jsonError(parsed.error.issues[0]?.message ?? "校验失败", 400);
   }
   const data = parsed.data;
+  const conversationId = data.conversationId;
+  if (!conversationId) {
+    return jsonError("conversationId 必填（请先发起一条文本消息再使用解梦按钮）", 400);
+  }
 
   const safetyText =
     data.mode === "fast"
@@ -97,7 +102,7 @@ export async function POST(req: Request) {
   const owned = await db
     .select({ id: conversations.id })
     .from(conversations)
-    .where(and(eq(conversations.id, data.conversationId), eq(conversations.user_id, userId)))
+    .where(and(eq(conversations.id, conversationId), eq(conversations.user_id, userId)))
     .limit(1);
   if (!owned[0]) return jsonError("会话不存在", 404);
 
@@ -115,7 +120,7 @@ export async function POST(req: Request) {
           .join("\n");
 
   await db.insert(messages).values({
-    conversation_id: data.conversationId,
+    conversation_id: conversationId,
     role: "user",
     content: userText,
     intent: "dream",
@@ -140,7 +145,7 @@ export async function POST(req: Request) {
       safeEnqueue(
         controller,
         frame("meta", {
-          conversationId: data.conversationId,
+          conversationId: conversationId,
           intent: "dream",
           mode: data.mode,
           source: "dream_api",
@@ -155,7 +160,7 @@ export async function POST(req: Request) {
           systemPrompt: sysPrompt,
           messages: [{ role: "user", content: userPrompt }],
           stream: true,
-          meta: { conversationId: data.conversationId, userId },
+          meta: { conversationId: conversationId, userId },
         });
 
         for await (const chunk of stream.textStream) {
@@ -191,7 +196,7 @@ export async function POST(req: Request) {
         const [card] = await db
           .insert(messages)
           .values({
-            conversation_id: data.conversationId,
+            conversation_id: conversationId,
             role: "assistant",
             content: finalText,
             intent: "dream",
@@ -213,7 +218,7 @@ export async function POST(req: Request) {
         await db
           .update(conversations)
           .set({ last_intent: "dream", last_message_at: new Date().toISOString() })
-          .where(eq(conversations.id, data.conversationId));
+          .where(eq(conversations.id, conversationId));
 
         safeEnqueue(controller, frame("done", {}));
       } catch (e) {
