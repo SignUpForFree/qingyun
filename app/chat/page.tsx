@@ -74,6 +74,7 @@ export default async function ChatPage({ searchParams }: PageProps) {
   return (
     <>
       <AppHeader
+        solid
         title={resolvedConvId ? "对话" : "AI 问答"}
         right={<HistoryDrawer currentId={resolvedConvId ?? undefined} />}
       />

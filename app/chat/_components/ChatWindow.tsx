@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
-import { IntentChips } from "./IntentChips";
 import { HistoryDrawer } from "./HistoryDrawer";
 import { DreamPreciseModal, type DreamPreciseFormData } from "./DreamPreciseModal";
 import { GlassCard, Sparkle } from "@/components/su";
@@ -699,20 +698,13 @@ export function ChatWindow({
           </div>
         }
       />
-      {progressHint && (
-        <p
-          aria-live="polite"
-          data-testid="progress-hint"
-          className="px-4 pb-1 text-[10px] tracking-ritual2 text-[var(--color-ink-fade)]"
-        >
-          {progressHint}
-        </p>
-      )}
-      <IntentChips onPick={(t) => void send(t)} busy={streaming !== null || busy} />
       <ChatInput
         onSend={send}
         busy={streaming !== null || busy}
         initialText={prefillText}
+        showQuickChips
+        solid
+        progressHint={progressHint}
       />
     </div>
   );

@@ -16,6 +16,10 @@ interface ChatInputProps {
   showQuickChips?: boolean;
   /** M4.10 ?prefill= 预填初始文本（不自动 send，让用户改后再发） */
   initialText?: string;
+  /** 实色背景（chat 主页用 — 透明状态下看不清气泡的边界） */
+  solid?: boolean;
+  /** SSE 进度提示，挂在 chips 上方一并 sticky */
+  progressHint?: string | null;
 }
 
 /**
@@ -34,6 +38,8 @@ export function ChatInput({
   busy,
   showQuickChips,
   initialText,
+  solid,
+  progressHint,
 }: ChatInputProps) {
   const [text, setText] = React.useState(initialText ?? "");
   const taRef = React.useRef<HTMLTextAreaElement | null>(null);
@@ -66,11 +72,23 @@ export function ChatInput({
   return (
     <div
       className={cn(
-        "glass hairline sticky bottom-0 z-20 flex flex-col gap-1 px-0 py-0",
+        "sticky bottom-0 z-20 flex flex-col gap-1 px-0 py-0",
         "border-t border-[var(--color-accent-lavender)]/30",
+        solid
+          ? "bg-[var(--color-bg-paper)]"
+          : "glass hairline",
         busy && "opacity-70",
       )}
     >
+      {progressHint && (
+        <p
+          aria-live="polite"
+          data-testid="progress-hint"
+          className="px-4 pt-1 text-[10px] tracking-ritual2 text-[var(--color-ink-fade)]"
+        >
+          {progressHint}
+        </p>
+      )}
       {showQuickChips && <IntentChips onPick={handleChipPick} busy={busy} />}
       <div className="flex items-end gap-2 px-3 py-3">
         <Textarea
