@@ -14,12 +14,19 @@ const { middleware } = await import("./middleware");
  * 这里只覆盖白名单 + cookie 存在性。
  */
 
-function req(path: string, opts?: { cookie?: string }): NextRequest {
+function req(
+  path: string,
+  opts?: { cookie?: string; ua?: string },
+): NextRequest {
   const url = new URL(`http://localhost:3000${path}`);
   const headers = new Headers();
   if (opts?.cookie) headers.set("cookie", opts.cookie);
+  if (opts?.ua) headers.set("user-agent", opts.ua);
   return new NextRequest(url, { headers });
 }
+
+const WECHAT_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.40";
 
 describe("middleware", () => {
   it("/legal/privacy passes through (no cookie)", () => {
@@ -37,11 +44,31 @@ describe("middleware", () => {
     expect(r.headers.get("x-middleware-next")).toBe("1");
   });
 
-  it("missing session on a page route -> 307 redirect to /api/auth/wechat", () => {
-    const r = middleware(req("/me"));
-    // NextResponse.redirect defaults to 307 in Next 16.
+  it("missing session + wechat UA -> 307 redirect to /api/auth/wechat", () => {
+    const r = middleware(req("/me", { ua: WECHAT_UA }));
     expect(r.status).toBe(307);
     expect(r.headers.get("location")).toContain("/api/auth/wechat");
+  });
+
+  it("missing session + browser UA -> 307 redirect to /login", () => {
+    const r = middleware(req("/me"));
+    expect(r.status).toBe(307);
+    expect(r.headers.get("location")).toContain("/login");
+  });
+
+  it("/login passes through (no cookie)", () => {
+    const r = middleware(req("/login"));
+    expect(r.headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it("/api/auth/phone/send-otp passes through (no cookie)", () => {
+    const r = middleware(req("/api/auth/phone/send-otp"));
+    expect(r.headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it("/api/auth/phone/verify passes through (no cookie)", () => {
+    const r = middleware(req("/api/auth/phone/verify"));
+    expect(r.headers.get("x-middleware-next")).toBe("1");
   });
 
   it("missing session on an API route -> 401 JSON", async () => {
