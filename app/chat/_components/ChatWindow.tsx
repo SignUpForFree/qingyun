@@ -110,12 +110,13 @@ export function ChatWindow({
       if (streaming !== null || busy) return;
 
       // dream fast：下一条用户消息直接走 /api/divination/dream
+      // fastSchema 字段平铺：{conversationId, mode:"fast", dream}（不是 payload.dreamText）
       if (dreamFastWaitingRef.current && convId) {
         dreamFastWaitingRef.current = false;
         await postSubAction("/api/divination/dream", "解梦", {
           conversationId: convId,
           mode: "fast",
-          payload: { dreamText: text },
+          dream: text,
         });
         return;
       }
@@ -578,19 +579,18 @@ export function ChatWindow({
         if (!dim) return;
         await postSubAction("/api/divination/qianwen", "抽签", {
           conversationId: convId,
-          dimension: dim,
+          category: dim,
           userQuestion: values.userQuestion ?? "",
         });
       } else if (ui === "dream_precise_form") {
+        // dream preciseSchema 字段平铺，不要再包 payload — schema 没有 payload 字段
         await postSubAction("/api/divination/dream", "解梦", {
           conversationId: convId,
           mode: "precise",
-          payload: {
-            core: values.core ?? "",
-            emotion: values.emotion ?? "",
-            reality: values.reality || undefined,
-            special: values.special || undefined,
-          },
+          core: values.core ?? "",
+          emotion: values.emotion ?? "",
+          reality: values.reality || undefined,
+          special: values.special || undefined,
         });
       } else if (ui === "bazi_quick_form") {
         // bazi route schema 字段是 quickFormData{gender,birth_time,birth_place}，
