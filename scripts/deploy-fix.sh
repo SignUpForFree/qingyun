@@ -29,18 +29,16 @@ if [ $# -lt 1 ]; then
   exit 1
 fi
 
-echo "==> rsync $# 文件 -> $HOST"
+echo "==> 推送 $# 文件 -> $HOST (tar pipe over ssh)"
+# 用 tar pipe 避免 rsync/scp 远端 shell 对 () [] 等特殊字符再展开一次
 for f in "$@"; do
   if [ ! -f "$f" ]; then
     echo "  ! $f 不存在" >&2
     exit 2
   fi
-  # 服务器侧目录可能不存在（如 lib/util/）— 先 mkdir
-  rdir="$(dirname "$f")"
-  ssh -i "$KEY" -o StrictHostKeyChecking=accept-new "$HOST" "mkdir -p ~/occult/$rdir" >/dev/null
-  rsync -az -e "ssh -i $KEY" "$f" "$HOST:~/occult/$f"
-  echo "  ✓ $f"
 done
+tar -cf - "$@" | ssh -i "$KEY" -o StrictHostKeyChecking=accept-new "$HOST" 'cd ~/occult && tar -xf -'
+echo "  ✓ 推送 $# 文件"
 
 echo "==> remote rebuild + recreate"
 ssh -i "$KEY" "$HOST" bash -s <<'REMOTE'
