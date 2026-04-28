@@ -19,6 +19,8 @@ interface Props {
   redirectTo?: string;
   /** 自定义成功提示 */
   successMessage?: string;
+  /** 当前已有头像 URL（用于 step1 AvatarPicker 预填） */
+  avatarUrl?: string | null;
 }
 
 /**
@@ -36,6 +38,7 @@ export function OnboardingClient({
   createMode,
   redirectTo,
   successMessage,
+  avatarUrl,
 }: Props) {
   const [step, setStep] = React.useState<1 | 2 | 3>(1);
   const [form, setForm] = React.useState<Partial<OnboardingForm>>(initial ?? {});
@@ -45,6 +48,8 @@ export function OnboardingClient({
       <Step1Identity
         initial={form}
         editing={editing}
+        avatarUrl={avatarUrl}
+        profileId={profileId}
         onNext={(v) => {
           setForm((prev) => ({ ...prev, ...v }));
           setStep(2);

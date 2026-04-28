@@ -29,6 +29,7 @@ export default async function MeEditPage() {
     <OnboardingClient
       initial={profileToOnboardingForm(def)}
       profileId={def.id}
+      avatarUrl={def.avatar_url}
       editing
       redirectTo="/me"
       successMessage="档案已更新"

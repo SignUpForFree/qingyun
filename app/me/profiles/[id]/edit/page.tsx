@@ -33,6 +33,7 @@ export default async function EditProfilePage({ params }: Params) {
     <OnboardingClient
       initial={profileToOnboardingForm(target)}
       profileId={target.id}
+      avatarUrl={target.avatar_url}
       editing
       redirectTo="/me/profiles"
       successMessage="档案已更新"

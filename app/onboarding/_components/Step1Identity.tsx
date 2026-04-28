@@ -4,6 +4,7 @@ import * as React from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { AvatarPicker } from "@/components/profile/AvatarPicker";
 import { StepShell } from "./StepShell";
 import type { OnboardingForm } from "./schema";
 
@@ -14,9 +15,19 @@ interface Step1Props {
   onNext: (value: Step1Value) => void;
   /** 编辑模式下顶部 desc 改为提示文案 */
   editing?: boolean;
+  /** 用于 AvatarPicker 渲染当前头像（编辑模式从 profile 读） */
+  avatarUrl?: string | null;
+  /** AvatarPicker 上传目标（编辑特定档案时传） */
+  profileId?: string;
 }
 
-export function Step1Identity({ initial, onNext, editing }: Step1Props) {
+export function Step1Identity({
+  initial,
+  onNext,
+  editing,
+  avatarUrl,
+  profileId,
+}: Step1Props) {
   const [nickname, setNickname] = React.useState(initial.nickname ?? "");
   const [gender, setGender] = React.useState<Step1Value["gender"] | undefined>(initial.gender);
 
@@ -34,6 +45,17 @@ export function Step1Identity({ initial, onNext, editing }: Step1Props) {
         onNext({ nickname: nickname.trim(), gender });
       }}
     >
+      {/* 头像（可选，AvatarPicker 立即上传到默认档案，独立于 step3 提交） */}
+      <div className="flex flex-col items-center gap-1">
+        <AvatarPicker
+          currentUrl={avatarUrl ?? null}
+          nickname={nickname || "我"}
+          profileId={profileId}
+          size={84}
+        />
+        <p className="text-[10px] text-[var(--color-ink-fade)]">点 击 上 传 头 像 · 可 跳 过</p>
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="nickname">如何称呼你</Label>
         <Input
