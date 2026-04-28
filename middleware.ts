@@ -25,6 +25,7 @@ const PUBLIC_PREFIXES = [
   "/api/dev-login", // M3.14: dev/test-only 登录捷径（route 内 NODE_ENV gate）
   "/api/avatar/", // M4 头像静态 serve（hash 命名，公开访问）
   "/login", // M5: 浏览器手机号登录页（未登录可访问）
+  "/api/logout", // M5: 清 qy_uid cookie 一键切账号（未登录也允许调用）
 ];
 
 function isPublic(path: string): boolean {
