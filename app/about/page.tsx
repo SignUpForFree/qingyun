@@ -62,11 +62,11 @@ export default function AboutPage() {
           </h3>
           <Divider />
           <ul className="space-y-1.5 text-xs leading-relaxed text-[var(--color-ink-mist)]">
-            <li>· Next.js App Router + Tailwind 4 + shadcn/ui</li>
-            <li>· SQLite + drizzle-orm（本地 / Vercel Build）</li>
-            <li>· lunar-javascript 真太阳时排盘</li>
-            <li>· DeepSeek deepseek-chat 流式生成</li>
-            <li>· 当前版本：v0.1（V1.0 MVP）</li>
+            <li>· Next.js 16 App Router + Tailwind 4 + shadcn/Base UI</li>
+            <li>· SQLite + drizzle-orm + FTS5 历史搜索</li>
+            <li>· lunar-javascript 真太阳时排盘 + 30+ 神煞 + 大运流年</li>
+            <li>· DeepSeek deepseek-v4-pro 流式生成（ofox 网关）</li>
+            <li>· 当前版本：v2.0（多档案 / 八字 V2 / 100 签 / 64 卦）</li>
           </ul>
         </GlassCard>
 

@@ -50,8 +50,9 @@ export const viewport: Viewport = {
   themeColor: "#C9A1D9",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // a11y：允许用户缩放（视障用户 + lighthouse 要求 maximumScale≥5 / userScalable=true）
+  maximumScale: 5,
+  userScalable: true,
 };
 
 export default function RootLayout({
