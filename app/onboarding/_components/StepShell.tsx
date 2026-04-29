@@ -2,7 +2,6 @@
 
 import { Button } from "@/components/ui/button";
 import { GlassCard, Sparkle, WatercolorDot } from "@/components/su";
-import { cn } from "@/lib/utils";
 import { StepIndicator } from "./StepIndicator";
 
 interface StepShellProps {
@@ -19,7 +18,7 @@ interface StepShellProps {
   /** 跳过精准时间等次链接（design §2 第 198 行） */
   skipLabel?: string;
   onSkip?: () => void;
-  /** 内容垂直居中（step1 内容少时用，step2/3 用默认顶部对齐自然撑开） */
+  /** @deprecated 三步统一顶部堆叠，不再使用垂直居中 */
   centerContent?: boolean;
 }
 
@@ -46,11 +45,10 @@ export function StepShell({
   loading,
   skipLabel,
   onSkip,
-  centerContent,
 }: StepShellProps) {
   return (
     <div
-      className="relative mx-auto flex min-h-[100dvh] max-w-md flex-col overflow-hidden p-6"
+      className="relative mx-auto flex min-h-[100dvh] w-full max-w-md flex-col overflow-hidden px-5 py-6"
       data-testid="onboarding-step-shell"
     >
       {/* 仙气水彩底（与 home 一致风格） */}
@@ -63,7 +61,7 @@ export function StepShell({
       <div className="relative z-10 flex flex-1 flex-col">
         <StepIndicator current={step} total={total} className="mb-6" />
 
-        <GlassCard className="flex min-h-[calc(100dvh-9rem)] flex-col gap-5 p-6">
+        <GlassCard className="flex min-h-[calc(100dvh-9rem)] flex-col gap-6 px-6 py-8">
           <header className="space-y-1.5 text-center">
             <p
               className="font-[family-name:var(--font-serif)] text-[11px] uppercase tracking-ritual3 text-[var(--color-accent-lavender)]"
@@ -97,12 +95,7 @@ export function StepShell({
             </div>
           </header>
 
-          <div
-            className={cn(
-              "flex flex-col gap-4",
-              centerContent && "my-auto",
-            )}
-          >
+          <div className="flex flex-col gap-4">
             {children}
           </div>
 

@@ -84,11 +84,26 @@ describe("buildGuideCard (M2.15 dispatch)", () => {
   });
 });
 
-// router 现在用 listUserProfiles（.from().where() 不带 .limit）
-function mockProfiles(rows: typeof profilesFixture) {
+/**
+ * Mock 两种 select 链式：
+ *   - listUserProfiles: select().from().where() 直接 await（thenable）
+ *   - getConversationProfileId: select().from().where().limit(1) await
+ *
+ * boundProfileId 给定 → conversation.profile_id 视为已绑定该 id；null → 未绑定。
+ */
+function mockProfiles(
+  rows: typeof profilesFixture,
+  boundProfileId: string | null = null,
+) {
   dbMock.select.mockImplementation(() => ({
     from: vi.fn().mockReturnValue({
-      where: vi.fn().mockResolvedValue(rows),
+      where: vi.fn().mockReturnValue({
+        limit: vi.fn().mockResolvedValue(
+          boundProfileId ? [{ profile_id: boundProfileId }] : [],
+        ),
+        then: (resolve: (v: typeof rows) => unknown) =>
+          Promise.resolve(rows).then(resolve),
+      }),
     }),
   }));
 }
@@ -128,6 +143,19 @@ describe("buildGuideCard intent=bazi - profile branches", () => {
     expect(card.meta.ui).toBe("profile_picker");
     expect(card.meta.intent).toBe("bazi");
   });
+
+  it("2+ profile + 会话已绑定档案 → 跳过 picker 直接 focus_picker", async () => {
+    mockProfiles(
+      [
+        { id: "p-1", nickname: "我", isDefault: true, gender: "male", birthDate: null },
+        { id: "p-2", nickname: "我妈", isDefault: false, gender: "female", birthDate: null },
+      ],
+      "p-2",
+    );
+    const card = await buildGuideCard("bazi", "u-1", "c-1");
+    expect(card.meta.ui).toBe("bazi_focus_picker");
+    expect(card.meta.profileId).toBe("p-2");
+  });
 });
 
 describe("buildGuideCard intent=meihua - profile branches", () => {
@@ -164,6 +192,19 @@ describe("buildGuideCard intent=meihua - profile branches", () => {
     const card = await buildGuideCard("meihua", "u-1", "c-1");
     expect(card.meta.ui).toBe("profile_picker");
     expect(card.meta.intent).toBe("meihua");
+  });
+
+  it("2+ profile + 会话已绑定档案 → 跳过 picker 直接 number_input", async () => {
+    mockProfiles(
+      [
+        { id: "p-1", nickname: "我", isDefault: true, gender: "male", birthDate: null },
+        { id: "p-2", nickname: "我爸", isDefault: false, gender: "male", birthDate: null },
+      ],
+      "p-1",
+    );
+    const card = await buildGuideCard("meihua", "u-1", "c-1");
+    expect(card.meta.ui).toBe("meihua_number_input");
+    expect(card.meta.profileId).toBe("p-1");
   });
 });
 

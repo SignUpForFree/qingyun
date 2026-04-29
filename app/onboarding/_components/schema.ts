@@ -23,6 +23,7 @@ export const onboardingSchema = z.object({
     iso: z.string().min(1, "请选择出生日期"),
     calendarType: z.enum(["solar", "lunar"]),
     hour: z.number().int().min(0).max(23).nullable(),
+    minute: z.number().int().min(0).max(59).nullable(),
     rawDate: z.object({
       year: z.number().int(),
       month: z.number().int(),
@@ -72,11 +73,12 @@ export function toProfilePatch(form: OnboardingForm): ProfilePatch {
   const birth_date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 
   const hourValue = form.birth.hour;
-  // null/undefined → "12:00"（"不知道时辰"占位，与 M1.7 默认档保持一致）
-  // 0 → "00:00"（子时，必须区分于 null）
+  const minuteValue = form.birth.minute ?? 0;
+  // null/undefined → "12:00"（"不知道时分"占位，与 M1.7 默认档保持一致）
+  // 0 → "00:MM"（子时，必须区分于 null）
   const birth_time = hourValue == null
     ? "12:00"
-    : `${String(hourValue).padStart(2, "0")}:00`;
+    : `${String(hourValue).padStart(2, "0")}:${String(minuteValue).padStart(2, "0")}`;
 
   const district = form.region.district?.trim();
   const districtPart = district ? ` ${district}` : "";

@@ -55,6 +55,20 @@ async function listUserProfiles(userId: string) {
     .where(eq(profiles.user_id, userId));
 }
 
+/**
+ * 读取会话已绑定的 profile_id（profile_picker 后由 /api/chat/set-profile 写入）。
+ * 已绑定 → 后续 bazi/meihua 引导卡跳过 profile_picker，直接进 focus_picker / number_input。
+ */
+async function getConversationProfileId(conversationId: string): Promise<string | null> {
+  const db = getDb();
+  const [row] = await db
+    .select({ profile_id: conversations.profile_id })
+    .from(conversations)
+    .where(eq(conversations.id, conversationId))
+    .limit(1);
+  return row?.profile_id ?? null;
+}
+
 export async function buildGuideCard(
   intent: Intent,
   userId: string,
@@ -84,19 +98,24 @@ export async function buildGuideCard(
       if (userProfiles.length === 0) {
         return { contentText: "请填写八字信息", meta: { ui: "bazi_quick_form" } };
       }
-      // 单档案 fast-path：直接进 focus_picker，不强制弹档案选择
-      if (userProfiles.length === 1) {
-        const onlyId = userProfiles[0]!.id;
+      // 会话已绑定档案（profile_picker 选过 / set-profile 写过） → 跳过选择器
+      const boundProfileId = await getConversationProfileId(conversationId);
+      const boundExists = boundProfileId
+        ? userProfiles.some((p) => p.id === boundProfileId)
+        : false;
+      // 单档案 fast-path 或 已绑定档案：直接进 focus_picker
+      if (userProfiles.length === 1 || boundExists) {
+        const profileId = boundExists ? boundProfileId! : userProfiles[0]!.id;
         return {
           contentText: "您想从哪个角度看八字？",
           meta: {
             ui: "bazi_focus_picker",
-            profileId: onlyId,
+            profileId,
             options: BAZI_FOCUS_OPTIONS,
           },
         };
       }
-      // 2+ 档案 → A3 模式显式选档案
+      // 2+ 档案 + 未绑定 → A3 模式显式选档案
       return {
         contentText: "用谁的档案算八字？",
         meta: {
@@ -120,14 +139,19 @@ export async function buildGuideCard(
       if (userProfiles.length === 0) {
         return { contentText: "请先填写八字信息", meta: { ui: "bazi_quick_form" } };
       }
-      // 单档案 fast-path：直接进报数环节
-      if (userProfiles.length === 1) {
-        const onlyId = userProfiles[0]!.id;
+      // 会话已绑定档案 → 跳过选择器
+      const boundProfileId = await getConversationProfileId(conversationId);
+      const boundExists = boundProfileId
+        ? userProfiles.some((p) => p.id === boundProfileId)
+        : false;
+      // 单档案 fast-path 或 已绑定档案：直接进报数环节
+      if (userProfiles.length === 1 || boundExists) {
+        const profileId = boundExists ? boundProfileId! : userProfiles[0]!.id;
         return {
           contentText: "请报 3 个 1-999 之间的随机数（也可只报 1-2 个）",
           meta: {
             ui: "meihua_number_input",
-            profileId: onlyId,
+            profileId,
             numberCount: 3,
           },
         };

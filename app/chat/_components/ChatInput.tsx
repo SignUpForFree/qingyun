@@ -74,16 +74,18 @@ export function ChatInput({
   return (
     <div
       className={cn(
-        "sticky bottom-0 z-20 flex flex-col gap-1 px-0 py-0",
+        // 在 chat layout (h-[100dvh] flex-col) 里，MessageList flex-1 自动让出底部，
+        // 这里只需常规 flex 子元素 — 不要 sticky，否则会盖在滚动区上方遮挡最新流式内容
+        "shrink-0 flex flex-col gap-0 px-0 py-0",
         "border-t border-[var(--color-accent-lavender)]/30",
-        // iOS Home Bar / 刘海 — 让 sticky 底栏始终多出一段安全区
+        // iOS Home Bar / 刘海 — 安全区
         "pb-[env(safe-area-inset-bottom,0px)]",
         solid
           ? "bg-[var(--color-bg-paper)]"
           : "glass hairline",
         busy && "opacity-70",
       )}
-      // iOS Safari 键盘弹起时 visualViewport 收缩 → 把 sticky 整体顶上去
+      // iOS Safari 键盘弹起时 visualViewport 收缩 → 把整体顶上去（仍保留兼容）
       style={keyboardInset > 0 ? { transform: `translateY(-${keyboardInset}px)` } : undefined}
     >
       {progressHint && (
@@ -96,7 +98,7 @@ export function ChatInput({
         </p>
       )}
       {showQuickChips && <IntentChips onPick={handleChipPick} busy={busy} />}
-      <div className="flex items-end gap-2 px-3 py-3">
+      <div className="flex items-end gap-2 px-3 pb-3 pt-1">
         <Textarea
           ref={taRef}
           rows={1}

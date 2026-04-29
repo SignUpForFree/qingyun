@@ -5,6 +5,7 @@ import { ChevronLeft } from "lucide-react";
 import { AppHeader } from "@/components/layout";
 import { Sparkle, WatercolorDot } from "@/components/su";
 import { PhoneBindCard } from "@/components/profile/PhoneBindCard";
+import { LoginGate } from "@/components/auth/LoginGate";
 import { requireUserId, UnauthenticatedError } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { phoneBind } from "@/lib/db/schema";
@@ -22,7 +23,7 @@ export default async function MePhonePage() {
   try {
     userId = await requireUserId();
   } catch (e) {
-    if (e instanceof UnauthenticatedError) redirect("/api/auth/wechat");
+    if (e instanceof UnauthenticatedError) return <LoginGate />;
     throw e;
   }
 

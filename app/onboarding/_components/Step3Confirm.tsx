@@ -7,6 +7,7 @@ import { z } from "zod";
 import { GlassCard, Divider } from "@/components/su";
 import { StepShell } from "./StepShell";
 import { toProfilePatch, type OnboardingForm } from "./schema";
+import { apiFetch } from "@/lib/util/api-fetch";
 
 // 最小 zod schema — 只校验我们用到的字段。`.passthrough()` 让 M2/M4 增加新字段时
 // 不破坏 onboarding 提交流程。
@@ -60,7 +61,7 @@ export function Step3Confirm({
       const patch = toProfilePatch(form);
 
       if (createMode) {
-        const res = await fetch("/api/me/profiles", {
+        const res = await apiFetch("/api/me/profiles", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(patch),
@@ -77,7 +78,7 @@ export function Step3Confirm({
 
       let targetId = profileId;
       if (!targetId) {
-        const listRes = await fetch("/api/me/profiles");
+        const listRes = await apiFetch("/api/me/profiles");
         if (!listRes.ok) {
           toast.error(`加载档案失败 (${listRes.status})`);
           return;
@@ -95,7 +96,7 @@ export function Step3Confirm({
         targetId = defaultProfile.id;
       }
 
-      const res = await fetch(`/api/me/profiles/${targetId}`, {
+      const res = await apiFetch(`/api/me/profiles/${targetId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
@@ -125,8 +126,8 @@ export function Step3Confirm({
         String(form.birth.rawDate.day).padStart(2, "0");
   const hourLabel =
     form.birth.hour === null
-      ? "时辰不知道（按正午占位）"
-      : `${String(form.birth.hour).padStart(2, "0")}:00 起`;
+      ? "时分不知道（按正午占位）"
+      : `${String(form.birth.hour).padStart(2, "0")}:${String(form.birth.minute ?? 0).padStart(2, "0")}`;
   const districtLabel = form.region.district ? ` ${form.region.district}` : "";
 
   return (

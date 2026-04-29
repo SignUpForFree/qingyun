@@ -40,7 +40,7 @@ export function Step2BirthInfo({ initial, onPrev, onNext }: Step2Props) {
       }}
     >
       <div className="space-y-2">
-        <Label>出生日期与时辰</Label>
+        <Label>出生日期与时分</Label>
         <DatePicker value={birthValue} onChange={setBirthValue} />
       </div>
 
@@ -61,13 +61,15 @@ function isRegionComplete(v: RegionPickerValue | null): v is RegionPickerValue {
 }
 
 function formValueFromDatePicker(v: DatePickerValue): OnboardingForm["birth"] {
-  // 用户未选时辰时 → 按子时（hour=0）记，hour=null 留作 metadata 标记
+  // 用户未选时辰时 → 按子时（hour=0/minute=0）记，hour=null 留作 metadata 标记
   const hour = v.hour ?? 0;
-  const iso = `${v.solarDate}T${String(hour).padStart(2, "0")}:00:00+08:00`;
+  const minute = v.minute ?? 0;
+  const iso = `${v.solarDate}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00+08:00`;
   return {
     iso,
     calendarType: v.calendarType,
     hour: v.hour,
+    minute: v.hour === null ? null : minute,
     rawDate: v.rawDate,
   };
 }
@@ -77,6 +79,7 @@ function datePickerValueFromForm(b: OnboardingForm["birth"]): DatePickerValue {
     solarDate: b.iso.slice(0, 10),
     calendarType: b.calendarType,
     hour: b.hour,
+    minute: b.minute,
     rawDate: b.rawDate,
   };
 }

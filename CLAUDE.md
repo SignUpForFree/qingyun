@@ -14,23 +14,27 @@ pnpm db:migrate    # drizzle-kit + better-sqlite3
 
 `.env.local` 已存在，里面是 ofox 网关 key（`AI_GATEWAY_*`）。**不要**提交。
 
-## 2. 生产服务器（腾讯云上海，与 coin 项目同一台）
+## 2. 生产服务器（腾讯云，2026-04-29 换机）
+
+> 旧机：`43.129.186.82` + `renliang.pem`（已下线，仅作历史记录）。
+> 新机镜像走腾讯云 Docker CE 应用镜像，Ubuntu 24.04 LTS，kernel 6.8。
 
 | 项 | 值 |
 |---|---|
-| Host | `43.129.186.82` |
+| Host | `192.144.226.27` |
 | User | `ubuntu` |
-| Key | `/Users/edy/Downloads/renliang.pem` |
+| Key | `/Users/edy/Downloads/renl.pem`（必须 `chmod 600`） |
+| OS | Ubuntu 24.04 LTS（hostname `VM-0-10-ubuntu`） |
 | Repo dir | `~/occult`（**不是** git repo，是 scp 推上去的，所以 `git pull` 不能用，用 `git apply` 打 patch 或 rsync 同步） |
 | Container | `qingyun-ai`（`docker compose ... ps`），镜像 `occult-qingyun:latest` |
 | 端口 | `0.0.0.0:3000:3000` |
 | 数据卷 | `~/occult/data:/app/data`（uid=1001，host 是 ubuntu uid=1000，必须 `sudo chown -R 1001:1001 ~/occult/data`） |
-| 公网 | http://43.129.186.82:3000 |
+| 公网 | http://192.144.226.27:3000 |
 
 ### 一行 SSH
 
 ```bash
-ssh -i /Users/edy/Downloads/renliang.pem -o StrictHostKeyChecking=accept-new ubuntu@43.129.186.82 '<cmd>'
+ssh -i /Users/edy/Downloads/renl.pem -o StrictHostKeyChecking=accept-new ubuntu@192.144.226.27 '<cmd>'
 ```
 
 ### 推改动 + 重建（最常用流程）
@@ -38,10 +42,10 @@ ssh -i /Users/edy/Downloads/renliang.pem -o StrictHostKeyChecking=accept-new ubu
 ```bash
 # 在本地
 git diff > /tmp/qingyun-fix.patch
-scp -i /Users/edy/Downloads/renliang.pem /tmp/qingyun-fix.patch ubuntu@43.129.186.82:~/occult/
+scp -i /Users/edy/Downloads/renl.pem /tmp/qingyun-fix.patch ubuntu@192.144.226.27:~/occult/
 
 # 在服务器
-ssh -i /Users/edy/Downloads/renliang.pem ubuntu@43.129.186.82
+ssh -i /Users/edy/Downloads/renl.pem ubuntu@192.144.226.27
 cd ~/occult
 git apply qingyun-fix.patch       # 注意：~/occult 不是 git repo，但 git apply 不依赖
 docker compose build --no-cache   # 必须 --no-cache，否则 Dockerfile 改动可能不生效
@@ -53,7 +57,7 @@ curl -sS http://127.0.0.1:3000/api/healthz
 ### 验证 API（外部）
 
 ```bash
-curl -sS http://43.129.186.82:3000/api/healthz
+curl -sS http://192.144.226.27:3000/api/healthz
 ```
 
 ## 3. 已知坑 / 反复踩

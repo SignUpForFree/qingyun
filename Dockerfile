@@ -12,14 +12,18 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 
+# 切阿里云 alpine 镜像（默认 dl-cdn.alpinelinux.org 在国内 ~10KB/s 拖死 gcc 安装）
+RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.tencent.com|g' /etc/apk/repositories
+
 # better-sqlite3 native 编译需要 python + build-base
 RUN apk add --no-cache python3 make g++ libc6-compat
 
-# pnpm via corepack
+# pnpm via corepack（用淘宝 npm 镜像加速 pnpm 自身下载）
 RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
 
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod=false
+RUN pnpm config set registry https://registry.npmmirror.com \
+ && pnpm install --frozen-lockfile --prod=false
 
 # ─────────────────────────────────────────
 # Stage 2: 构建 Next.js standalone
@@ -27,6 +31,7 @@ RUN pnpm install --frozen-lockfile --prod=false
 FROM node:20-alpine AS builder
 WORKDIR /app
 
+RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.tencent.com|g' /etc/apk/repositories
 RUN apk add --no-cache python3 make g++ libc6-compat
 RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
 
@@ -42,6 +47,7 @@ RUN pnpm build
 FROM node:20-alpine AS runner
 WORKDIR /app
 
+RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.tencent.com|g' /etc/apk/repositories
 # better-sqlite3 运行时需要 libc6-compat（musl ↔ glibc 桥接）
 RUN apk add --no-cache libc6-compat tini
 

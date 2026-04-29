@@ -4,7 +4,7 @@ import { ChatWindow } from "./_components/ChatWindow";
 import { HistoryDrawer } from "./_components/HistoryDrawer";
 import { ensureUserId } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
-import { conversations, messages } from "@/lib/db/schema";
+import { conversations, messages, profiles } from "@/lib/db/schema";
 import type { DisplayMessage } from "./_components/MessageBubble";
 
 /**
@@ -47,9 +47,19 @@ export default async function ChatPage({ searchParams }: PageProps) {
   let initialMessages: DisplayMessage[] = [];
   let resolvedConvId: string | null = null;
 
+  // chat 是登录后页面（middleware/LoginGate 保证），这里直接读默认档案做头像/昵称
+  const userId = await ensureUserId();
+  const db = getDb();
+
+  const defaultProfileRow = await db
+    .select({ nickname: profiles.nickname, avatar_url: profiles.avatar_url })
+    .from(profiles)
+    .where(and(eq(profiles.user_id, userId), eq(profiles.is_default, true)))
+    .limit(1);
+  const userAvatarUrl = defaultProfileRow[0]?.avatar_url ?? null;
+  const userNickname = defaultProfileRow[0]?.nickname ?? "我";
+
   if (cid) {
-    const userId = await ensureUserId();
-    const db = getDb();
     const owned = await db
       .select({ id: conversations.id })
       .from(conversations)
@@ -85,6 +95,8 @@ export default async function ChatPage({ searchParams }: PageProps) {
         initialIntent={intent}
         openHistoryOnMount={openHistory}
         prefillText={prefill}
+        userAvatarUrl={userAvatarUrl}
+        userNickname={userNickname}
       />
     </>
   );

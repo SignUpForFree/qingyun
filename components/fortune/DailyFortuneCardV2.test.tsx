@@ -77,7 +77,7 @@ describe("DailyFortuneCardV2 (M4.1)", () => {
       "幸运花",
       "随身物",
       "配饰",
-      "食物",
+      "幸运食物",
     ]) {
       expect(screen.getByText(a)).toBeInTheDocument();
     }

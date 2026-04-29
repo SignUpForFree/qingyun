@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { OnboardingClient } from "@/app/onboarding/_components/OnboardingClient";
+import { LoginGate } from "@/components/auth/LoginGate";
 import { requireUserId, UnauthenticatedError } from "@/lib/auth/session";
 import { listProfiles } from "@/lib/profile/repository";
 import { profileToOnboardingForm } from "@/lib/profile/to-onboarding-form";
@@ -17,7 +18,7 @@ export default async function MeEditPage() {
   try {
     userId = await requireUserId();
   } catch (e) {
-    if (e instanceof UnauthenticatedError) redirect("/api/auth/wechat");
+    if (e instanceof UnauthenticatedError) return <LoginGate />;
     throw e;
   }
 

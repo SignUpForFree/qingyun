@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Camera, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/util/api-fetch";
 
 interface AvatarPickerProps {
   /** 当前头像 URL（已上传的 /api/avatar/xxx 或 null） */
@@ -87,7 +88,7 @@ export function AvatarPicker({
       const fd = new FormData();
       fd.append("file", blob, "avatar.jpg");
       if (profileId) fd.append("profile_id", profileId);
-      const res = await fetch("/api/me/avatar", { method: "POST", body: fd });
+      const res = await apiFetch("/api/me/avatar", { method: "POST", body: fd });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         toast.error(err?.error ?? `上传失败 (${res.status})`);

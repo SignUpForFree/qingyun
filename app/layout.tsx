@@ -4,6 +4,7 @@ import { Noto_Serif_SC, Noto_Sans_SC, Ma_Shan_Zheng } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
 import { AppShell } from "@/components/layout";
+import { LoginSheet } from "@/components/auth/LoginSheet";
 
 const notoSerif = Noto_Serif_SC({
   subsets: ["latin"],
@@ -75,6 +76,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col font-sans">
         <AppShell>{children}</AppShell>
+        <LoginSheet />
         <Toaster richColors position="top-center" />
       </body>
     </html>

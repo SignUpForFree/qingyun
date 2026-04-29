@@ -7,6 +7,7 @@ import { GlassCard, Sparkle } from "@/components/su";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { apiFetch } from "@/lib/util/api-fetch";
 
 interface PhoneBindCardProps {
   /** 已绑定的 E.164 号码（已脱敏后端给的字段：+86 138****1234） */
@@ -51,7 +52,7 @@ export function PhoneBindCard({ currentPhone, onBound }: PhoneBindCardProps) {
     setSending(true);
     try {
       const e164 = `+86${phone.trim()}`;
-      const res = await fetch("/api/me/phone/verify", {
+      const res = await apiFetch("/api/me/phone/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: e164 }),
@@ -75,7 +76,7 @@ export function PhoneBindCard({ currentPhone, onBound }: PhoneBindCardProps) {
     setVerifying(true);
     try {
       const e164 = `+86${phone.trim()}`;
-      const res = await fetch("/api/me/phone/change", {
+      const res = await apiFetch("/api/me/phone/change", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: e164, code: code.trim() }),

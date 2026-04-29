@@ -3,8 +3,11 @@ import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/layout";
 import { GlassCard, Sparkle, WatercolorDot, Divider, LogoMark } from "@/components/su";
 import { Button } from "@/components/ui/button";
-import { DailyFortuneCardV2 } from "@/components/fortune/DailyFortuneCardV2";
+import { FortuneSummaryCard } from "@/components/fortune/FortuneSummaryCard";
+import { LuckyAttrsCard } from "@/components/fortune/LuckyAttrsCard";
+import { LauncherStack } from "@/components/fortune/LauncherStack";
 import { ProfileSwitcher, type ProfileSwitcherItem } from "@/components/profile/ProfileSwitcher";
+import { LoginGate } from "@/components/auth/LoginGate";
 import { requireUserId, UnauthenticatedError } from "@/lib/auth/session";
 import { listProfiles } from "@/lib/profile/repository";
 import {
@@ -14,13 +17,13 @@ import {
 import { getLunarToday } from "@/lib/util/lunar-date";
 
 /**
- * 首页 (M4.4, image2)
+ * 首页 — 参考"轻运阁"三卡式：FortuneSummaryCard / LuckyAttrsCard / LauncherStack
  *
  * 4 种页面状态：
  *   1. 未认证 → middleware 已经把它跳到 /api/auth/wechat；这里 try/catch 兜底
  *   2. 未建档 / 默认档丢失 → /onboarding（理论上 M1.7 已建占位档）
  *   3. 默认档为占位（birth_place="未填" / gender="other"）→ "继续完善" CTA
- *   4. 默认档已填 → DailyFortuneCardV2 完整运势卡（7 维度 + 8 lucky + 4 launcher）
+ *   4. 默认档已填 → 三张独立白卡（运势分数 / 幸运物 / 4 入口）
  */
 export const dynamic = "force-dynamic";
 
@@ -30,7 +33,7 @@ export default async function HomePage() {
     userId = await requireUserId();
   } catch (e: unknown) {
     if (e instanceof UnauthenticatedError) {
-      redirect("/api/auth/wechat");
+      return <LoginGate />;
     }
     throw e;
   }
@@ -56,7 +59,7 @@ export default async function HomePage() {
         }
         right={<HomeAvatar nickname={def.nickname} />}
       />
-      <div className="relative flex flex-1 flex-col items-center gap-5 overflow-hidden p-4 pb-20">
+      <div className="relative flex flex-1 flex-col items-center gap-5 p-4 pb-28">
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <WatercolorDot color="lavender" size={140} className="absolute left-[8%] top-[14%]" />
           <WatercolorDot color="pink" size={120} className="absolute right-[10%] top-[20%]" />
@@ -95,7 +98,7 @@ function HomeAvatar({ nickname }: { nickname: string }) {
 
 async function FortuneSection({
   userId,
-  nickname,
+  nickname: _nickname,
 }: {
   userId: string;
   nickname: string;
@@ -111,16 +114,16 @@ async function FortuneSection({
   }
 
   return (
-    <DailyFortuneCardV2
-      fortune={{
-        date: fortune.date,
-        overall: fortune.overall,
-        scores: fortune.scores,
-        oneLiner: fortune.oneLiner,
-        attributes: fortune.attributes,
-      }}
-      nickname={nickname}
-    />
+    <>
+      <FortuneSummaryCard
+        date={fortune.date}
+        overall={fortune.overall}
+        scores={fortune.scores}
+        oneLiner={fortune.oneLiner}
+      />
+      <LuckyAttrsCard attrs={fortune.attributes} />
+      <LauncherStack />
+    </>
   );
 }
 

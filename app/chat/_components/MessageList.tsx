@@ -7,6 +7,7 @@ import {
   type DisplayMessage,
   type CardPickCallback,
   type CardSubmitCallback,
+  type CardActionCallback,
 } from "./MessageBubble";
 
 interface MessageListProps {
@@ -16,7 +17,12 @@ interface MessageListProps {
   empty?: React.ReactNode;
   onCardPick?: CardPickCallback;
   onCardSubmit?: CardSubmitCallback;
+  onCardAction?: CardActionCallback;
   busy?: boolean;
+  /** user 头像 URL（来自默认档案 avatar_url；null 时取首字 fallback） */
+  userAvatarUrl?: string | null;
+  /** user 昵称（avatar fallback + alt） */
+  userNickname?: string;
 }
 
 /**
@@ -39,47 +45,45 @@ export function MessageList({
   empty,
   onCardPick,
   onCardSubmit,
+  onCardAction,
   busy,
+  userAvatarUrl,
+  userNickname,
 }: MessageListProps) {
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const endRef = React.useRef<HTMLDivElement | null>(null);
-  const isPinnedRef = React.useRef(true);
   const firstMountRef = React.useRef(true);
 
-  // 监听底锚点是否在视口（用户向上翻 → false → 后续新消息不再追滚）
-  // jsdom 没 IntersectionObserver，guard 一下保持 isPinned=true 兼容测试。
-  React.useEffect(() => {
-    if (typeof IntersectionObserver === "undefined") return;
-    const target = endRef.current;
+  /**
+   * 是否"贴底" — 直接算 scrollTop 与底距，比 IntersectionObserver 的 rootMargin
+   * 更稳（之前用负 rootMargin 导致 endRef 在底部时反而被判为 not-intersecting，
+   * isPinned 永久 false，整套 auto-scroll 全部 skip）。
+   *
+   * 阈值 80px：用户主动向上滚 ≥80px 才视为"读旧消息中"，新内容不打扰。
+   */
+  function isPinnedToBottom(): boolean {
     const root = scrollRef.current;
-    if (!target || !root) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        const e = entries[0];
-        if (e) isPinnedRef.current = e.isIntersecting;
-      },
-      { root, rootMargin: "0px 0px -64px 0px", threshold: 0 },
-    );
-    io.observe(target);
-    return () => io.disconnect();
-  }, []);
+    if (!root) return true;
+    const dist = root.scrollHeight - root.scrollTop - root.clientHeight;
+    return dist < 80;
+  }
 
-  // 流式期间：每次 streamingText 变化都"瞬时"贴底（仅当 isPinned=true）
+  // 流式期间：每次 streamingText 变化都"瞬时"贴底
   React.useEffect(() => {
     if (streamingText === null) return;
-    if (!isPinnedRef.current) return;
+    if (!isPinnedToBottom()) return;
     endRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
   }, [streamingText]);
 
-  // 消息边界：messages.length 变化（新一轮答复落定）→ 平滑滚到底
+  // 消息边界：messages.length 变化总是滚到底
+  // 用户主动动作（输入框发送 / 点 chips / 点卡片选项）都会导致新消息出现，
+  // 此时 UI 必须把视图带到最新内容，不受 isPinnedToBottom 约束（因为用户期望看到）。
   React.useEffect(() => {
     if (firstMountRef.current) {
       firstMountRef.current = false;
-      // 首次挂载：直接瞬时贴底，不滚动动画
       endRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
       return;
     }
-    if (!isPinnedRef.current) return;
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages.length]);
 
@@ -100,7 +104,10 @@ export function MessageList({
               message={m}
               onCardPick={onCardPick}
               onCardSubmit={onCardSubmit}
+              onCardAction={onCardAction}
               busy={busy}
+              userAvatarUrl={userAvatarUrl}
+              userNickname={userNickname}
             />
           ))}
           {streamingText !== null && (

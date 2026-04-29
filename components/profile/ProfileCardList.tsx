@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { GlassCard, Sparkle } from "@/components/su";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/util/api-fetch";
 
 export interface ProfileCardItem {
   id: string;
@@ -42,7 +42,7 @@ export function ProfileCardList({ profiles }: ProfileCardListProps) {
     if (busy) return;
     setBusy(id);
     try {
-      const res = await fetch(`/api/me/profiles/${id}`, {
+      const res = await apiFetch(`/api/me/profiles/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ is_default: true }),
@@ -68,7 +68,7 @@ export function ProfileCardList({ profiles }: ProfileCardListProps) {
     }
     setBusy(id);
     try {
-      const res = await fetch(`/api/me/profiles/${id}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/me/profiles/${id}`, { method: "DELETE" });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         toast.error(err?.error ?? `删除失败 (${res.status})`);
@@ -85,9 +85,9 @@ export function ProfileCardList({ profiles }: ProfileCardListProps) {
 
   if (profiles.length === 0) {
     return (
-      <GlassCard className="p-6 text-center text-sm text-[var(--color-ink-fade)]">
-        还没有档案。
-      </GlassCard>
+      <div className="space-y-3" data-testid="profile-card-list">
+        <AddProfileCard />
+      </div>
     );
   }
 
@@ -160,16 +160,21 @@ export function ProfileCardList({ profiles }: ProfileCardListProps) {
         </GlassCard>
       ))}
 
-      <Link href="/me/profiles/new" className="block">
-        <Button
-          variant="outline"
-          className="h-12 w-full rounded-[14px] border-[var(--color-accent-lavender)]/40 font-[family-name:var(--font-serif)] tracking-ritual text-[var(--color-accent-plum)]"
-          data-testid="profile-new-cta"
-        >
-          + 新建一个档案
-        </Button>
-      </Link>
+      <AddProfileCard />
     </div>
+  );
+}
+
+function AddProfileCard() {
+  return (
+    <Link
+      href="/me/profiles/new"
+      className="flex h-14 items-center justify-center gap-2 rounded-[16px] border border-dashed border-[var(--color-accent-plum)]/45 bg-white/40 font-[family-name:var(--font-serif)] text-[14px] tracking-ritual text-[var(--color-accent-plum)] transition hover:bg-white/60"
+      data-testid="profile-new-cta"
+    >
+      <span>＋</span>
+      <span>添加个人档案</span>
+    </Link>
   );
 }
 

@@ -119,9 +119,18 @@ export async function POST(req: Request) {
       });
     }
 
-    // 单档案 fast-path：直接进报数环节
-    if (userProfiles.length === 1) {
-      const onlyId = userProfiles[0]!.id;
+    // 已绑定档案 fast-path（防止 client 漏传 profileId 时倒退到 picker）
+    const bound = await db
+      .select({ profile_id: conversations.profile_id })
+      .from(conversations)
+      .where(eq(conversations.id, conversationId))
+      .limit(1);
+    const boundId = bound[0]?.profile_id;
+    const boundExists = boundId ? userProfiles.some((p) => p.id === boundId) : false;
+
+    // 单档案 fast-path 或 已绑定档案 fast-path：直接进报数环节
+    if (userProfiles.length === 1 || boundExists) {
+      const onlyId = boundExists ? boundId! : userProfiles[0]!.id;
       const cardMeta = {
         ui: "meihua_number_input" as const,
         profileId: onlyId,

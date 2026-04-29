@@ -6,9 +6,9 @@ import { toast } from "sonner";
 import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
 import { HistoryDrawer } from "./HistoryDrawer";
-import { DreamPreciseModal, type DreamPreciseFormData } from "./DreamPreciseModal";
-import { GlassCard, Sparkle } from "@/components/su";
+import { EmptyLauncher } from "./EmptyLauncher";
 import type { DisplayMessage } from "./MessageBubble";
+import { apiFetch } from "@/lib/util/api-fetch";
 
 interface ChatWindowProps {
   conversationId: string | null;
@@ -21,6 +21,10 @@ interface ChatWindowProps {
   openHistoryOnMount?: boolean;
   /** ?prefill=xxx → 预填到输入框（不自动发送，M4.10 / DeepAskButton 入口） */
   prefillText?: string;
+  /** 当前用户默认档案头像 URL（user 气泡左侧显示） */
+  userAvatarUrl?: string | null;
+  /** 当前用户默认档案昵称（avatar fallback 取首字 + 无障碍 alt） */
+  userNickname?: string;
 }
 
 const INTENT_AUTO_TEXT: Record<NonNullable<ChatWindowProps["initialIntent"]>, string> = {
@@ -70,6 +74,8 @@ export function ChatWindow({
   initialIntent,
   openHistoryOnMount,
   prefillText,
+  userAvatarUrl,
+  userNickname,
 }: ChatWindowProps) {
   const router = useRouter();
   const [convId, setConvId] = React.useState<string | null>(initialConvId);
@@ -91,9 +97,6 @@ export function ChatWindow({
     }
     setDrawerOpenRaw(next);
   }, []);
-  /** M4.9: dream precise modal 仪式特化 fullscreen */
-  const [dreamModalOpen, setDreamModalOpen] = React.useState(false);
-  const dreamModalSeenRef = React.useRef<Set<string>>(new Set());
   const abortRef = React.useRef<AbortController | null>(null);
   const autoSentRef = React.useRef(false);
   const sendRef = React.useRef<(t: string) => Promise<void>>(() => Promise.resolve());
@@ -135,7 +138,7 @@ export function ChatWindow({
 
       let res: Response;
       try {
-        res = await fetch("/api/chat", {
+        res = await apiFetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ conversationId: convId, text }),
@@ -289,7 +292,7 @@ export function ChatWindow({
       setBusy(true);
       let res: Response;
       try {
-        res = await fetch(url, {
+        res = await apiFetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -542,7 +545,7 @@ export function ChatWindow({
         const profileId = key;
         void (async () => {
           try {
-            await fetch("/api/chat/set-profile", {
+            await apiFetch("/api/chat/set-profile", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ conversationId: convId, profileId }),
@@ -612,20 +615,33 @@ export function ChatWindow({
         const numbers = (values.numbers ?? "")
           .split(/[,，\s]+/)
           .map((s) => Number(s))
-          .filter((n) => Number.isInteger(n) && n >= 1 && n <= 9)
+          .filter((n) => Number.isInteger(n) && n >= 1 && n <= 999)
           .slice(0, 3);
         if (numbers.length === 0) {
-          toast.error("数字不合法，请填 1-3 个 1-9 的整数");
+          toast.error("数字不合法，请填 1-3 个 1-999 的整数");
           return;
+        }
+        // 卡片 metadata 里已写入 profileId（router/route 创建卡时塞的）；
+        // 提交时必须带回去，否则后端进 Branch A 又出 profile_picker → 用户感知"重复弹窗"
+        const numMsg = messages.find((m) => m.id === msgId);
+        let mhProfileId: string | undefined;
+        if (numMsg?.metadata) {
+          try {
+            const meta = JSON.parse(numMsg.metadata) as { profileId?: string };
+            mhProfileId = meta.profileId;
+          } catch {
+            /* 忽略，下面让后端 fallback */
+          }
         }
         await postSubAction("/api/divination/meihua", "测算", {
           conversationId: convId,
+          ...(mhProfileId ? { profileId: mhProfileId } : {}),
           numbers,
           userQuestion: values.userQuestion ?? "",
         });
       }
     },
-    [convId, postSubAction],
+    [convId, postSubAction, messages],
   );
 
   React.useEffect(() => {
@@ -645,43 +661,49 @@ export function ChatWindow({
     return () => abortRef.current?.abort();
   }, []);
 
-  // M4.9: 当列表新增 dream_precise_form 卡 → 自动开 modal（每张卡只开一次）
-  React.useEffect(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const m = messages[i]!;
-      if (m.role !== "assistant" || !m.metadata) continue;
-      try {
-        const meta = JSON.parse(m.metadata) as { ui?: string };
-        if (meta.ui === "dream_precise_form" && !dreamModalSeenRef.current.has(m.id)) {
-          dreamModalSeenRef.current.add(m.id);
-          setDreamModalOpen(true);
+  /**
+   * slip_image 卡上的 "立即解读" / "保存到相册" 等卡片级 action。
+   * 之前 MessageList 漏传 onCardAction，导致按钮 onClick 等于 noop。
+   */
+  const handleCardAction = React.useCallback(
+    async (msgId: string, ui: string, action: string): Promise<void> => {
+      if (ui === "slip_image" && action === "explain") {
+        if (!convId) {
+          toast.error("会话尚未建立，请先与轻运打个招呼");
+          return;
         }
-      } catch {
-        /* skip 坏 JSON */
-      }
-      break; // 只看最新一条
-    }
-  }, [messages]);
-
-  const handleDreamModalSubmit = React.useCallback(
-    async (data: DreamPreciseFormData) => {
-      if (!convId) {
-        toast.error("会话尚未建立，请先与轻运打个招呼");
+        await postSubAction("/api/divination/qianwen/explain", "解读", {
+          messageId: msgId,
+        });
         return;
       }
-      setDreamModalOpen(false);
-      await postSubAction("/api/divination/dream", "解梦", {
-        conversationId: convId,
-        mode: "precise",
-        payload: {
-          core: data.core,
-          emotion: data.emotion,
-          reality: data.reality || undefined,
-          special: data.special || undefined,
-        },
-      });
+      if (ui === "slip_image" && action === "share") {
+        // M5 微信内会接 wx.previewImage；浏览器 fallback：触发下载
+        const msg = messages.find((m) => m.id === msgId);
+        if (!msg?.metadata) {
+          toast.error("图片信息丢失");
+          return;
+        }
+        try {
+          const meta = JSON.parse(msg.metadata) as { imageUrl?: string; slipNumber?: number };
+          if (!meta.imageUrl) {
+            toast.error("签图未生成");
+            return;
+          }
+          const a = document.createElement("a");
+          a.href = meta.imageUrl;
+          a.download = `lingqian-${meta.slipNumber ?? "slip"}.png`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          toast.success("已开始下载，长按图片可保存到相册");
+        } catch {
+          toast.error("保存失败，请稍候再试");
+        }
+        return;
+      }
     },
-    [convId, postSubAction],
+    [convId, postSubAction, messages],
   );
 
   return (
@@ -694,36 +716,24 @@ export function ChatWindow({
         onOpenChange={setDrawerOpen}
         hideTrigger
       />
-      <DreamPreciseModal
-        open={dreamModalOpen}
-        onClose={() => setDreamModalOpen(false)}
-        onSubmit={handleDreamModalSubmit}
-        busy={busy}
-      />
       <MessageList
         messages={messages}
         streamingText={streaming}
         onCardPick={handleCardPick}
         onCardSubmit={handleCardSubmit}
+        onCardAction={handleCardAction}
         busy={busy}
+        userAvatarUrl={userAvatarUrl}
+        userNickname={userNickname}
         empty={
-          <div className="flex flex-1 items-center justify-center px-6">
-            <GlassCard className="max-w-sm space-y-2 p-5 text-center">
-              <p className="text-sm tracking-ritual2 text-[var(--color-ink-plum)]">
-                想问就问，我陪你慢慢理 <Sparkle size={10} />
-              </p>
-              <p className="text-xs text-[var(--color-ink-fade)]">
-                抽签 / 解梦 / 八字 / 测算 都直接打字告诉我
-              </p>
-            </GlassCard>
-          </div>
+          <EmptyLauncher onPick={send} busy={streaming !== null || busy} />
         }
       />
       <ChatInput
         onSend={send}
         busy={streaming !== null || busy}
         initialText={prefillText}
-        showQuickChips
+        showQuickChips={messages.length > 0}
         solid
         progressHint={progressHint}
       />

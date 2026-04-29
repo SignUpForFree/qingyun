@@ -43,9 +43,9 @@ beforeEach(() => {
 });
 
 describe("ProfileCardList", () => {
-  it("空列表 → 提示无档案", () => {
+  it("空列表 → 渲染添加档案 CTA", () => {
     render(<ProfileCardList profiles={[]} />);
-    expect(screen.getByText(/还没有档案/)).toBeInTheDocument();
+    expect(screen.getByTestId("profile-new-cta")).toBeInTheDocument();
   });
 
   it("默认档案显示 默认 徽章", () => {

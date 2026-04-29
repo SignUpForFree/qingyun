@@ -2,46 +2,60 @@
 
 import * as React from "react";
 import lunar from "lunar-javascript";
+import Picker from "react-mobile-picker";
 import { CalendarIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+} from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
 import type { CalendarType } from "@/types/domain";
 
 const { Solar, Lunar } = lunar;
 
 /**
- * 时辰选项 — 12 时辰 + 不知道
- *
- * 每个时辰对应起始小时；选"不知道"时存 12 (默认子时) + metadata.unknownHour=true。
- * 参考 spec §6.4.M1 第 2 步。
+ * 时辰参考表（用户填具体小时后由 hour → 时辰自动判定，仅作回显）
  */
-const HOUR_OPTIONS = [
-  { label: "子时 (23:00-01:00)", hour: 0, displayHour: 23 },
-  { label: "丑时 (01:00-03:00)", hour: 1, displayHour: 1 },
-  { label: "寅时 (03:00-05:00)", hour: 3, displayHour: 3 },
-  { label: "卯时 (05:00-07:00)", hour: 5, displayHour: 5 },
-  { label: "辰时 (07:00-09:00)", hour: 7, displayHour: 7 },
-  { label: "巳时 (09:00-11:00)", hour: 9, displayHour: 9 },
-  { label: "午时 (11:00-13:00)", hour: 11, displayHour: 11 },
-  { label: "未时 (13:00-15:00)", hour: 13, displayHour: 13 },
-  { label: "申时 (15:00-17:00)", hour: 15, displayHour: 15 },
-  { label: "酉时 (17:00-19:00)", hour: 17, displayHour: 17 },
-  { label: "戌时 (19:00-21:00)", hour: 19, displayHour: 19 },
-  { label: "亥时 (21:00-23:00)", hour: 21, displayHour: 21 },
-] as const;
+const HOUR_BRANCHES: ReadonlyArray<{ label: string; branch: number }> = [
+  { label: "子时", branch: 0 },
+  { label: "丑时", branch: 1 },
+  { label: "寅时", branch: 3 },
+  { label: "卯时", branch: 5 },
+  { label: "辰时", branch: 7 },
+  { label: "巳时", branch: 9 },
+  { label: "午时", branch: 11 },
+  { label: "未时", branch: 13 },
+  { label: "申时", branch: 15 },
+  { label: "酉时", branch: 17 },
+  { label: "戌时", branch: 19 },
+  { label: "亥时", branch: 21 },
+];
 
-const UNKNOWN_HOUR_VALUE = "unknown";
+function hourToBranchLabel(hour: number): string {
+  if (hour === 23 || hour === 0) return "子时";
+  const idx = HOUR_BRANCHES.findIndex((b) => hour >= b.branch && hour < b.branch + 2);
+  return HOUR_BRANCHES[idx]?.label ?? "";
+}
+
+const MIN_YEAR = 1900;
+const MAX_YEAR = new Date().getFullYear();
+const MINUTE_STEP = 5;
 
 export interface DatePickerValue {
   /** 公历日期（即使用户选农历，也存对应公历），ISO 字符串 yyyy-mm-dd */
   solarDate: string;
   /** 用户选择时使用的历法 */
   calendarType: CalendarType;
-  /** 时辰起始小时（0-23）；用户选"不知道"时为 null */
+  /** 出生小时（0-23）；用户选"不知道"时为 null */
   hour: number | null;
+  /** 出生分钟（0-59）；hour=null 时该字段也为 null */
+  minute: number | null;
   /** 用户原始输入（用于回显） — 农历或公历的年月日 */
   rawDate: { year: number; month: number; day: number };
 }
@@ -50,245 +64,388 @@ export interface DatePickerProps {
   value: DatePickerValue | null;
   onChange: (value: DatePickerValue) => void;
   className?: string;
-  /** 是否禁用：onSubmit 中可临时禁用 */
   disabled?: boolean;
 }
 
-const MIN_DATE = new Date("1900-01-01T00:00:00+08:00");
-const MAX_DATE = new Date();
+interface DraftPickerValue {
+  year: string;
+  month: string;
+  day: string;
+  hour: string;
+  minute: string;
+  [key: string]: string;
+}
 
+/**
+ * 出生日期选择 — 移动端滚轮风格（Sheet from bottom + react-mobile-picker 5 列年月日时分）
+ *
+ * - trigger 行：显示当前已选日期+时分，点击展开 Sheet
+ * - Sheet 顶部：公历/农历 toggle
+ * - Sheet 主体：5 列滚轮（年/月/日/时/分），日数随 年+月 联动
+ * - Sheet 底部：「不知道时分」链接 + 取消/确定
+ * - 不知道时分：hour=null/minute=null（toProfilePatch 时占位 12:00）
+ */
 export function DatePicker({ value, onChange, className, disabled }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
-
-  // 历法选择独立于 value 维护：未选日期时也允许切公历/农历
-  const [pickedCalendar, setPickedCalendar] = React.useState<CalendarType>(
+  const [calendarType, setCalendarType] = React.useState<CalendarType>(
     value?.calendarType ?? "solar",
   );
+  const [draft, setDraft] = React.useState<DraftPickerValue>(() =>
+    valueToDraft(value, calendarType),
+  );
 
-  // 外部 value 历法变化时同步内部 state（编辑模式回填 / 切回 step 时）
+  // 外部 value 历法/日期变化时同步内部 calendarType + draft（编辑模式回填 / 切回 step 时）
   React.useEffect(() => {
-    if (value && value.calendarType !== pickedCalendar) {
-      setPickedCalendar(value.calendarType);
+    if (value) {
+      setCalendarType(value.calendarType);
     }
-  }, [value, pickedCalendar]);
-
-  const calendarType: CalendarType = value?.calendarType ?? pickedCalendar;
-
-  // 公历选中日期（即使用户选农历，calendar 内部也按公历显示对应日期）
-  const solarSelected = React.useMemo(() => {
-    if (!value) return undefined;
-    return new Date(`${value.solarDate}T00:00:00+08:00`);
   }, [value]);
 
-  const calendarTypeLabel = calendarType === "lunar" ? "农历" : "公历";
-  const dateLabel = value
-    ? formatDateLabel(value)
-    : "选择出生日期";
-
-  const handleCalendarTypeSwitch = (newType: CalendarType) => {
-    if (newType === calendarType) return;
-    setPickedCalendar(newType);
-    // 未填日期：仅更新选择，等用户选日期时按当前历法解释
-    if (!value) return;
-    // 已填：按新历法重算 rawDate
-    onChange(convertCalendarType(value, newType));
+  const openSheet = () => {
+    if (disabled) return;
+    setDraft(valueToDraft(value, value?.calendarType ?? calendarType));
+    setCalendarType(value?.calendarType ?? "solar");
+    setOpen(true);
   };
 
-  const handleSolarPick = (picked: Date | undefined) => {
-    if (!picked) return;
-    const year = picked.getFullYear();
-    const month = picked.getMonth() + 1;
-    const day = picked.getDate();
-    const solarDate = toIsoDate(year, month, day);
+  const handleCalendarSwitch = (next: CalendarType) => {
+    if (next === calendarType) return;
+    // 切换历法：把当前 draft 表示的日期换成另一种历法的对应日
+    setDraft((prev) => convertDraftCalendar(prev, calendarType, next));
+    setCalendarType(next);
+  };
 
-    if (calendarType === "lunar") {
-      // 用户切到了农历模式选择 — Calendar 仍显示公历，但要把所选公历转为农历存入 rawDate
-      const ld = Solar.fromYmd(year, month, day).getLunar();
-      onChange({
-        solarDate,
-        calendarType,
-        hour: value?.hour ?? null,
-        rawDate: {
-          year: ld.getYear(),
-          month: ld.getMonth(),
-          day: ld.getDay(),
-        },
-      });
-    } else {
-      onChange({
-        solarDate,
-        calendarType: "solar",
-        hour: value?.hour ?? null,
-        rawDate: { year, month, day },
-      });
+  const handleConfirm = () => {
+    const result = draftToValue(draft, calendarType);
+    if (!result) return;
+    onChange(result);
+    setOpen(false);
+  };
+
+  const handleUnknownHour = () => {
+    if (!value) {
+      // 未选过日期就点「不知道时分」无意义；提示先选日期
+      return;
     }
+    onChange({ ...value, hour: null, minute: null });
+    setOpen(false);
   };
 
-  const handleHourChange = (next: string | null) => {
-    if (!value || next === null) return;
-    const hour = next === UNKNOWN_HOUR_VALUE ? null : Number(next);
-    onChange({ ...value, hour });
-  };
+  // 联动日数：年+月变化时把超界的 day 截到最大
+  const maxDay = daysInMonth(Number(draft.year), Number(draft.month));
+  React.useEffect(() => {
+    setDraft((prev) => {
+      const dayNum = Number(prev.day);
+      const max = daysInMonth(Number(prev.year), Number(prev.month));
+      if (dayNum > max) {
+        return { ...prev, day: pad2(max) };
+      }
+      return prev;
+    });
+  }, [draft.year, draft.month]);
 
   return (
-    <div className={cn("space-y-3", className)}>
-      {/* 公历 / 农历 切换 */}
-      <div className="flex gap-2">
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => handleCalendarTypeSwitch("solar")}
-          className={cn(
-            "flex-1 rounded-[8px] px-3 py-2 text-sm transition-colors",
-            calendarType === "solar"
-              ? "bg-[var(--color-accent-lavender)]/30 text-[var(--color-ink-plum)]"
-              : "text-[var(--color-ink-fade)] hover:bg-[var(--color-accent-lavender)]/10",
-          )}
-        >
-          公历
-        </button>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => handleCalendarTypeSwitch("lunar")}
-          className={cn(
-            "flex-1 rounded-[8px] px-3 py-2 text-sm transition-colors",
-            calendarType === "lunar"
-              ? "bg-[var(--color-accent-lavender)]/30 text-[var(--color-ink-plum)]"
-              : "text-[var(--color-ink-fade)] hover:bg-[var(--color-accent-lavender)]/10",
-          )}
-        >
-          农历
-        </button>
-      </div>
-
-      {/* 日期 popover */}
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger
-          disabled={disabled}
-          className="hairline glass flex w-full items-center justify-start gap-2 rounded-[8px] px-3 py-2 text-sm text-[var(--color-ink-plum)] hover:bg-[var(--color-accent-lavender)]/10 disabled:opacity-50"
-        >
-          <CalendarIcon className="h-4 w-4 opacity-60" />
-          <span className={cn(!value && "text-[var(--color-ink-fade)]")}>{dateLabel}</span>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <div className="border-b px-3 py-2 text-xs text-[var(--color-ink-fade)]">
-            {calendarType === "lunar" ? (
-              <>选择对应的<strong className="mx-1">公历</strong>日期，将自动换算为农历显示</>
-            ) : (
-              <>请选择出生的<strong className="mx-1">公历</strong>日期</>
-            )}
-          </div>
-          <Calendar
-            mode="single"
-            selected={solarSelected}
-            onSelect={(d) => {
-              handleSolarPick(d);
-              setOpen(false);
-            }}
-            captionLayout="dropdown"
-            startMonth={MIN_DATE}
-            endMonth={MAX_DATE}
-            disabled={(d) => d > MAX_DATE || d < MIN_DATE}
-          />
-        </PopoverContent>
-      </Popover>
-
-      {/* 时辰 */}
-      <Select
-        value={hourSelectValue(value)}
-        onValueChange={handleHourChange}
-        disabled={disabled || !value}
+    <div className={cn("space-y-2", className)}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={openSheet}
+        data-testid="onboarding-birth-trigger"
+        className={cn(
+          "hairline glass flex w-full items-center gap-2 rounded-[8px] px-3 py-2.5 text-sm transition-colors",
+          "hover:bg-[var(--color-accent-lavender)]/10 disabled:opacity-50",
+          value ? "text-[var(--color-ink-plum)]" : "text-[var(--color-ink-fade)]",
+        )}
       >
-        <SelectTrigger className="w-full">
-          {/* 不用 SelectValue，避免 SelectContent 关闭时显示 raw value（"3" / "unknown"）*/}
-          <span
-            className={cn(
-              !value && "text-[var(--color-ink-fade)]",
-            )}
-          >
-            {hourTriggerLabel(value)}
-          </span>
-        </SelectTrigger>
-        <SelectContent>
-          {HOUR_OPTIONS.map((opt) => (
-            <SelectItem key={opt.hour} value={opt.hour.toString()}>
-              {opt.label}
-            </SelectItem>
-          ))}
-          <SelectItem value={UNKNOWN_HOUR_VALUE}>不知道（按子时计算）</SelectItem>
-        </SelectContent>
-      </Select>
+        <CalendarIcon className="h-4 w-4 opacity-60" />
+        <span className="flex-1 text-left">
+          {value ? formatTriggerLabel(value) : "选择出生日期与时分"}
+        </span>
+      </button>
 
-      {/* 历法 + 农历日期回显 */}
-      {value && value.calendarType === "lunar" && (
-        <p className="text-xs text-[var(--color-ink-fade)]">
-          已选：农历 {value.rawDate.year} 年 {value.rawDate.month} 月 {value.rawDate.day} 日（公历{" "}
-          {value.solarDate}）· {calendarTypeLabel}模式
-        </p>
-      )}
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent
+          side="bottom"
+          showCloseButton={false}
+          className="rounded-t-[16px] border-t border-[var(--color-accent-lavender)]/30 bg-[var(--color-bg-paper)] p-0"
+        >
+          <SheetHeader className="space-y-2 border-b border-[var(--color-accent-lavender)]/20 pb-3">
+            <SheetTitle className="text-center font-[family-name:var(--font-serif)] text-[15px] tracking-ritual text-[var(--color-ink-plum)]">
+              出生日期与时分
+            </SheetTitle>
+            <SheetDescription className="sr-only">
+              请滚动选择年、月、日、时、分
+            </SheetDescription>
+            <div className="mx-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => handleCalendarSwitch("solar")}
+                className={cn(
+                  "flex-1 rounded-[8px] px-3 py-1.5 text-sm transition-colors",
+                  calendarType === "solar"
+                    ? "bg-[var(--color-accent-lavender)]/30 text-[var(--color-ink-plum)]"
+                    : "text-[var(--color-ink-fade)] hover:bg-[var(--color-accent-lavender)]/10",
+                )}
+              >
+                公历
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCalendarSwitch("lunar")}
+                className={cn(
+                  "flex-1 rounded-[8px] px-3 py-1.5 text-sm transition-colors",
+                  calendarType === "lunar"
+                    ? "bg-[var(--color-accent-lavender)]/30 text-[var(--color-ink-plum)]"
+                    : "text-[var(--color-ink-fade)] hover:bg-[var(--color-accent-lavender)]/10",
+                )}
+              >
+                农历
+              </button>
+            </div>
+          </SheetHeader>
+
+          <div
+            className="relative px-2 py-3"
+            data-testid="onboarding-birth-wheel"
+          >
+            {/* 中央选中行高亮（pointer-events-none 让滚动不被吞） */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute left-2 right-2 top-1/2 z-10 h-8 -translate-y-1/2 rounded-[8px] bg-[var(--color-accent-lavender)]/20 ring-1 ring-[var(--color-accent-lavender)]/40"
+            />
+            <Picker
+              value={draft}
+              onChange={(next) => setDraft(next as DraftPickerValue)}
+              height={200}
+              itemHeight={32}
+              wheelMode="natural"
+            >
+              <Picker.Column name="year">
+                {yearOptions().map((y) => (
+                  <Picker.Item key={y} value={pad4(y)}>
+                    {pad4(y)} 年
+                  </Picker.Item>
+                ))}
+              </Picker.Column>
+              <Picker.Column name="month">
+                {monthOptions().map((m) => (
+                  <Picker.Item key={m} value={pad2(m)}>
+                    {pad2(m)} 月
+                  </Picker.Item>
+                ))}
+              </Picker.Column>
+              <Picker.Column name="day">
+                {Array.from({ length: maxDay }, (_, i) => i + 1).map((d) => (
+                  <Picker.Item key={d} value={pad2(d)}>
+                    {pad2(d)} 日
+                  </Picker.Item>
+                ))}
+              </Picker.Column>
+              <Picker.Column name="hour">
+                {Array.from({ length: 24 }, (_, h) => h).map((h) => (
+                  <Picker.Item key={h} value={pad2(h)}>
+                    {pad2(h)} 时
+                  </Picker.Item>
+                ))}
+              </Picker.Column>
+              <Picker.Column name="minute">
+                {minuteOptions().map((m) => (
+                  <Picker.Item key={m} value={pad2(m)}>
+                    {pad2(m)} 分
+                  </Picker.Item>
+                ))}
+              </Picker.Column>
+            </Picker>
+          </div>
+
+          <SheetFooter className="flex-row items-center gap-2 border-t border-[var(--color-accent-lavender)]/20 p-3">
+            <button
+              type="button"
+              onClick={handleUnknownHour}
+              disabled={!value}
+              className="text-[12px] text-[var(--color-accent-plum)] underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              不知道时分
+            </button>
+            <div className="ml-auto flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setOpen(false)}
+              >
+                取消
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleConfirm}
+                className="bg-gradient-to-r from-[#F0B8C8] to-[#C9A1D9] text-white hover:opacity-90"
+              >
+                确定
+              </Button>
+            </div>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
 
+// ───────── helpers ─────────
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function pad4(n: number): string {
+  return String(n).padStart(4, "0");
+}
+
 function toIsoDate(year: number, month: number, day: number): string {
-  const m = String(month).padStart(2, "0");
-  const d = String(day).padStart(2, "0");
-  return `${year}-${m}-${d}`;
+  return `${pad4(year)}-${pad2(month)}-${pad2(day)}`;
+}
+
+function yearOptions(): number[] {
+  const out: number[] = [];
+  for (let y = MIN_YEAR; y <= MAX_YEAR; y++) out.push(y);
+  return out;
+}
+
+function monthOptions(): number[] {
+  return Array.from({ length: 12 }, (_, i) => i + 1);
+}
+
+function minuteOptions(): number[] {
+  return Array.from({ length: 60 / MINUTE_STEP }, (_, i) => i * MINUTE_STEP);
+}
+
+function daysInMonth(year: number, month: number): number {
+  if (!year || !month) return 31;
+  return new Date(year, month, 0).getDate();
 }
 
 /**
- * 任意 0-23 整数 → 对应时辰起始小时（HOUR_OPTIONS.hour）
- * 0,23 → 0（子时）；1,2 → 1（丑）；3,4 → 3（寅）...
- * 编辑模式下从 birth_time 反推出的 hour=8/10/12 也能正确归到时辰起始。
+ * DatePickerValue → 滚轮 draft 形态
+ * - 农历模式下 draft 显示农历年月日；hour/minute 始终是 24 小时制
+ * - hour=null（不知道）时 draft 用 12:00 占位（与 toProfilePatch 一致）
  */
-function normalizeHourToBranch(hour: number): number {
-  if (hour === 23 || hour === 0) return 0;
-  // 1-2 → 1, 3-4 → 3, 5-6 → 5, ...
-  return hour - ((hour - 1) % 2);
-}
-
-function hourSelectValue(value: DatePickerValue | null): string {
-  if (!value) return "";
-  if (value.hour === null) return UNKNOWN_HOUR_VALUE;
-  return normalizeHourToBranch(value.hour).toString();
-}
-
-function hourTriggerLabel(value: DatePickerValue | null): string {
-  if (!value) return "选择时辰";
-  if (value.hour === null) return "不知道（按子时计算）";
-  const hour = normalizeHourToBranch(value.hour);
-  return HOUR_OPTIONS.find((o) => o.hour === hour)?.label ?? "选择时辰";
-}
-
-function convertCalendarType(prev: DatePickerValue, target: CalendarType): DatePickerValue {
-  if (target === prev.calendarType) return prev;
-
-  if (target === "lunar") {
-    // solar → lunar: rawDate 用 lunar 表示
-    const [y, m, d] = prev.solarDate.split("-").map(Number);
-    const ld = Solar.fromYmd(y, m, d).getLunar();
+function valueToDraft(
+  value: DatePickerValue | null,
+  calendarType: CalendarType,
+): DraftPickerValue {
+  if (!value) {
+    // 默认 1995-01-01 12:00
     return {
-      ...prev,
-      calendarType: "lunar",
-      rawDate: { year: ld.getYear(), month: ld.getMonth(), day: ld.getDay() },
+      year: "1995",
+      month: "01",
+      day: "01",
+      hour: "12",
+      minute: "00",
     };
   }
-
-  // lunar → solar: rawDate 同步为 solar
-  const [y, m, d] = prev.solarDate.split("-").map(Number);
+  const display =
+    calendarType === "lunar" || value.calendarType === "lunar"
+      ? value.rawDate
+      : { year: value.rawDate.year, month: value.rawDate.month, day: value.rawDate.day };
   return {
-    ...prev,
-    calendarType: "solar",
-    rawDate: { year: y, month: m, day: d },
+    year: pad4(display.year),
+    month: pad2(display.month),
+    day: pad2(display.day),
+    hour: pad2(value.hour ?? 12),
+    minute: pad2(value.hour === null ? 0 : (value.minute ?? 0)),
   };
 }
 
-function formatDateLabel(value: DatePickerValue): string {
-  if (value.calendarType === "lunar") {
-    return `农历 ${value.rawDate.year}-${value.rawDate.month}-${value.rawDate.day}`;
+/**
+ * draft + 当前历法 → DatePickerValue
+ *
+ * 农历模式：draft 是用户选的农历年月日，需要转成公历存到 solarDate
+ * 公历模式：draft 是公历年月日，直接当 solarDate
+ */
+function draftToValue(
+  draft: DraftPickerValue,
+  calendarType: CalendarType,
+): DatePickerValue | null {
+  const year = Number(draft.year);
+  const month = Number(draft.month);
+  const day = Number(draft.day);
+  const hour = Number(draft.hour);
+  const minute = Number(draft.minute);
+  if (!year || !month || !day) return null;
+
+  if (calendarType === "lunar") {
+    let solarDate: string;
+    try {
+      const sd = Lunar.fromYmd(year, month, day).getSolar();
+      solarDate = toIsoDate(sd.getYear(), sd.getMonth(), sd.getDay());
+    } catch {
+      return null;
+    }
+    return {
+      solarDate,
+      calendarType: "lunar",
+      hour,
+      minute,
+      rawDate: { year, month, day },
+    };
   }
-  return `${value.solarDate}`;
+
+  return {
+    solarDate: toIsoDate(year, month, day),
+    calendarType: "solar",
+    hour,
+    minute,
+    rawDate: { year, month, day },
+  };
+}
+
+/**
+ * 历法切换时：把 draft 当前显示的日期按另一种历法重新表达
+ *   prev=solar, next=lunar：solar y-m-d → lunar y-m-d
+ *   prev=lunar, next=solar：lunar y-m-d → solar y-m-d
+ */
+function convertDraftCalendar(
+  draft: DraftPickerValue,
+  prev: CalendarType,
+  next: CalendarType,
+): DraftPickerValue {
+  if (prev === next) return draft;
+  const y = Number(draft.year);
+  const m = Number(draft.month);
+  const d = Number(draft.day);
+  if (!y || !m || !d) return draft;
+  try {
+    if (next === "lunar") {
+      const ld = Solar.fromYmd(y, m, d).getLunar();
+      return {
+        ...draft,
+        year: pad4(ld.getYear()),
+        month: pad2(ld.getMonth()),
+        day: pad2(ld.getDay()),
+      };
+    }
+    const sd = Lunar.fromYmd(y, m, d).getSolar();
+    return {
+      ...draft,
+      year: pad4(sd.getYear()),
+      month: pad2(sd.getMonth()),
+      day: pad2(sd.getDay()),
+    };
+  } catch {
+    return draft;
+  }
+}
+
+/** trigger 行展示文案：「公历 1995-05-15 10:30 · 巳时」/「农历 1995-04-16 时分未填」 */
+function formatTriggerLabel(value: DatePickerValue): string {
+  const label = value.calendarType === "lunar" ? "农历" : "公历";
+  const dateStr = `${pad4(value.rawDate.year)}-${pad2(value.rawDate.month)}-${pad2(value.rawDate.day)}`;
+  if (value.hour === null) {
+    return `${label} ${dateStr} · 时分未填`;
+  }
+  const time = `${pad2(value.hour)}:${pad2(value.minute ?? 0)}`;
+  return `${label} ${dateStr} · ${time} · ${hourToBranchLabel(value.hour)}`;
 }
 
 /** 测试 / 服务端构造 helper */
@@ -297,11 +454,13 @@ export function buildSolarDatePickerValue(
   month: number,
   day: number,
   hour: number | null = null,
+  minute: number | null = null,
 ): DatePickerValue {
   return {
     solarDate: toIsoDate(year, month, day),
     calendarType: "solar",
     hour,
+    minute: hour === null ? null : (minute ?? 0),
     rawDate: { year, month, day },
   };
 }
@@ -311,12 +470,14 @@ export function buildLunarDatePickerValue(
   month: number,
   day: number,
   hour: number | null = null,
+  minute: number | null = null,
 ): DatePickerValue {
   const solar = Lunar.fromYmd(year, month, day).getSolar();
   return {
     solarDate: toIsoDate(solar.getYear(), solar.getMonth(), solar.getDay()),
     calendarType: "lunar",
     hour,
+    minute: hour === null ? null : (minute ?? 0),
     rawDate: { year, month, day },
   };
 }

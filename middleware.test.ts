@@ -7,11 +7,10 @@ vi.mock("server-only", () => ({}));
 const { middleware } = await import("./middleware");
 
 /**
- * 鉴权 middleware 测试 — 6 路径
+ * 鉴权 middleware 测试（V2 弹窗登录）
  *
- * 注意：plan 模板里写了 7 条（含两条 wechat_bind DB 检查），但 Edge runtime
- * 不能 import better-sqlite3，所以 bind 完整性校验下放到 page/route layer。
- * 这里只覆盖白名单 + cookie 存在性。
+ * 注意：V2 起页面路由不再 redirect，由 LoginGate（client）触发 Sheet 弹窗；
+ * middleware 只负责放行公开前缀，私有 API 拦截为 401 JSON。
  */
 
 function req(
@@ -44,20 +43,13 @@ describe("middleware", () => {
     expect(r.headers.get("x-middleware-next")).toBe("1");
   });
 
-  it("missing session + wechat UA -> 307 redirect to /api/auth/wechat", () => {
+  it("missing session + wechat UA -> page passes through (LoginGate client-side)", () => {
     const r = middleware(req("/me", { ua: WECHAT_UA }));
-    expect(r.status).toBe(307);
-    expect(r.headers.get("location")).toContain("/api/auth/wechat");
+    expect(r.headers.get("x-middleware-next")).toBe("1");
   });
 
-  it("missing session + browser UA -> 307 redirect to /login", () => {
+  it("missing session + browser UA -> page passes through (LoginGate client-side)", () => {
     const r = middleware(req("/me"));
-    expect(r.status).toBe(307);
-    expect(r.headers.get("location")).toContain("/login");
-  });
-
-  it("/login passes through (no cookie)", () => {
-    const r = middleware(req("/login"));
     expect(r.headers.get("x-middleware-next")).toBe("1");
   });
 

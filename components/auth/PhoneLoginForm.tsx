@@ -11,26 +11,27 @@ import { Button } from "@/components/ui/button";
 const PHONE_RE = /^1[3-9]\d{9}$/;
 
 interface PhoneLoginFormProps {
-  /** 登录后跳转目标（middleware 没传时默认 "/"） */
+  /** 登录后跳转目标（onSuccess 未传时用，默认 "/"） */
   redirectTo?: string;
+  /**
+   * 登录成功后回调（弹窗模式用此，避免 router.replace 整页跳转）。
+   * 调用方负责关 Sheet + router.refresh()
+   */
+  onSuccess?: (info: { isNew: boolean }) => void;
 }
 
 /**
- * PhoneLoginForm — 浏览器手机号登录表单（M5 mock 阶段）
+ * PhoneLoginForm — 手机号 + 6 位 OTP 登录表单
  *
- * 与 PhoneBindCard 区别：这个是登录前（无 cookie），那个是登录后绑定。
+ * 用作 LoginSheet 内容；登录前组件，不需要 cookie。
  *
  * 流程：
- *   1. 输入 11 位中国大陆手机号
- *   2. 点 发送验证码 → POST /api/auth/phone/send-otp
- *      （dev 模式：服务器 console.info；prod mock 阶段同样走 console.info，
- *        M5 接 SMS gateway 时统一替换）
- *   3. 60s 倒计时
- *   4. 输入 6 位 OTP，点 登录 → POST /api/auth/phone/verify
- *      返回 { userId, isNew }
- *   5. isNew=true → 跳 /onboarding；false → 跳 redirectTo
+ *   1. 11 位中国大陆手机号 → POST /api/auth/phone/send-otp
+ *   2. 60s 倒计时
+ *   3. 6 位 OTP → POST /api/auth/phone/verify → { userId, isNew }
+ *   4. 有 onSuccess → 调用回调（弹窗模式）；无 onSuccess → router.replace
  */
-export function PhoneLoginForm({ redirectTo }: PhoneLoginFormProps) {
+export function PhoneLoginForm({ redirectTo, onSuccess }: PhoneLoginFormProps) {
   const router = useRouter();
   const [phone, setPhone] = React.useState("");
   const [code, setCode] = React.useState("");
@@ -109,7 +110,11 @@ export function PhoneLoginForm({ redirectTo }: PhoneLoginFormProps) {
       }
       const data = (await res.json()) as { isNew: boolean };
       toast.success(data.isNew ? "欢迎，先填份档案" : "登录成功");
-      const target = data.isNew ? "/onboarding" : redirectTo ?? "/";
+      if (onSuccess) {
+        onSuccess({ isNew: data.isNew });
+        return;
+      }
+      const target = data.isNew ? "/onboarding" : (redirectTo ?? "/");
       router.replace(target);
     } catch (e) {
       if (process.env.NODE_ENV !== "production") console.error("phone login fetch failed", e);
@@ -127,74 +132,72 @@ export function PhoneLoginForm({ redirectTo }: PhoneLoginFormProps) {
       }}
       data-testid="phone-login-form"
     >
-      <GlassCard className="space-y-4 p-5">
-      <header className="flex items-center justify-center gap-2">
-        <Sparkle size={9} variant="asterisk" />
-        <h2 className="font-[family-name:var(--font-serif)] text-[14px] tracking-ritual2 text-[var(--color-ink-plum)]">
-          手 机 号 登 录
-        </h2>
-        <Sparkle size={9} variant="asterisk" />
-      </header>
+      <GlassCard className="space-y-4 p-5" shadow="none">
+        <header className="flex items-center justify-center gap-2">
+          <Sparkle size={9} variant="asterisk" />
+          <h2 className="font-[family-name:var(--font-serif)] text-[14px] tracking-ritual2 text-[var(--color-ink-plum)]">
+            手 机 号 登 录
+          </h2>
+          <Sparkle size={9} variant="asterisk" />
+        </header>
 
-      <div className="space-y-2">
-        <Label htmlFor="phone-input" className="text-xs text-[var(--color-ink-fade)]">
-          手机号（中国大陆 +86）
-        </Label>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-[var(--color-ink-mist)]">+86</span>
-          <Input
-            id="phone-input"
-            inputMode="numeric"
-            maxLength={11}
-            placeholder="1XX XXXX XXXX"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
-            data-testid="login-phone-input"
-          />
+        <div className="space-y-2">
+          <Label htmlFor="phone-input" className="text-xs text-[var(--color-ink-fade)]">
+            手机号（中国大陆 +86）
+          </Label>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[var(--color-ink-mist)]">+86</span>
+            <Input
+              id="phone-input"
+              inputMode="numeric"
+              maxLength={11}
+              placeholder="1XX XXXX XXXX"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
+              data-testid="login-phone-input"
+            />
+          </div>
         </div>
-      </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="phone-code" className="text-xs text-[var(--color-ink-fade)]">
-          验证码（6 位）
-        </Label>
-        <div className="flex items-center gap-2">
-          <Input
-            id="phone-code"
-            inputMode="numeric"
-            maxLength={6}
-            placeholder="6 位数字"
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-            data-testid="login-code-input"
-          />
-          <Button
-            type="button"
-            variant="outline"
-            disabled={!phoneValid || sending || cooldown > 0}
-            onClick={sendOtp}
-            className="h-10 shrink-0 px-3 text-[11px]"
-            data-testid="login-send-otp"
-          >
-            {cooldown > 0 ? `${cooldown}s` : sending ? "发送中…" : "发送验证码"}
-          </Button>
+        <div className="space-y-2">
+          <Label htmlFor="phone-code" className="text-xs text-[var(--color-ink-fade)]">
+            验证码（6 位）
+          </Label>
+          <div className="flex items-center gap-2">
+            <Input
+              id="phone-code"
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="6 位数字"
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+              data-testid="login-code-input"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!phoneValid || sending || cooldown > 0}
+              onClick={sendOtp}
+              className="h-10 shrink-0 px-3 text-[11px]"
+              data-testid="login-send-otp"
+            >
+              {cooldown > 0 ? `${cooldown}s` : sending ? "发送中…" : "发送验证码"}
+            </Button>
+          </div>
         </div>
-      </div>
 
-      <Button
-        type="submit"
-        disabled={!phoneValid || !codeValid || verifying}
-        className="h-12 w-full rounded-[14px] bg-gradient-to-r from-[#F0B8C8] to-[#C9A1D9] font-[family-name:var(--font-serif)] text-[15px] tracking-ritual text-white shadow-pill hover:opacity-90 disabled:opacity-50"
-        data-testid="login-submit"
-      >
-        {verifying ? "登录中…" : "登 录"}
-      </Button>
+        <Button
+          type="submit"
+          disabled={!phoneValid || !codeValid || verifying}
+          className="h-12 w-full rounded-[14px] bg-gradient-to-r from-[#F0B8C8] to-[#C9A1D9] font-[family-name:var(--font-serif)] text-[15px] tracking-ritual text-white shadow-pill hover:opacity-90 disabled:opacity-50"
+          data-testid="login-submit"
+        >
+          {verifying ? "登录中…" : "登 录"}
+        </Button>
 
-      <p className="text-center text-[10px] leading-relaxed text-[var(--color-ink-fade)]">
-        手机号仅用于账号识别 · 不会用于营销 · 不会展示给其他用户
-        <br />
-        微信内打开走微信授权，浏览器走手机号验证码
-      </p>
+        <p className="text-center text-[10px] leading-relaxed text-[var(--color-ink-fade)]">
+          手机号仅用于账号识别 · 不会用于营销 · 不会展示给其他用户
+        </p>
       </GlassCard>
     </form>
   );

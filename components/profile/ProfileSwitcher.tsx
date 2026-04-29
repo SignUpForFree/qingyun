@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ChevronDown, Check } from "lucide-react";
 import { Sparkle } from "@/components/su";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/util/api-fetch";
 
 export interface ProfileSwitcherItem {
   id: string;
@@ -55,7 +56,7 @@ export function ProfileSwitcher({
     }
     setBusy(id);
     try {
-      const res = await fetch(`/api/me/profiles/${id}`, {
+      const res = await apiFetch(`/api/me/profiles/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ is_default: true }),

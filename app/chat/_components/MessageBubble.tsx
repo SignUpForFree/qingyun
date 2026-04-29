@@ -42,6 +42,10 @@ interface MessageBubbleProps {
   onCardSubmit?: CardSubmitCallback;
   onCardAction?: CardActionCallback;
   busy?: boolean;
+  /** user 气泡左侧头像（来自默认档案 avatar_url） */
+  userAvatarUrl?: string | null;
+  /** user 昵称（avatar fallback + alt） */
+  userNickname?: string;
 }
 
 interface MetaUi {
@@ -180,6 +184,8 @@ export function MessageBubble({
   onCardSubmit,
   onCardAction,
   busy,
+  userAvatarUrl,
+  userNickname,
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const isSystem = message.role === "system";
@@ -195,7 +201,16 @@ export function MessageBubble({
   }
 
   if (isUser) {
-    return <TextBubble message={message} streaming={streaming} isUser className={className} />;
+    return (
+      <TextBubble
+        message={message}
+        streaming={streaming}
+        isUser
+        className={className}
+        userAvatarUrl={userAvatarUrl}
+        userNickname={userNickname}
+      />
+    );
   }
 
   const meta = parseMeta(message.metadata);
@@ -590,16 +605,22 @@ function TextBubble({
   streaming,
   isUser,
   className,
+  userAvatarUrl,
+  userNickname,
 }: {
   message: DisplayMessage;
   streaming?: boolean;
   isUser: boolean;
   className?: string;
+  userAvatarUrl?: string | null;
+  userNickname?: string;
 }) {
   return (
     <div className={cn("flex w-full", isUser ? "justify-end" : "justify-start", className)}>
-      <div className="flex max-w-[82%] gap-2">
-        {!isUser && (
+      <div className={cn("flex max-w-[82%] gap-2", isUser && "flex-row-reverse")}>
+        {isUser ? (
+          <UserAvatar url={userAvatarUrl ?? null} nickname={userNickname ?? "我"} />
+        ) : (
           <div
             aria-hidden
             className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#E8E4FF] to-[#FFE8F0]"
@@ -630,6 +651,32 @@ function TextBubble({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * user 气泡左侧头像 — 有 avatar_url 用图，否则首字 fallback。
+ * 复用 ProfileCardList 的同款样式，保持视觉一致。
+ */
+function UserAvatar({ url, nickname }: { url: string | null; nickname: string }) {
+  if (url) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return (
+      <img
+        src={url}
+        alt={nickname}
+        className="mt-1 h-7 w-7 shrink-0 rounded-full object-cover"
+      />
+    );
+  }
+  const initial = nickname.slice(0, 1) || "我";
+  return (
+    <div
+      aria-label={nickname}
+      className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-lavender)]/30 font-[family-name:var(--font-serif)] text-[12px] text-[var(--color-ink-plum)]"
+    >
+      {initial}
     </div>
   );
 }

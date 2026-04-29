@@ -32,15 +32,24 @@ export function profileToOnboardingForm(p: Profile): Partial<OnboardingForm> {
     const month = Number(m);
     const day = Number(d);
     let hour: number | null = null;
+    let minute: number | null = null;
     const timeMatch = /^(\d{2}):(\d{2})$/.exec(p.birth_time);
     if (timeMatch) {
       const h = Number(timeMatch[1]);
-      hour = p.birth_time === "12:00" ? null : h;
+      const mm = Number(timeMatch[2]);
+      if (p.birth_time === "12:00") {
+        hour = null;
+        minute = null;
+      } else {
+        hour = h;
+        minute = mm;
+      }
     }
     out.birth = {
       iso: `${p.birth_date}T${p.birth_time}:00+08:00`,
       calendarType: p.birth_calendar === "lunar" ? "lunar" : "solar",
       hour,
+      minute,
       rawDate: { year, month, day },
     };
   }

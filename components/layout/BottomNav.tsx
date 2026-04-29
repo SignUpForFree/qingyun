@@ -7,7 +7,7 @@ import { Sparkle } from "@/components/su";
 
 const TABS = [
   { href: "/", key: "home", label: "首页" },
-  { href: "/chat", key: "chat", label: "对话" },
+  { href: "/chat", key: "chat", label: "AI问答" },
   { href: "/me", key: "me", label: "我的" },
 ] as const;
 
