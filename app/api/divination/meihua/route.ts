@@ -3,7 +3,6 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { conversations, messages, profiles } from "@/lib/db/schema";
 import { ensureUserId } from "@/lib/auth/session";
-import { checkRateLimit } from "@/lib/ai/check-rate-limit";
 import { guardTexts } from "@/lib/safety/guard";
 import { chat } from "@/lib/ai/client";
 import { frame, heartbeat, safeEnqueue, SSE_HEADERS } from "@/lib/chat/sse";
@@ -11,6 +10,13 @@ import { serializeJson } from "@/lib/db/json";
 import { meihuaV2 } from "@/lib/divination/meihua-v2";
 import { buildMeihuaPrompt } from "@/lib/ai/prompts/meihua-interpret";
 import { sanitizeAiOutput } from "@/lib/ai/output-sanitizer";
+import {
+  bumpConversationActivity,
+  enforceRateLimit,
+  jsonError,
+  parseJsonBody,
+  requireConversationOwned,
+} from "@/lib/chat/route-helpers";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -45,39 +51,21 @@ const bodySchema = z.object({
 // 与 lib/divination/meihua-v2.ts，本路由专心做 SSE + DB
 
 export async function POST(req: Request) {
-  let raw: unknown;
-  try {
-    raw = await req.json();
-  } catch {
-    return jsonError("请求体不是合法 JSON", 400);
-  }
-
-  const parsed = bodySchema.safeParse(raw);
-  if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message ?? "校验失败", 400);
-  }
-  const data = parsed.data;
+  const body = await parseJsonBody(req, bodySchema);
+  if (body.error) return body.error;
+  const data = body.data;
   const conversationId = data.conversationId;
   if (!conversationId) {
     return jsonError("conversationId 必填（请先发起一条文本消息再使用梅花按钮）", 400);
   }
 
   const userId = await ensureUserId();
-  const limit = await checkRateLimit(userId, "meihua");
-  if (!limit.allowed) {
-    return jsonError(
-      `每小时梅花 AI 解卦上限 ${limit.limit} 次，请稍后再试（已发 ${limit.used}）`,
-      429,
-    );
-  }
+  const limited = await enforceRateLimit(userId, "meihua", "梅花 AI 解卦");
+  if (limited) return limited;
 
   const db = getDb();
-  const owned = await db
-    .select({ id: conversations.id })
-    .from(conversations)
-    .where(and(eq(conversations.id, conversationId), eq(conversations.user_id, userId)))
-    .limit(1);
-  if (!owned[0]) return jsonError("会话不存在", 404);
+  const ownedFail = await requireConversationOwned(db, conversationId, userId);
+  if (ownedFail) return ownedFail;
 
   // ============ Branch A: 仅 conversationId — 列档案 / 引导建档 ============
   if (!data.profileId) {
@@ -367,10 +355,7 @@ export async function POST(req: Request) {
           }),
         );
 
-        await db
-          .update(conversations)
-          .set({ last_intent: "meihua", last_message_at: new Date().toISOString() })
-          .where(eq(conversations.id, conversationId));
+        await bumpConversationActivity(db, conversationId, "meihua");
 
         safeEnqueue(controller, frame("done", {}));
       } catch (e) {
@@ -398,11 +383,4 @@ export async function POST(req: Request) {
   });
 
   return new Response(sse, { headers: SSE_HEADERS });
-}
-
-function jsonError(message: string, status: number): Response {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
 }

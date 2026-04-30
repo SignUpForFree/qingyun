@@ -1,22 +1,36 @@
 import { cn } from "@/lib/utils";
-import { Sparkle } from "@/components/su";
 import { ChoiceCard } from "./cards/ChoiceCard";
-import { FormCard, type FormField } from "./cards/FormCard";
+import { FormCard } from "./cards/FormCard";
 import { SlipImageCard } from "./cards/SlipImageCard";
 import { SlipImageFullscreen } from "./cards/SlipImageFullscreen";
 import { SlipReportCard } from "./cards/SlipReportCard";
 import { BaziResultCard } from "./cards/BaziResultCard";
 import { DreamResultCard } from "./cards/DreamResultCard";
 import { ProfilePickerCard } from "./cards/ProfilePickerCard";
-import { ProgressLongTaskCard, type LongTaskStage } from "./cards/ProgressLongTaskCard";
-import { ErrorCard, type ErrorCode } from "./cards/ErrorCard";
+import { ProgressLongTaskCard } from "./cards/ProgressLongTaskCard";
+import { ErrorCard } from "./cards/ErrorCard";
 import { ShakeSlipAnim } from "./cards/ShakeSlipAnim";
 import { SlipResultCard } from "@/components/divination/SlipResultCard";
 import { MeihuaResultCard } from "@/components/divination/MeihuaResultCard";
+import { CardWrap, TextBubble } from "./cards/TextBubble";
+import {
+  parseMeta,
+  type BaziResultMeta,
+  type DreamResultMeta,
+  type ErrorCardMeta,
+  type MeihuaResultMeta,
+  type ProfilePickerMeta,
+  type ProgressLongTaskMeta,
+  type SlipImageMeta,
+  type SlipReportMeta,
+} from "./cards/meta-types";
+import {
+  BAZI_QUICK_FIELDS,
+  DREAM_PRECISE_FIELDS,
+  MEIHUA_NUMBER_FIELDS,
+  SLIP_QUESTION_FIELDS,
+} from "./cards/form-fields";
 import type { Message } from "@/lib/db/schema";
-import type { SlipLevel } from "@/db/seed/slips-v2";
-import type { BaziPillars, BaziTenGods } from "@/types/domain";
-import type { Wuxing } from "@/lib/bazi/stems-branches";
 import type { SlipImageLevel } from "./cards/SlipImageFullscreen";
 
 export type DisplayMessage = Pick<
@@ -48,116 +62,6 @@ interface MessageBubbleProps {
   userNickname?: string;
 }
 
-interface MetaUi {
-  ui: string;
-  [k: string]: unknown;
-}
-
-function parseMeta(raw: string | null | undefined): MetaUi | null {
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as MetaUi;
-  } catch {
-    return null;
-  }
-}
-
-const DREAM_PRECISE_FIELDS: readonly FormField[] = [
-  { key: "core", label: "核心场景", type: "textarea", required: true, max: 500 },
-  { key: "emotion", label: "情绪感受", type: "textarea", required: true, max: 200 },
-  { key: "reality", label: "现实关联（可选）", type: "textarea", max: 200 },
-  { key: "special", label: "特殊细节（可选）", type: "textarea", max: 200 },
-];
-
-const BAZI_QUICK_FIELDS: readonly FormField[] = [
-  {
-    key: "gender",
-    label: "性别",
-    type: "select",
-    required: true,
-    options: [
-      { value: "male", label: "男" },
-      { value: "female", label: "女" },
-    ],
-  },
-  { key: "birth_time", label: "出生时间（含时辰）", type: "text", required: true, max: 30 },
-  { key: "birth_place", label: "出生地（省 市 区）", type: "text", required: true, max: 30 },
-];
-
-const MEIHUA_NUMBER_FIELDS: readonly FormField[] = [
-  { key: "numbers", label: "1-3 个数字（1-9，逗号分隔）", type: "text", required: true, max: 20 },
-  { key: "userQuestion", label: "想测什么事？", type: "textarea", required: true, max: 200 },
-];
-
-const SLIP_QUESTION_FIELDS: readonly FormField[] = [
-  { key: "userQuestion", label: "心事 / 想问的事", type: "textarea", required: true, max: 200 },
-];
-
-interface SlipImageMeta {
-  slipNumber: number;
-  level: SlipLevel;
-  title: string;
-  poem?: string;
-  poemLines?: string[];
-  imageUrl?: string;
-  dimension?: string;
-  reading?: string;
-  category?: string;
-  /** design §7 6 dim tabs：综合/事业/财运/感情/人际/健康 → reading 文本 */
-  readings?: Partial<Record<"综合" | "事业" | "财运" | "感情" | "人际" | "健康", string>>;
-}
-
-interface BaziResultMeta {
-  focus: string;
-  chart: {
-    pillars: BaziPillars;
-    fiveElements: Record<Wuxing, number>;
-    dayMaster: string;
-    tenGods: BaziTenGods;
-    currentLuck: string;
-  };
-}
-
-interface DreamResultMeta {
-  mode?: "fast" | "precise";
-}
-
-interface ProfilePickerMeta {
-  profiles: Array<{
-    id: string;
-    nickname: string;
-    isDefault: boolean;
-    avatarUrl?: string;
-    birthDate?: string;
-    gender?: "male" | "female" | "other";
-  }>;
-  conversationId?: string;
-  allowAddNew?: boolean;
-}
-
-interface ErrorCardMeta {
-  message: string;
-  code?: ErrorCode;
-  retryable?: boolean;
-}
-
-interface ProgressLongTaskMeta {
-  etaSec?: number;
-  stage?: LongTaskStage;
-  percent?: number;
-  cancellable?: boolean;
-}
-
-interface SlipReportMeta {
-  slipNumber: number;
-  level: SlipImageLevel;
-  title: string;
-  poem: string;
-  dimension: string;
-  reading: string;
-  aiInterpretation: string;
-}
-
 /**
  * 单条消息气泡 — 22 ui 分发（M2.14, spec §4.4）
  *
@@ -187,10 +91,7 @@ export function MessageBubble({
   userAvatarUrl,
   userNickname,
 }: MessageBubbleProps) {
-  const isUser = message.role === "user";
-  const isSystem = message.role === "system";
-
-  if (isSystem) {
+  if (message.role === "system") {
     return (
       <div className={cn("text-center", className)}>
         <span className="rounded-full bg-white/40 px-3 py-1 text-xs text-[var(--color-ink-fade)]">
@@ -200,7 +101,7 @@ export function MessageBubble({
     );
   }
 
-  if (isUser) {
+  if (message.role === "user") {
     return (
       <TextBubble
         message={message}
@@ -476,16 +377,7 @@ export function MessageBubble({
     }
 
     case "meihua_result": {
-      const m = meta as unknown as {
-        ben: { number: number; name: string; upper: string; lower: string };
-        hu: { number: number; name: string; upper: string; lower: string };
-        bian: { number: number; name: string; upper: string; lower: string };
-        guaZhongGua: { number: number; name: string; upper: string; lower: string };
-        dongYao: number;
-        tiYong: { ti: string; yong: string; relation: string };
-        yingQi: { speed: "fast" | "medium" | "slow"; timeHint: string; branchHour: string | null };
-        verdict: string;
-      };
+      const m = meta as unknown as MeihuaResultMeta;
       return (
         <CardWrap className={className}>
           <MeihuaResultCard
@@ -584,99 +476,4 @@ export function MessageBubble({
         />
       );
   }
-}
-
-function CardWrap({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={cn("flex w-full justify-start", className)}>
-      <div className="w-full max-w-[92%]">{children}</div>
-    </div>
-  );
-}
-
-function TextBubble({
-  message,
-  streaming,
-  isUser,
-  className,
-  userAvatarUrl,
-  userNickname,
-}: {
-  message: DisplayMessage;
-  streaming?: boolean;
-  isUser: boolean;
-  className?: string;
-  userAvatarUrl?: string | null;
-  userNickname?: string;
-}) {
-  return (
-    <div className={cn("flex w-full", isUser ? "justify-end" : "justify-start", className)}>
-      <div className={cn("flex max-w-[82%] gap-2", isUser && "flex-row-reverse")}>
-        {isUser ? (
-          <UserAvatar url={userAvatarUrl ?? null} nickname={userNickname ?? "我"} />
-        ) : (
-          <div
-            aria-hidden
-            className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#E8E4FF] to-[#FFE8F0]"
-          >
-            <Sparkle size={10} variant="diamond" />
-          </div>
-        )}
-        <div
-          className={cn(
-            "relative whitespace-pre-wrap break-words px-4 py-2.5 text-sm leading-relaxed",
-            "font-[family-name:var(--font-serif)] text-[var(--color-ink-plum)]",
-            isUser
-              ? "rounded-[18px] rounded-br-[4px] bg-gradient-to-br from-[#F0B8C8]/40 to-[#C9A1D9]/40 shadow-pill"
-              : "glass hairline rounded-[18px] rounded-bl-[4px]",
-          )}
-        >
-          {message.content}
-          {streaming && (
-            <span
-              aria-hidden
-              className={cn(
-                "ml-1 inline-flex h-3.5 w-3.5 translate-y-[1px] items-center justify-center align-middle",
-                "animate-pulse text-[13px] leading-none text-[var(--color-accent-lavender)]",
-              )}
-            >
-              ✦
-            </span>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * user 气泡左侧头像 — 有 avatar_url 用图，否则首字 fallback。
- * 复用 ProfileCardList 的同款样式，保持视觉一致。
- */
-function UserAvatar({ url, nickname }: { url: string | null; nickname: string }) {
-  if (url) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return (
-      <img
-        src={url}
-        alt={nickname}
-        className="mt-1 h-7 w-7 shrink-0 rounded-full object-cover"
-      />
-    );
-  }
-  const initial = nickname.slice(0, 1) || "我";
-  return (
-    <div
-      aria-label={nickname}
-      className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-lavender)]/30 font-[family-name:var(--font-serif)] text-[12px] text-[var(--color-ink-plum)]"
-    >
-      {initial}
-    </div>
-  );
 }

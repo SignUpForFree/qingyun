@@ -3,12 +3,12 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { conversations, messages } from "@/lib/db/schema";
 import { ensureUserId } from "@/lib/auth/session";
-import { checkRateLimit } from "@/lib/ai/check-rate-limit";
 import { chat } from "@/lib/ai/client";
 import { frame, heartbeat, safeEnqueue, SSE_HEADERS } from "@/lib/chat/sse";
 import { serializeJson } from "@/lib/db/json";
 import { buildSlipPrompt } from "@/lib/ai/prompts/slip-interpret";
 import { sanitizeAiOutput } from "@/lib/ai/output-sanitizer";
+import { enforceRateLimit, jsonError, parseJsonBody } from "@/lib/chat/route-helpers";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -42,27 +42,13 @@ interface SlipImageMeta {
 }
 
 export async function POST(req: Request) {
-  let raw: unknown;
-  try {
-    raw = await req.json();
-  } catch {
-    return jsonError("请求体不是合法 JSON", 400);
-  }
-
-  const parsed = bodySchema.safeParse(raw);
-  if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message ?? "校验失败", 400);
-  }
-  const { messageId } = parsed.data;
+  const body = await parseJsonBody(req, bodySchema);
+  if (body.error) return body.error;
+  const { messageId } = body.data;
 
   const userId = await ensureUserId();
-  const limit = await checkRateLimit(userId, "divination");
-  if (!limit.allowed) {
-    return jsonError(
-      `每小时解签 AI 调用上限 ${limit.limit} 次，请稍后再试（已发 ${limit.used}）`,
-      429,
-    );
-  }
+  const limited = await enforceRateLimit(userId, "divination", "解签 AI 调用");
+  if (limited) return limited;
 
   const db = getDb();
 
@@ -254,11 +240,4 @@ export async function POST(req: Request) {
   });
 
   return new Response(sse, { headers: SSE_HEADERS });
-}
-
-function jsonError(message: string, status: number): Response {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
 }

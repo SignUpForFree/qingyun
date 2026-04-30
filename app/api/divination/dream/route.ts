@@ -1,14 +1,20 @@
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { conversations, messages } from "@/lib/db/schema";
 import { ensureUserId } from "@/lib/auth/session";
-import { checkRateLimit } from "@/lib/ai/check-rate-limit";
 import { guardTexts } from "@/lib/safety/guard";
 import { chat } from "@/lib/ai/client";
 import { sanitizeAiOutput } from "@/lib/ai/output-sanitizer";
 import { frame, heartbeat, safeEnqueue, SSE_HEADERS } from "@/lib/chat/sse";
 import { serializeJson } from "@/lib/db/json";
+import {
+  bumpConversationActivity,
+  enforceRateLimit,
+  jsonError,
+  parseJsonBody,
+  requireConversationOwned,
+} from "@/lib/chat/route-helpers";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -65,18 +71,9 @@ const SYSTEM_PROMPT_PRECISE = [
 ].join("\n");
 
 export async function POST(req: Request) {
-  let raw: unknown;
-  try {
-    raw = await req.json();
-  } catch {
-    return jsonError("请求体不是合法 JSON", 400);
-  }
-
-  const parsed = bodySchema.safeParse(raw);
-  if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message ?? "校验失败", 400);
-  }
-  const data = parsed.data;
+  const body = await parseJsonBody(req, bodySchema);
+  if (body.error) return body.error;
+  const data = body.data;
   const conversationId = data.conversationId;
   if (!conversationId) {
     return jsonError("conversationId 必填（请先发起一条文本消息再使用解梦按钮）", 400);
@@ -90,21 +87,12 @@ export async function POST(req: Request) {
   if (safetyFail) return safetyFail;
 
   const userId = await ensureUserId();
-  const limit = await checkRateLimit(userId, "dream");
-  if (!limit.allowed) {
-    return jsonError(
-      `每小时解梦 AI 上限 ${limit.limit} 次，请稍后再试（已发 ${limit.used}）`,
-      429,
-    );
-  }
+  const limited = await enforceRateLimit(userId, "dream", "解梦 AI");
+  if (limited) return limited;
 
   const db = getDb();
-  const owned = await db
-    .select({ id: conversations.id })
-    .from(conversations)
-    .where(and(eq(conversations.id, conversationId), eq(conversations.user_id, userId)))
-    .limit(1);
-  if (!owned[0]) return jsonError("会话不存在", 404);
+  const ownedFail = await requireConversationOwned(db, conversationId, userId);
+  if (ownedFail) return ownedFail;
 
   const userPrompt = buildUserPrompt(data);
   const userText =
@@ -215,10 +203,7 @@ export async function POST(req: Request) {
           }),
         );
 
-        await db
-          .update(conversations)
-          .set({ last_intent: "dream", last_message_at: new Date().toISOString() })
-          .where(eq(conversations.id, conversationId));
+        await bumpConversationActivity(db, conversationId, "dream");
 
         safeEnqueue(controller, frame("done", {}));
       } catch (e) {
@@ -302,11 +287,4 @@ function extractSuggestions(text: string): string[] {
     .map((s) => s.trim())
     .filter((s) => s.length > 0 && s.length < 100)
     .slice(0, 3);
-}
-
-function jsonError(message: string, status: number): Response {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
 }

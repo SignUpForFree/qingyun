@@ -3,7 +3,6 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { conversations, messages, profiles } from "@/lib/db/schema";
 import { ensureUserId } from "@/lib/auth/session";
-import { checkRateLimit } from "@/lib/ai/check-rate-limit";
 import { guardTexts } from "@/lib/safety/guard";
 import { chat } from "@/lib/ai/client";
 import { frame, heartbeat, safeEnqueue, SSE_HEADERS } from "@/lib/chat/sse";
@@ -12,6 +11,13 @@ import { buildChartV2 } from "@/lib/bazi/chart";
 import { buildBaziPrompt, type V2DivinationDim } from "@/lib/ai/prompts/bazi-interpret";
 import { sanitizeAiOutput } from "@/lib/ai/output-sanitizer";
 import { parsePillarsCache, serializePillars } from "@/lib/profile/bazi-pillars";
+import {
+  bumpConversationActivity,
+  enforceRateLimit,
+  jsonError,
+  parseJsonBody,
+  requireConversationOwned,
+} from "@/lib/chat/route-helpers";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -58,39 +64,21 @@ const bodySchema = z.object({
 });
 
 export async function POST(req: Request) {
-  let raw: unknown;
-  try {
-    raw = await req.json();
-  } catch {
-    return jsonError("请求体不是合法 JSON", 400);
-  }
-
-  const parsed = bodySchema.safeParse(raw);
-  if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message ?? "校验失败", 400);
-  }
-  const data = parsed.data;
+  const body = await parseJsonBody(req, bodySchema);
+  if (body.error) return body.error;
+  const data = body.data;
   const conversationId = data.conversationId;
   if (!conversationId) {
     return jsonError("conversationId 必填（请先发起一条文本消息再使用八字按钮）", 400);
   }
 
   const userId = await ensureUserId();
-  const limit = await checkRateLimit(userId, "bazi");
-  if (!limit.allowed) {
-    return jsonError(
-      `每小时八字 AI 解读上限 ${limit.limit} 次，请稍后再试（已发 ${limit.used}）`,
-      429,
-    );
-  }
+  const limited = await enforceRateLimit(userId, "bazi", "八字 AI 解读");
+  if (limited) return limited;
 
   const db = getDb();
-  const owned = await db
-    .select({ id: conversations.id })
-    .from(conversations)
-    .where(and(eq(conversations.id, conversationId), eq(conversations.user_id, userId)))
-    .limit(1);
-  if (!owned[0]) return jsonError("会话不存在", 404);
+  const ownedFail = await requireConversationOwned(db, conversationId, userId);
+  if (ownedFail) return ownedFail;
 
   // ============ Branch B: quickFormData → 创建档案 ============
   if (data.quickFormData) {
@@ -455,10 +443,7 @@ export async function POST(req: Request) {
           }),
         );
 
-        await db
-          .update(conversations)
-          .set({ last_intent: "bazi", last_message_at: new Date().toISOString() })
-          .where(eq(conversations.id, conversationId));
+        await bumpConversationActivity(db, conversationId, "bazi");
 
         safeEnqueue(controller, frame("done", {}));
       } catch (e) {
@@ -512,11 +497,4 @@ function parseBirthDateTime(date: string, time: string): Date {
     return new Date("1990-01-01T12:00:00+08:00");
   }
   return d;
-}
-
-function jsonError(message: string, status: number): Response {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
 }

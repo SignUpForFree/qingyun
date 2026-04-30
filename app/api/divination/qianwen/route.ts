@@ -1,12 +1,18 @@
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { conversations, messages, slips } from "@/lib/db/schema";
+import { messages, slips } from "@/lib/db/schema";
 import { ensureUserId } from "@/lib/auth/session";
-import { checkRateLimit } from "@/lib/ai/check-rate-limit";
 import { guardTexts } from "@/lib/safety/guard";
 import { pickSlip } from "@/lib/divination/slips";
 import { serializeJson } from "@/lib/db/json";
+import {
+  bumpConversationActivity,
+  enforceRateLimit,
+  jsonError,
+  parseJsonBody,
+  requireConversationOwned,
+} from "@/lib/chat/route-helpers";
 
 export const runtime = "nodejs";
 
@@ -39,46 +45,21 @@ const bodySchema = z.object({
 });
 
 export async function POST(req: Request) {
-  let raw: unknown;
-  try {
-    raw = await req.json();
-  } catch {
-    return jsonError("请求体不是合法 JSON", 400);
-  }
+  const body = await parseJsonBody(req, bodySchema);
+  if (body.error) return body.error;
+  const { conversationId, category, userQuestion } = body.data;
 
-  const parsed = bodySchema.safeParse(raw);
-  if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message ?? "校验失败", 400);
-  }
-  const { conversationId, category, userQuestion } = parsed.data;
-
-  const safetyFail = guardTexts({
-    text: userQuestion ?? "",
-  });
+  const safetyFail = guardTexts({ text: userQuestion ?? "" });
   if (userQuestion && safetyFail) return safetyFail;
 
   const userId = await ensureUserId();
-  const limit = await checkRateLimit(userId, "divination");
-  if (!limit.allowed) {
-    return jsonError(
-      `每小时抽签上限 ${limit.limit} 次，请稍后再试（已发 ${limit.used}）`,
-      429,
-    );
-  }
+  const limited = await enforceRateLimit(userId, "divination", "抽签");
+  if (limited) return limited;
 
+  if (!conversationId) return jsonError("conversationId 必填", 400);
   const db = getDb();
-
-  if (!conversationId) {
-    return jsonError("conversationId 必填", 400);
-  }
-  const owned = await db
-    .select({ id: conversations.id })
-    .from(conversations)
-    .where(and(eq(conversations.id, conversationId), eq(conversations.user_id, userId)))
-    .limit(1);
-  if (!owned[0]) {
-    return jsonError("会话不存在", 404);
-  }
+  const ownedFail = await requireConversationOwned(db, conversationId, userId);
+  if (ownedFail) return ownedFail;
 
   // ============ Step 1：仅 category，写 slip_question_input 卡 ============
 
@@ -193,10 +174,7 @@ export async function POST(req: Request) {
     })
     .returning();
 
-  await db
-    .update(conversations)
-    .set({ last_intent: "divination", last_message_at: new Date().toISOString() })
-    .where(eq(conversations.id, conversationId));
+  await bumpConversationActivity(db, conversationId, "divination");
 
   return Response.json({
     step: "slip_drawn",
@@ -206,12 +184,5 @@ export async function POST(req: Request) {
       content: `第 ${slip.number} 签 · ${slip.title}`,
       metadata: serializeJson(cardMeta),
     },
-  });
-}
-
-function jsonError(message: string, status: number): Response {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: { "Content-Type": "application/json" },
   });
 }

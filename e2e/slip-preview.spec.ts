@@ -39,7 +39,7 @@ test("API 烟测 · 抽签全链路（建会话 → 抽签 → 验证返回）",
   });
 
   // 列会话拿 id
-  const list = await request.get("/api/conversations");
+  const list = await request.get("/api/chat/conversations");
   const { conversations } = await list.json();
   const conv = conversations[0];
   if (!conv) throw new Error("没拿到会话");
