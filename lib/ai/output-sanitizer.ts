@@ -37,7 +37,11 @@ export interface SanitizeResult {
 }
 
 /**
- * 替换禁词为柔和说法
+ * 替换禁词为柔和说法 + 去掉 Markdown 装饰（标题 / 加粗）
+ *
+ * Prompt 已经禁用 # / ## / ### 和 ** **，但 DeepSeek 偶尔仍会写出
+ * （训练语料里教科书风格强烈）。持久化前最后一道清扫，避免 UI 上
+ * 出现裸的 "### 火旺耗身" 标题。
  *
  * @param text AI 原始输出
  * @param scope core (chat) | divination (含开源签强词)
@@ -51,7 +55,7 @@ export function sanitizeAiOutput(
   const extraDream = ["凶兆", "不祥"] as const;
   const all = scope === "divination" ? [...list, ...extraDream] : [...list, ...extraDream];
 
-  let cleaned = text;
+  let cleaned = stripMarkdownDecoration(text);
   const hitWords: string[] = [];
   for (const word of all) {
     if (cleaned.includes(word)) {
@@ -65,6 +69,21 @@ export function sanitizeAiOutput(
     hitCount: hitWords.length,
     hitWords,
   };
+}
+
+/**
+ * 去掉 AI 输出里残留的 Markdown 装饰：
+ *   - 行首 #+ 空格 → 删（标题）
+ *   - **xxx** → xxx（加粗）
+ *   - __xxx__ → xxx（替代加粗）
+ *
+ * 保留：行内 [方括号标签] / 数字列表 / 中文标点 / 表情符号
+ */
+export function stripMarkdownDecoration(text: string): string {
+  return text
+    .replace(/^[ \t]*#{1,6}[ \t]+/gm, "")  // 行首标题
+    .replace(/\*\*([^*\n]+)\*\*/g, "$1")    // **加粗**
+    .replace(/__([^_\n]+)__/g, "$1");       // __加粗__
 }
 
 /** 仅检测，不替换；用于离线 audit */

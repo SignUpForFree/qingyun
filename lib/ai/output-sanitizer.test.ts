@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { sanitizeAiOutput, detectForbidden } from "./output-sanitizer";
+import {
+  sanitizeAiOutput,
+  detectForbidden,
+  stripMarkdownDecoration,
+} from "./output-sanitizer";
 
 describe("sanitizeAiOutput (M3.34)", () => {
   it("无禁词时原文不变 + hitCount=0", () => {
@@ -50,6 +54,39 @@ describe("sanitizeAiOutput (M3.34)", () => {
     expect(once.hitCount).toBeGreaterThan(0);
     const twice = sanitizeAiOutput(once.cleaned);
     expect(twice.hitCount).toBe(0);
+  });
+});
+
+describe("stripMarkdownDecoration", () => {
+  it("去掉行首 ### 标题", () => {
+    const input = "### 火旺耗身\n这段是正文";
+    expect(stripMarkdownDecoration(input)).toBe("火旺耗身\n这段是正文");
+  });
+
+  it("支持 # / ## / ###### 多级标题", () => {
+    expect(stripMarkdownDecoration("# 一\n## 二\n###### 六")).toBe("一\n二\n六");
+  });
+
+  it("去掉 **加粗**", () => {
+    expect(stripMarkdownDecoration("此处**重点**提醒")).toBe("此处重点提醒");
+  });
+
+  it("去掉 __加粗__", () => {
+    expect(stripMarkdownDecoration("此处__重点__提醒")).toBe("此处重点提醒");
+  });
+
+  it("保留 [方括号标签] / 数字列表 / 中文标点", () => {
+    const input = "[心理视角] 1. 第一段\n[周公解梦] 2. 第二段";
+    expect(stripMarkdownDecoration(input)).toBe(input);
+  });
+
+  it("行中 # 不被误删（只删行首）", () => {
+    expect(stripMarkdownDecoration("微信号是 #123")).toBe("微信号是 #123");
+  });
+
+  it("sanitizeAiOutput 也去掉 ### 标题", () => {
+    const r = sanitizeAiOutput("### 火旺耗身\n此处需多留意。");
+    expect(r.cleaned).toBe("火旺耗身\n此处需多留意。");
   });
 });
 

@@ -4,6 +4,7 @@ import type { ModelMessage } from "ai";
 import { getDb } from "@/lib/db/client";
 import { conversations, messages } from "@/lib/db/schema";
 import { chat } from "@/lib/ai/client";
+import { sanitizeAiOutput } from "@/lib/ai/output-sanitizer";
 import { buildPromptMessages, K_RECENT } from "@/lib/ai/summarizer";
 import { serializeJson } from "@/lib/db/json";
 import { profiles } from "@/lib/db/schema";
@@ -20,6 +21,7 @@ import { frame, safeEnqueue } from "./sse";
 export const SYSTEM_PROMPT = [
   "你是轻运 AI，一位温柔、年轻化的国学陪伴助手。",
   "回复风格：自然、简短（默认 80–200 字），有温度但不端说教架子。",
+  "禁用 Markdown 标题（# / ## / ###）和加粗符号（** / __）；段落直接用纯文本，不要带任何标签前缀。",
   "禁用：大凶 / 倒霉 / 厄运 / 命中注定 / 注定 / 必然 等绝对负面词。把不利信号转成『适合静一静』、『可以慢一点』、『先慢一步』、『沉住气』这类柔和说法。",
   "结尾不要硬贴『加油』、『相信自己』这种空洞鸡汤。",
 ].join("\n");
@@ -279,10 +281,14 @@ export async function streamChatReply(args: {
     /* usage 抓不到不致命 */
   }
 
+  // 持久化前清扫 Markdown 装饰 + 禁词兜底（流式 token 已经吐给客户端，这一层
+  // 只保证落库 / 历史回看不会留下 ###标题 / **加粗** 残留）
+  const sanitized = sanitizeAiOutput(assistantText, "core");
+
   await db.insert(messages).values({
     conversation_id: args.conversationId,
     role: "assistant",
-    content: assistantText || "(无内容)",
+    content: sanitized.cleaned || "(无内容)",
     intent: "chat",
     tokens_used: tokens,
   });
