@@ -32,6 +32,7 @@ const UpdateBody = z.object({
     .regex(/^\d{2}:\d{2}$/, "birth_time 必须是 HH:mm")
     .optional(),
   birth_calendar: z.enum(["solar", "lunar"]).optional(),
+  birth_is_leap_month: z.boolean().optional(),
   birth_place: z.string().min(1).max(80).optional(),
   current_address: z.string().max(80).optional(),
   is_default: z.literal(true).optional(),

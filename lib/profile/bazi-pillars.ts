@@ -50,6 +50,7 @@ export function computePillarsFromProfile(profile: Profile): CachedPillars {
     latitude: SHANGHAI_LATITUDE,
     gender: (profile.gender ?? "male") as "male" | "female",
     calendarType: profile.birth_calendar,
+    isLeapMonth: profile.birth_is_leap_month,
   });
   return {
     pillars: computed.pillars,

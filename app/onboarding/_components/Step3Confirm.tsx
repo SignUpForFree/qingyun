@@ -116,9 +116,10 @@ export function Step3Confirm({
   }
 
   const calendarLabel = form.birth.calendarType === "lunar" ? "农历" : "公历";
+  const leapPrefix = form.birth.calendarType === "lunar" && form.birth.rawDate.isLeap ? "闰 " : "";
   const dateLabel =
     form.birth.calendarType === "lunar"
-      ? `农历 ${form.birth.rawDate.year}-${form.birth.rawDate.month}-${form.birth.rawDate.day}`
+      ? `农历 ${leapPrefix}${form.birth.rawDate.year}-${form.birth.rawDate.month}-${form.birth.rawDate.day}`
       : form.birth.rawDate.year +
         "-" +
         String(form.birth.rawDate.month).padStart(2, "0") +

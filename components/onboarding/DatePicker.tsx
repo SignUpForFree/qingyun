@@ -18,6 +18,16 @@ import { Button } from "@/components/ui/button";
 import type { CalendarType } from "@/types/domain";
 
 const { Solar, Lunar } = lunar;
+// LunarYear / LunarMonth 在 lunar-javascript 的 .d.ts 里没声明，但运行时存在。
+// 仅 DatePicker 内部需要（计算闰月数 + 闰月日数），用类型守卫包一层避免 any 扩散。
+interface LunarYearLike {
+  fromYear(year: number): { getLeapMonth(): number };
+}
+interface LunarMonthLike {
+  fromYm(year: number, month: number): { getDayCount(): number } | null;
+}
+const LunarYear = (lunar as unknown as { LunarYear: LunarYearLike }).LunarYear;
+const LunarMonth = (lunar as unknown as { LunarMonth: LunarMonthLike }).LunarMonth;
 
 /**
  * 时辰参考表（用户填具体小时后由 hour → 时辰自动判定，仅作回显）
@@ -57,7 +67,7 @@ export interface DatePickerValue {
   /** 出生分钟（0-59）；hour=null 时该字段也为 null */
   minute: number | null;
   /** 用户原始输入（用于回显） — 农历或公历的年月日 */
-  rawDate: { year: number; month: number; day: number };
+  rawDate: { year: number; month: number; day: number; isLeap?: boolean };
 }
 
 export interface DatePickerProps {
@@ -73,6 +83,8 @@ interface DraftPickerValue {
   day: string;
   hour: string;
   minute: string;
+  /** 农历闰月开关："0" 非闰月 / "1" 闰月；公历模式始终为 "0" */
+  isLeap: string;
   [key: string]: string;
 }
 
@@ -131,18 +143,36 @@ export function DatePicker({ value, onChange, className, disabled }: DatePickerP
     setOpen(false);
   };
 
-  // 联动日数：年+月变化时把超界的 day 截到最大
-  const maxDay = daysInMonth(Number(draft.year), Number(draft.month));
+  // 当年闰月数字（0 = 当年无闰月），仅农历模式有意义
+  const draftYear = Number(draft.year);
+  const draftMonth = Number(draft.month);
+  const leapMonthOfYear = calendarType === "lunar" ? getLeapMonthOfYear(draftYear) : 0;
+  const showLeapColumn = calendarType === "lunar" && leapMonthOfYear > 0 && leapMonthOfYear === draftMonth;
+
+  // 当年/月不再是闰月候选时，把 isLeap 强制回 "0"，避免脏状态污染 draftToValue
+  React.useEffect(() => {
+    if (!showLeapColumn && draft.isLeap !== "0") {
+      setDraft((prev) => ({ ...prev, isLeap: "0" }));
+    }
+  }, [showLeapColumn, draft.isLeap]);
+
+  // 联动日数：年+月+闰月+历法变化时把超界的 day 截到最大
+  const maxDay = daysInMonth(draftYear, draftMonth, calendarType, draft.isLeap === "1");
   React.useEffect(() => {
     setDraft((prev) => {
       const dayNum = Number(prev.day);
-      const max = daysInMonth(Number(prev.year), Number(prev.month));
+      const max = daysInMonth(
+        Number(prev.year),
+        Number(prev.month),
+        calendarType,
+        prev.isLeap === "1",
+      );
       if (dayNum > max) {
         return { ...prev, day: pad2(max) };
       }
       return prev;
     });
-  }, [draft.year, draft.month]);
+  }, [draft.year, draft.month, draft.isLeap, calendarType]);
 
   return (
     <div className={cn("space-y-2", className)}>
@@ -234,6 +264,12 @@ export function DatePicker({ value, onChange, className, disabled }: DatePickerP
                   </Picker.Item>
                 ))}
               </Picker.Column>
+              {showLeapColumn && (
+                <Picker.Column name="isLeap">
+                  <Picker.Item value="0">非闰</Picker.Item>
+                  <Picker.Item value="1">闰月</Picker.Item>
+                </Picker.Column>
+              )}
               <Picker.Column name="day">
                 {Array.from({ length: maxDay }, (_, i) => i + 1).map((d) => (
                   <Picker.Item key={d} value={pad2(d)}>
@@ -320,9 +356,34 @@ function minuteOptions(): number[] {
   return Array.from({ length: 60 / MINUTE_STEP }, (_, i) => i * MINUTE_STEP);
 }
 
-function daysInMonth(year: number, month: number): number {
+function daysInMonth(
+  year: number,
+  month: number,
+  calendarType: CalendarType = "solar",
+  isLeap = false,
+): number {
   if (!year || !month) return 31;
+  if (calendarType === "lunar") {
+    try {
+      const lm = LunarMonth.fromYm(year, isLeap ? -month : month);
+      return lm ? lm.getDayCount() : 30;
+    } catch {
+      return 30;
+    }
+  }
   return new Date(year, month, 0).getDate();
+}
+
+/**
+ * 当年闰月数字（0 表示无闰月）。仅用于决定 DatePicker 是否渲染「闰」列。
+ */
+function getLeapMonthOfYear(year: number): number {
+  if (!year) return 0;
+  try {
+    return LunarYear.fromYear(year).getLeapMonth() ?? 0;
+  } catch {
+    return 0;
+  }
 }
 
 /**
@@ -342,18 +403,18 @@ function valueToDraft(
       day: "01",
       hour: "12",
       minute: "00",
+      isLeap: "0",
     };
   }
-  const display =
-    calendarType === "lunar" || value.calendarType === "lunar"
-      ? value.rawDate
-      : { year: value.rawDate.year, month: value.rawDate.month, day: value.rawDate.day };
+  const display = value.rawDate;
+  const isLeap = calendarType === "lunar" && value.calendarType === "lunar" && value.rawDate.isLeap === true;
   return {
     year: pad4(display.year),
     month: pad2(display.month),
     day: pad2(display.day),
     hour: pad2(value.hour ?? 12),
     minute: pad2(value.hour === null ? 0 : (value.minute ?? 0)),
+    isLeap: isLeap ? "1" : "0",
   };
 }
 
@@ -375,9 +436,12 @@ function draftToValue(
   if (!year || !month || !day) return null;
 
   if (calendarType === "lunar") {
+    // 仅当当年该月确实是闰月时 isLeap 才能为真，否则强制 false
+    const leapMonth = getLeapMonthOfYear(year);
+    const isLeap = draft.isLeap === "1" && leapMonth > 0 && leapMonth === month;
     let solarDate: string;
     try {
-      const sd = Lunar.fromYmd(year, month, day).getSolar();
+      const sd = Lunar.fromYmd(year, isLeap ? -month : month, day).getSolar();
       solarDate = toIsoDate(sd.getYear(), sd.getMonth(), sd.getDay());
     } catch {
       return null;
@@ -387,7 +451,7 @@ function draftToValue(
       calendarType: "lunar",
       hour,
       minute,
-      rawDate: { year, month, day },
+      rawDate: { year, month, day, isLeap: isLeap || undefined },
     };
   }
 
@@ -418,34 +482,42 @@ function convertDraftCalendar(
   try {
     if (next === "lunar") {
       const ld = Solar.fromYmd(y, m, d).getLunar();
+      // lunar-javascript getMonth() 返回带符号月（闰月为负）
+      const lm = ld.getMonth();
+      const isLeap = lm < 0;
       return {
         ...draft,
         year: pad4(ld.getYear()),
-        month: pad2(ld.getMonth()),
+        month: pad2(Math.abs(lm)),
         day: pad2(ld.getDay()),
+        isLeap: isLeap ? "1" : "0",
       };
     }
-    const sd = Lunar.fromYmd(y, m, d).getSolar();
+    // 农历 → 公历：用 prev draft 中的 isLeap 决定
+    const isLeap = draft.isLeap === "1";
+    const sd = Lunar.fromYmd(y, isLeap ? -m : m, d).getSolar();
     return {
       ...draft,
       year: pad4(sd.getYear()),
       month: pad2(sd.getMonth()),
       day: pad2(sd.getDay()),
+      isLeap: "0",
     };
   } catch {
     return draft;
   }
 }
 
-/** trigger 行展示文案：「公历 1995-05-15 10:30 · 巳时」/「农历 1995-04-16 时分未填」 */
+/** trigger 行展示文案：「公历 1995-05-15 10:30 · 巳时」/「农历 闰六月 1995-04-16 时分未填」 */
 function formatTriggerLabel(value: DatePickerValue): string {
   const label = value.calendarType === "lunar" ? "农历" : "公历";
+  const leapPrefix = value.calendarType === "lunar" && value.rawDate.isLeap ? "闰 " : "";
   const dateStr = `${pad4(value.rawDate.year)}-${pad2(value.rawDate.month)}-${pad2(value.rawDate.day)}`;
   if (value.hour === null) {
-    return `${label} ${dateStr} · 时分未填`;
+    return `${label} ${leapPrefix}${dateStr} · 时分未填`;
   }
   const time = `${pad2(value.hour)}:${pad2(value.minute ?? 0)}`;
-  return `${label} ${dateStr} · ${time} · ${hourToBranchLabel(value.hour)}`;
+  return `${label} ${leapPrefix}${dateStr} · ${time} · ${hourToBranchLabel(value.hour)}`;
 }
 
 /** 测试 / 服务端构造 helper */
@@ -471,13 +543,14 @@ export function buildLunarDatePickerValue(
   day: number,
   hour: number | null = null,
   minute: number | null = null,
+  isLeap = false,
 ): DatePickerValue {
-  const solar = Lunar.fromYmd(year, month, day).getSolar();
+  const solar = Lunar.fromYmd(year, isLeap ? -month : month, day).getSolar();
   return {
     solarDate: toIsoDate(solar.getYear(), solar.getMonth(), solar.getDay()),
     calendarType: "lunar",
     hour,
     minute: hour === null ? null : (minute ?? 0),
-    rawDate: { year, month, day },
+    rawDate: { year, month, day, isLeap: isLeap || undefined },
   };
 }

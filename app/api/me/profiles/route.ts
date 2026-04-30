@@ -20,6 +20,7 @@ const CreateBody = z.object({
   birth_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "birth_date 必须是 YYYY-MM-DD"),
   birth_time: z.string().regex(/^\d{2}:\d{2}$/, "birth_time 必须是 HH:mm"),
   birth_calendar: z.enum(["solar", "lunar"]).optional(),
+  birth_is_leap_month: z.boolean().optional(),
   birth_place: z.string().min(1).max(80),
   current_address: z.string().max(80).optional(),
 });

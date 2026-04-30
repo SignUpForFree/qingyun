@@ -13,6 +13,7 @@ function makeProfile(overrides: Partial<Profile> = {}): Profile {
     birth_date: "1995-03-08",
     birth_time: "10:00",
     birth_calendar: "solar",
+    birth_is_leap_month: false,
     birth_place: "上海 上海市",
     current_address: null,
     bazi_pillars: null,

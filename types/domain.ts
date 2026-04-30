@@ -45,4 +45,6 @@ export interface BuildChartInput {
   latitude: number;
   gender: Gender;
   calendarType: CalendarType;
+  /** 农历闰月：仅 calendarType=lunar 时有意义；true → 转 solar 时把月份取负传给 lunar.js */
+  isLeapMonth?: boolean;
 }

@@ -99,6 +99,11 @@ export const profiles = sqliteTable(
     birth_calendar: text("birth_calendar", { enum: ["solar", "lunar"] })
       .notNull()
       .default("solar"),
+    // 农历闰月标志：true 时 birth_date 的"月"指闰月（如 1995 闰八月）；
+    // 公历或非闰月年永远 false。chart.ts toBaseSolarTime 用它给 lunar.js 传 -month。
+    birth_is_leap_month: integer("birth_is_leap_month", { mode: "boolean" })
+      .notNull()
+      .default(false),
     birth_place: text("birth_place").notNull(),
     current_address: text("current_address"),
     bazi_pillars: text("bazi_pillars"), // JSON cache (avoid recomputing lunar.js)

@@ -42,6 +42,7 @@ describe("toProfilePatch", () => {
       birth_date: "1995-03-08",
       birth_time: "10:00",
       birth_calendar: "solar",
+      birth_is_leap_month: false,
       birth_place: "上海 上海市",
     });
     // 经纬度不应进入 PUT 体（V2.0 schema 不存储）

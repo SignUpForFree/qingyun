@@ -27,6 +27,8 @@ export interface CreateProfileInput {
   birth_date: string; // "YYYY-MM-DD"
   birth_time: string; // "HH:mm"
   birth_calendar?: "solar" | "lunar";
+  /** 农历闰月：仅 birth_calendar=lunar 且当年该月为闰月时为 true */
+  birth_is_leap_month?: boolean;
   birth_place: string;
   current_address?: string;
 }
@@ -63,6 +65,7 @@ export async function createProfile(
     birth_date: input.birth_date,
     birth_time: input.birth_time,
     birth_calendar: input.birth_calendar ?? "solar",
+    birth_is_leap_month: input.birth_is_leap_month ?? false,
     birth_place: input.birth_place,
     current_address: input.current_address,
     created_at: now,

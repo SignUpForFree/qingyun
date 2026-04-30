@@ -54,6 +54,7 @@ const PROFILE_FIXTURE = {
   birth_date: "1990-01-01",
   birth_time: "12:00",
   birth_calendar: "solar" as const,
+  birth_is_leap_month: false,
   birth_place: "未填",
   current_address: null,
   bazi_pillars: null,

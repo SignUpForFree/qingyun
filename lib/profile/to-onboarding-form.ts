@@ -45,12 +45,13 @@ export function profileToOnboardingForm(p: Profile): Partial<OnboardingForm> {
         minute = mm;
       }
     }
+    const isLeap = p.birth_calendar === "lunar" && Boolean(p.birth_is_leap_month);
     out.birth = {
       iso: `${p.birth_date}T${p.birth_time}:00+08:00`,
       calendarType: p.birth_calendar === "lunar" ? "lunar" : "solar",
       hour,
       minute,
-      rawDate: { year, month, day },
+      rawDate: { year, month, day, isLeap: isLeap || undefined },
     };
   }
 

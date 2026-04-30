@@ -28,6 +28,7 @@ export const onboardingSchema = z.object({
       year: z.number().int(),
       month: z.number().int(),
       day: z.number().int(),
+      isLeap: z.boolean().optional(),
     }),
   }),
   region: z.object({
@@ -56,6 +57,8 @@ export interface ProfilePatch {
   birth_date: string;
   birth_time: string;
   birth_calendar: "solar" | "lunar";
+  /** 农历闰月：仅 birth_calendar=lunar 时有意义 */
+  birth_is_leap_month?: boolean;
   birth_place: string;
 }
 
@@ -86,12 +89,15 @@ export function toProfilePatch(form: OnboardingForm): ProfilePatch {
     .replace(/\s+/g, " ")
     .trim();
 
+  const isLeap = form.birth.calendarType === "lunar" && form.birth.rawDate.isLeap === true;
+
   return {
     nickname: form.nickname,
     gender: form.gender,
     birth_date,
     birth_time,
     birth_calendar: form.birth.calendarType,
+    birth_is_leap_month: isLeap,
     birth_place,
   };
 }

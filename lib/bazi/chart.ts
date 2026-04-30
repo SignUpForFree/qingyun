@@ -100,8 +100,10 @@ function toBaseSolarTime(input: BuildChartInput): Date {
 
   // 农历输入：按 UTC+8 提取 birthTime 字段作为农历年月日时分（避免 DST/时区漂移），
   // 转公历后重组为 UTC+8 Date（即 ISO 字符串带 +08:00）。
+  // 闰月：lunar-javascript 约定月份取负数表示闰月（例如 2025 闰六月 = -6）。
   const lf = getUTC8Fields(input.birthTime);
-  const lunarDate = Lunar.fromYmdHms(lf.year, lf.month, lf.day, lf.hour, lf.minute, lf.second);
+  const lunarMonth = input.isLeapMonth ? -lf.month : lf.month;
+  const lunarDate = Lunar.fromYmdHms(lf.year, lunarMonth, lf.day, lf.hour, lf.minute, lf.second);
   const s = lunarDate.getSolar();
   // 用 UTC ms 重建：UTC+8 的 yyyy-mm-dd hh:mm:ss → 对应 UTC ms
   const utcMs = Date.UTC(s.getYear(), s.getMonth() - 1, s.getDay(), s.getHour(), s.getMinute(), 0);
