@@ -10,6 +10,9 @@ vi.mock("ai", () => ({
 vi.mock("./gateway", () => ({
   getGateway: () => () => "mock-model-instance",
   AI_MODEL: "deepseek-chat",
+  AI_BACKUP_MODEL: "deepseek-chat",
+  hasBackupGateway: () => false,
+  modelForLane: () => "deepseek-chat",
 }));
 
 import { chat, __TEST__ } from "./client";

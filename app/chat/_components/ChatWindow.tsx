@@ -97,6 +97,7 @@ export function ChatWindow({
         showQuickChips={stream.messages.length > 0}
         solid
         progressHint={stream.progressHint}
+        placeholder="请描述你遇到的事情和想问的问题"
       />
     </div>
   );

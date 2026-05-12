@@ -120,7 +120,7 @@ const slipDrawing = z.object({
 const slipImage = z.object({
   ui: z.literal("slip_image"),
   slipNumber: z.number().int().min(1).max(100),
-  level: z.enum(["上上", "上吉", "中吉", "中平", "下下"]),
+  level: z.enum(["上上", "上吉", "吉", "平", "渐顺", "慎行"]),
   title: z.string(),
   poemLines: z.array(z.string()).length(4),
   imageUrl: z.string(),
@@ -130,7 +130,7 @@ const slipImage = z.object({
 const slipReport = z.object({
   ui: z.literal("slip_report"),
   slipNumber: z.number().int().min(1).max(100),
-  level: z.enum(["上上", "上吉", "中吉", "中平", "下下"]),
+  level: z.enum(["上上", "上吉", "吉", "平", "渐顺", "慎行"]),
   title: z.string(),
   poem: z.string(),
   dimension: z.string(),
@@ -146,13 +146,17 @@ const dreamResultFast = z.object({
 
 const dreamResultPrecise = z.object({
   ui: z.literal("dream_result_precise"),
+  empathy: z.string(),
   threeViews: z.object({
-    psychology: z.string(),
     zhouGong: z.string(),
-    modern: z.string(),
+    freud: z.string(),
+    jung: z.string(),
   }),
-  summary: z.string(),
+  coreMeaning: z.string(),
   suggestions: z.array(z.string()),
+  subconsciousMsg: z.string(),
+  conclusion: z.string(),
+  summary: z.string(),
 });
 
 const baziResult = z.object({

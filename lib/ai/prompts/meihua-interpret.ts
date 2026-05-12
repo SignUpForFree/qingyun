@@ -21,7 +21,7 @@ const SYSTEM_BASE = [
   "全文 280-450 字。结构：[卦象速断 60-100 字] / [体用 + 时辰能量 60-100 字] / [应期 + 五行损益 60-100 字] / [收尾 1 句行动建议]。",
   "禁用 Markdown 标题（# / ## / ###）和加粗符号（** / __）；只保留 [方括号标签] 作段落前缀，其余用纯文本。",
   "禁词：大凶 / 倒霉 / 厄运 / 命中注定 / 注定 / 必然。负面信号转柔和说法（先慢一步、沉住气、宜稳）。",
-  "结合给定卦辞 / 爻辞 / 彖辞 / 体用 / 时辰 / 五行损益有理有据，不空泛。",
+  "结合给定卦辞 / 爻辞 / 彖辞 / 大象传 / 体用 / 时辰 / 五行损益有理有据，不空泛。",
 ].join("\n");
 
 const TIYONG_LABEL: Record<string, string> = {
@@ -64,6 +64,7 @@ export function buildMeihuaPrompt(args: BuildMeihuaPromptArgs): BuildMeihuaPromp
     `本卦：${result.benDict.name}（上${result.ben.upper}下${result.ben.lower}）${linesArt}`,
     `卦辞：${result.benDict.panCi}`,
     `彖辞：${result.benDict.tuanCi}`,
+    `大象传：${result.benDict.daXiang}`,
     `动爻：第 ${result.dongYao} 爻 — ${result.benDict.dongYaoCi ?? "（无）"}`,
     `互卦：${result.huDict.name}（上${result.hu.upper}下${result.hu.lower}）— 卦辞：${result.huDict.panCi}`,
     `变卦：${result.bianDict.name}（上${result.bian.upper}下${result.bian.lower}）— 卦辞：${result.bianDict.panCi}`,

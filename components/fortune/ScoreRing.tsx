@@ -111,7 +111,7 @@ export function ScoreRing({
 
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span
-          className="num-mono font-[family-name:var(--font-serif)] text-[var(--color-ink-plum)]"
+          className="num-mono font-[family-name:var(--font-serif)] font-bold text-[var(--color-ink-plum)]"
           style={{ fontSize: size * 0.32, lineHeight: 1 }}
         >
           {score}

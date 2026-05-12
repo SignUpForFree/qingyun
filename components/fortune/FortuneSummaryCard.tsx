@@ -24,7 +24,7 @@ export function FortuneSummaryCard({
     >
       <div className="grid grid-cols-[auto_1fr] items-center gap-3">
         <div className="flex flex-col items-center gap-1.5">
-          <span className="text-[11px] tracking-ritual2 text-[var(--color-ink-fade)]">
+          <span className="text-[12px] font-bold tracking-ritual text-[var(--color-ink-mist)]">
             轻 运 分 数
           </span>
           <ScoreRing score={overall} size={120} strokeWidth={9} caption="" sparkles={false} />
@@ -34,7 +34,7 @@ export function FortuneSummaryCard({
 
       {oneLiner && (
         <p
-          className="px-1 text-center font-[family-name:var(--font-serif)] text-[14px] leading-relaxed tracking-ritual text-[var(--color-ink-plum)]"
+          className="px-1 text-center font-[family-name:var(--font-serif)] text-[15px] font-bold leading-relaxed tracking-ritual text-[var(--color-ink-plum)]"
           data-testid="hero-one-liner"
         >
           {oneLiner}
@@ -43,7 +43,7 @@ export function FortuneSummaryCard({
 
       <Link
         href={`/fortune/${date}`}
-        className="flex h-11 items-center justify-center rounded-full bg-gradient-to-r from-[#F0B8C8]/40 to-[#C9A1D9]/40 font-[family-name:var(--font-serif)] text-[13px] tracking-ritual text-[var(--color-accent-plum)] transition hover:from-[#F0B8C8]/60 hover:to-[#C9A1D9]/60"
+        className="flex h-11 items-center justify-center rounded-full bg-gradient-to-r from-[#F0B8C8]/40 to-[#C9A1D9]/40 font-[family-name:var(--font-serif)] text-[14px] font-medium tracking-ritual text-[var(--color-accent-plum)] transition hover:from-[#F0B8C8]/60 hover:to-[#C9A1D9]/60"
         data-testid="fortune-detail-link"
       >
         查 看 运 势 详 情 <span className="ml-1.5">→</span>

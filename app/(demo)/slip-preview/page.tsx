@@ -5,18 +5,19 @@ import { SLIPS_V2 as SLIPS_SEED, type SlipLevel } from "@/db/seed/slips-v2";
 /**
  * Design lab：SlipResultCard 视觉预览（spec §6 抽签 + design §7）
  *
- * 仅 dev 用，列出 production seed 实际 5 等级各一张样式，便于和
+ * 仅 dev 用，列出 production seed 实际 6 等级各一张样式，便于和
  * prompts-all-pages.md §7 对照。第一张含 6 维 readings 演示 tabs 切换。
  * 不出现在 BottomNav，不在导航里挂入口；直接访问 /slip-preview。
  */
 export default function SlipPreviewPage() {
-  // production 数据 5 级 + 兼容历史 4 级
+  // 6 级签等级
   const wanted: SlipLevel[] = [
     "上上",
     "上吉",
-    "中吉",
-    "中平",
-    "下下",
+    "吉",
+    "平",
+    "渐顺",
+    "慎行",
   ];
   const samples = wanted
     .map((lv) => SLIPS_SEED.find((s) => s.level === lv))
@@ -35,9 +36,9 @@ export default function SlipPreviewPage() {
   return (
     <>
       <AppHeader title="灵 签 卡 预 览" />
-      <div className="flex flex-1 flex-col items-center gap-4 p-4 pb-20">
+      <div className="flex flex-1 flex-col items-center gap-4 p-4 pb-safe-bottom">
         <p className="px-2 text-center text-xs text-[var(--color-ink-fade)]">
-          design lab · production 5 等级各一张样式（首张含 6 维 tabs 演示）
+          design lab · production 6 等级各一张样式（首张含 6 维 tabs 演示）
         </p>
         {samples.map((s, idx) => {
           const fullReadings: Record<string, string> = {};

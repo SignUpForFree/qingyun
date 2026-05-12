@@ -47,7 +47,7 @@ export default async function MePhonePage() {
           </span>
         }
       />
-      <div className="relative flex flex-1 flex-col overflow-hidden p-4 pb-20">
+      <div className="relative flex flex-1 flex-col overflow-hidden p-4 pb-safe-bottom">
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <WatercolorDot color="lavender" size={140} className="absolute left-[8%] top-[10%]" />
           <WatercolorDot color="pink" size={120} className="absolute right-[10%] top-[20%]" />

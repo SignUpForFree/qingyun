@@ -38,11 +38,17 @@ export async function POST(req: Request): Promise<Response> {
         { status: 400 },
       );
     }
-    const result = sendOtp(parsed.data.phone);
+    const result = await sendOtp(parsed.data.phone);
     if (!result.sent) {
+      if (result.cooldownMs) {
+        return NextResponse.json(
+          { error: "rate_limited", cooldownMs: result.cooldownMs },
+          { status: 429 },
+        );
+      }
       return NextResponse.json(
-        { error: "rate_limited", cooldownMs: result.cooldownMs },
-        { status: 429 },
+        { error: "sms_failed", reason: result.reason ?? "unknown" },
+        { status: 502 },
       );
     }
     return NextResponse.json({ sent: true });

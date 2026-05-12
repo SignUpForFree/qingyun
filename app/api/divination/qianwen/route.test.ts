@@ -16,7 +16,7 @@ vi.mock("@/lib/safety/guard", () => ({
 
 interface SlipRow {
   number: number;
-  level: "上上" | "上吉" | "中吉" | "中平" | "下下";
+  level: "上上" | "上吉" | "吉" | "平" | "渐顺" | "慎行";
   title: string;
   poem: string;
   default_reading: string;

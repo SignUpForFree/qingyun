@@ -60,11 +60,16 @@ export function EmptyLauncher({ onPick, busy }: EmptyLauncherProps) {
       className="mx-auto w-full max-w-md space-y-4 px-4 pt-6"
       data-testid="chat-empty-launcher"
     >
+      <div className="flex justify-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/images/ai-avatar.png" alt="轻运 AI" className="h-24 w-24" />
+      </div>
+
       <div className="text-center">
-        <p className="font-[family-name:var(--font-serif)] text-[15px] tracking-ritual text-[var(--color-ink-plum)]">
+        <p className="font-[family-name:var(--font-serif)] text-[16px] font-medium tracking-ritual text-[var(--color-ink-plum)]">
           想问就问，我陪你慢慢理 <Sparkle size={10} />
         </p>
-        <p className="mt-1 text-[11px] text-[var(--color-ink-fade)]">
+        <p className="mt-1 text-[12px] text-[var(--color-ink-mist)]">
           四式直入 · 也可直接打字告诉我
         </p>
       </div>
@@ -105,7 +110,7 @@ function CompactCard({ def, onPick, busy }: CardProps) {
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-[var(--color-accent-lavender)]/25 to-[var(--color-accent-plum)]/15 text-[var(--color-ink-plum)]">
               <FunctionIcon name={def.icon} size={14} />
             </span>
-            <span className="font-[family-name:var(--font-serif)] text-[15px] tracking-ritual text-[var(--color-ink-plum)]">
+            <span className="font-[family-name:var(--font-serif)] text-[15px] font-bold tracking-ritual text-[var(--color-ink-plum)]">
               {def.label}
             </span>
           </span>
@@ -134,7 +139,7 @@ function WideCard({ def, onPick, busy }: CardProps) {
           <FunctionIcon name={def.icon} size={18} />
         </span>
         <div className="flex-1">
-          <p className="font-[family-name:var(--font-serif)] text-[15px] tracking-ritual text-[var(--color-ink-plum)]">
+          <p className="font-[family-name:var(--font-serif)] text-[15px] font-bold tracking-ritual text-[var(--color-ink-plum)]">
             {def.label}
           </p>
           <p className="mt-0.5 text-[11px] text-[var(--color-ink-fade)]">{def.desc}</p>

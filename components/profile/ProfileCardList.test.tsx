@@ -117,7 +117,7 @@ describe("ProfileCardList", () => {
     expect(screen.getByText(/农历/)).toBeInTheDocument();
   });
 
-  it("有 avatar_url → 渲染 img；无 → 渲染首字 fallback", () => {
+  it("有 avatar_url → 渲染 img；无 → 渲染默认头像", () => {
     const { rerender } = render(
       <ProfileCardList
         profiles={[makeProfile({ avatar_url: "/uploads/a.jpg" })]}
@@ -126,6 +126,6 @@ describe("ProfileCardList", () => {
     expect(screen.getByRole("img")).toHaveAttribute("src", "/uploads/a.jpg");
 
     rerender(<ProfileCardList profiles={[makeProfile({ avatar_url: null })]} />);
-    expect(screen.getByText("云")).toBeInTheDocument();
+    expect(screen.getByRole("img")).toHaveAttribute("src", "/images/ai-avatar.png");
   });
 });

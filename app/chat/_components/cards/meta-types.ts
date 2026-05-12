@@ -44,6 +44,23 @@ export interface BaziResultMeta {
 
 export interface DreamResultMeta {
   mode?: "fast" | "precise";
+  /** 🌙 开篇共情 */
+  empathy?: string;
+  /** 🔮 三重维度 */
+  threeViews?: {
+    zhouGong: string;
+    freud: string;
+    jung: string;
+  };
+  /** 📜 核心寓意 */
+  coreMeaning?: string;
+  /** 💡 规避方案 */
+  suggestions?: string[];
+  /** 💌 潜意识真心话 */
+  subconsciousMsg?: string;
+  /** 🌷 结语 */
+  conclusion?: string;
+  summary?: string;
 }
 
 export interface ProfilePickerMeta {
@@ -80,6 +97,13 @@ export interface SlipReportMeta {
   dimension: string;
   reading: string;
   aiInterpretation: string;
+  isFullInterpret?: boolean;
+  sections?: Array<{
+    emoji: string;
+    label: string;
+    shortReading: string;
+    longReading: string;
+  }>;
 }
 
 export interface MeihuaResultMeta {

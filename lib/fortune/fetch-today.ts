@@ -2,21 +2,27 @@ import "server-only";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { profiles, fortunesDaily, type Profile } from "@/lib/db/schema";
-import { buildChartV2 } from "@/lib/bazi/chart";
 import { getDayPillar } from "@/lib/bazi/today";
+import { getChartV2ForProfile } from "./chart-from-profile";
 import { computeDaily7, type DimensionScores7 } from "./daily-7dim";
 import { computeAttributes, type Attributes } from "./attributes";
 import { pickOneLiner } from "./one-liner";
 import { buildReadingFallback } from "./reading-fallback";
 import { computeDailyScores } from "./scorer";
-import { parsePillarsCache, serializePillars } from "@/lib/profile/bazi-pillars";
-
 /**
  * 共享版 today fortune fetch (M4.4)
  *
  * 给 RSC（app/page.tsx）和 /api/fortune/today route 共用。同步 better-sqlite3，
  * 命中 fortunes_daily 缓存直接返回，未命中则 buildChartV2 + 写缓存。
  */
+
+/**
+ * reading 来源（参 docs/superpowers/specs/2026-05-04-fortune-reading-ai-mcp.md §3）
+ *   "fallback" — 本地模板池兜底（lib/fortune/reading-fallback.ts，21 选 1）
+ *   "ai"       — DeepSeek v4 Pro 生成（lib/ai/prompts/fortune-reading.ts）
+ * 客户端 ReadingAutoRegen 检测 != "ai" 时 once-fire 触发 /api/fortune/today/regenerate
+ */
+export type ReadingSource = "fallback" | "ai";
 
 export interface DailyFortuneResult {
   cached: boolean;
@@ -26,6 +32,7 @@ export interface DailyFortuneResult {
   attributes: Attributes;
   oneLiner: string | null;
   reading: string;
+  readingSource: ReadingSource;
   profileId: string;
 }
 
@@ -79,6 +86,7 @@ export function fetchTodayFortune(args: FetchTodayArgs): DailyFortuneResult {
       attributes: JSON.parse(cached.attributes) as Attributes,
       oneLiner: cached.one_liner,
       reading: cached.reading,
+      readingSource: (cached.reading_source as ReadingSource) ?? "fallback",
       profileId: defaultProfile.id,
     };
   }
@@ -91,35 +99,7 @@ function computeAndCacheFortune(
   today: ReturnType<typeof getDayPillar>,
 ): DailyFortuneResult {
   const db = getDb();
-  let pillars = parsePillarsCache(profile.bazi_pillars);
-
-  const chartV2 = buildChartV2(
-    {
-      birthTime: new Date(
-        `${profile.birth_date}T${(profile.birth_time || "12:00").slice(0, 5)}:00+08:00`,
-      ),
-      longitude: 121.47,
-      latitude: 31.23,
-      gender: (profile.gender ?? "male") as "male" | "female",
-      calendarType: profile.birth_calendar,
-    },
-    { centerYear: new Date().getUTCFullYear() },
-  );
-
-  if (!pillars) {
-    pillars = { pillars: chartV2.pillars, solarTrueTime: chartV2.solarTrueTime };
-    try {
-      db.update(profiles)
-        .set({
-          bazi_pillars: serializePillars(pillars),
-          updated_at: new Date().toISOString(),
-        })
-        .where(eq(profiles.id, profile.id))
-        .run();
-    } catch (e) {
-      console.error("写 bazi_pillars 缓存失败", e);
-    }
-  }
+  const chartV2 = getChartV2ForProfile(profile);
 
   const daily7 = computeDaily7({
     chart: {
@@ -149,6 +129,7 @@ function computeAndCacheFortune(
         one_liner: oneLiner,
         attributes: JSON.stringify(attributes),
         reading,
+        reading_source: "fallback",
         generated_at: sql`CURRENT_TIMESTAMP`,
       })
       .onConflictDoUpdate({
@@ -158,7 +139,8 @@ function computeAndCacheFortune(
           scores: JSON.stringify(daily7.scores),
           one_liner: oneLiner,
           attributes: JSON.stringify(attributes),
-          reading,
+          // 注意：reading + reading_source **不在 conflict update 集合里**
+          // 因为如果之前已是 ai 版，不要被这次 fallback 重算覆盖回 fallback
           generated_at: sql`CURRENT_TIMESTAMP`,
         },
       })
@@ -175,6 +157,7 @@ function computeAndCacheFortune(
     attributes,
     oneLiner,
     reading,
+    readingSource: "fallback",
     profileId: profile.id,
   };
 }

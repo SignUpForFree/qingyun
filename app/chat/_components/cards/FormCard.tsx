@@ -55,20 +55,22 @@ export function FormCard({
 
   return (
     <GlassCard className={cn("space-y-3 p-4", className)}>
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-[family-name:var(--font-serif)] tracking-ritual text-[var(--color-ink-plum)]">
+      <div className="flex items-center justify-between gap-2">
+        <p className="whitespace-pre-wrap text-sm font-[family-name:var(--font-serif)] leading-relaxed tracking-ritual text-[var(--color-ink-plum)]">
           {title}
         </p>
         <Sparkle size={10} variant="diamond" />
       </div>
       {fields.map((f) => (
         <div key={f.key} className="space-y-1">
-          <label className="text-xs tracking-ritual2 text-[var(--color-ink-fade)]">
-            {f.label}
-            {f.required && (
-              <span className="ml-0.5 text-[var(--color-wuxing-fire)]">*</span>
-            )}
-          </label>
+          {f.label.trim().length > 0 ? (
+            <label className="text-xs tracking-ritual2 text-[var(--color-ink-fade)]">
+              {f.label}
+              {f.required && (
+                <span className="ml-0.5 text-[var(--color-wuxing-fire)]">*</span>
+              )}
+            </label>
+          ) : null}
           {f.type === "textarea" || (f.max !== undefined && f.max > 50) ? (
             <textarea
               rows={3}

@@ -108,7 +108,7 @@ export function AvatarPicker({
     }
   }
 
-  const initial = (nickname || "我").slice(0, 1);
+  const displayUrl = previewUrl || "/images/ai-avatar.png";
 
   return (
     <div className={cn("relative inline-block", className)} data-testid="avatar-picker">
@@ -124,21 +124,12 @@ export function AvatarPicker({
         style={{ width: size, height: size }}
         data-testid="avatar-picker-trigger"
       >
-        {previewUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={previewUrl}
-            alt={nickname}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <span
-            className="flex h-full w-full items-center justify-center bg-[var(--color-accent-lavender)]/30 font-[family-name:var(--font-serif)] text-[var(--color-ink-plum)]"
-            style={{ fontSize: size * 0.42 }}
-          >
-            {initial}
-          </span>
-        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={displayUrl}
+          alt={nickname}
+          className="h-full w-full object-cover"
+        />
         {uploading && (
           <span className="absolute inset-0 flex items-center justify-center bg-black/30">
             <Loader2 className="h-5 w-5 animate-spin text-white" />

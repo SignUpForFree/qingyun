@@ -7,7 +7,7 @@ import { guardTexts } from "@/lib/safety/guard";
 import { chat } from "@/lib/ai/client";
 import { frame, heartbeat, safeEnqueue, SSE_HEADERS } from "@/lib/chat/sse";
 import { serializeJson } from "@/lib/db/json";
-import { meihuaV2 } from "@/lib/divination/meihua-v2";
+import { meihuaProvider } from "@/lib/divination-providers";
 import { buildMeihuaPrompt } from "@/lib/ai/prompts/meihua-interpret";
 import { sanitizeAiOutput } from "@/lib/ai/output-sanitizer";
 import {
@@ -226,9 +226,9 @@ export async function POST(req: Request) {
   const numbers = data.numbers;
   const userQuestion = data.userQuestion ?? "";
 
-  // M3.23：用 V2 算法（5 卦推演 + 体用 + 时辰能量 + 五行损益 + 应期 +
-  // 64 卦字典 panci/yaoci/tuanci）替代 V1 内联简化算法
-  const v2 = meihuaV2({
+  // 通过 MeihuaProvider 抽象层（默认 LocalMeihuaProvider 走 V2 算法），
+  // 后续可通过 env MEIHUA_PROVIDER=api 切第三方
+  const v2 = await meihuaProvider.cast({
     numbers,
     userQuestion,
     profile: {
@@ -239,6 +239,9 @@ export async function POST(req: Request) {
       bazi_pillars: profile.bazi_pillars,
     },
   });
+
+  // 客户端断流时 abort，立即取消上游 DeepSeek（reasoning enabled 烧钱路径）
+  const ac = new AbortController();
 
   const sse = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -277,11 +280,15 @@ export async function POST(req: Request) {
 
         safeEnqueue(controller, frame("progress", { stage: "streaming", percent: 40 }));
 
+        // 梅花卦象 = 上下卦 + 互卦 + 变卦 + 用神 + 体用 + 五行生克，多维度联立推理
+        // 开 reasoning 让 v4 Pro 思考交叉关系再输出。
         const stream = await chat({
           systemPrompt,
           messages: [{ role: "user", content: userPrompt }],
           stream: true,
+          thinking: "enabled",
           meta: { conversationId: conversationId, userId },
+          abortSignal: ac.signal,
         });
 
         for await (const chunk of stream.textStream) {
@@ -359,18 +366,24 @@ export async function POST(req: Request) {
 
         safeEnqueue(controller, frame("done", {}));
       } catch (e) {
-        if (process.env.NODE_ENV !== "production") {
-          console.error("/api/divination/meihua 失败", e);
+        if ((e as Error)?.name === "AbortError") {
+          if (process.env.NODE_ENV !== "production") {
+            console.info("/api/divination/meihua client aborted");
+          }
+        } else {
+          if (process.env.NODE_ENV !== "production") {
+            console.error("/api/divination/meihua 失败", e);
+          }
+          const isTimeout = e instanceof Error && /timeout|abort/i.test(e.message);
+          safeEnqueue(
+            controller,
+            frame("error", {
+              message: isTimeout ? "AI 演算超时，请重试" : "AI 卡了一下，请稍后再试",
+              code: isTimeout ? "ai_timeout" : "unknown",
+              retryable: true,
+            }),
+          );
         }
-        const isTimeout = e instanceof Error && /timeout|abort/i.test(e.message);
-        safeEnqueue(
-          controller,
-          frame("error", {
-            message: isTimeout ? "AI 演算超时，请重试" : "AI 卡了一下，请稍后再试",
-            code: isTimeout ? "ai_timeout" : "unknown",
-            retryable: true,
-          }),
-        );
       } finally {
         stopHeartbeat();
         try {
@@ -379,6 +392,9 @@ export async function POST(req: Request) {
           /* 已 close 不致命 */
         }
       }
+    },
+    cancel() {
+      ac.abort(new DOMException("Client disconnected", "AbortError"));
     },
   });
 

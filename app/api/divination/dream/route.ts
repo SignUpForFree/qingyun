@@ -1,7 +1,6 @@
 import { z } from "zod";
-import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { conversations, messages } from "@/lib/db/schema";
+import { messages } from "@/lib/db/schema";
 import { ensureUserId } from "@/lib/auth/session";
 import { guardTexts } from "@/lib/safety/guard";
 import { chat } from "@/lib/ai/client";
@@ -15,6 +14,7 @@ import {
   parseJsonBody,
   requireConversationOwned,
 } from "@/lib/chat/route-helpers";
+import { buildDreamPrompt, extractDreamSections } from "@/lib/ai/prompts/dream-interpret";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -33,7 +33,9 @@ const HEARTBEAT_MS = 25_000;
  *   2. 写 user message（fast → dream 文本；precise → 拼 4 字段）
  *   3. SSE meta → AI 流 → 写 dream_result_fast / dream_result_precise 卡
  *
- * 三视角解读（precise）：心理学 / 周公 / 现代实用建议（在 prompt 内分段，AI 自由组织文本）
+ * precise 模式 7 段结构（需求 §解梦内容）：
+ *   🌙 开篇共情 → 🔮 三重维度解读(周公/弗洛伊德/荣格)
+ *   → 📜 核心寓意 → 💡 规避方案 → 💌 潜意识真心话 → 🌷 结语
  */
 
 // CLAUDE.md 第 1 条：ChatWindow 首次会话 convId 为 null，必须 .nullish()
@@ -54,23 +56,10 @@ const preciseSchema = z.object({
 
 const bodySchema = z.discriminatedUnion("mode", [fastSchema, preciseSchema]);
 
-// M3.29: dream prompt 禁词锁与全站对齐 — CORE 6 词 + 解梦专属（凶兆/不祥）
-const SYSTEM_PROMPT_FAST = [
-  "你是温柔的解梦师。给用户一段简短回应。",
-  "结构：1) 一句话点出主要意象；2) 一句话现代视角解读；3) 一句话行动建议。",
-  "字数：100-200 字。语气温柔不武断。",
-  "禁用 Markdown 标题（# / ## / ###）和加粗符号（** / __）；段落直接用纯文本。",
-  "禁词：大凶 / 倒霉 / 厄运 / 命中注定 / 注定 / 必然 / 凶兆 / 不祥。",
-].join("\n");
-
-const SYSTEM_PROMPT_PRECISE = [
-  "你是资深解梦师，融合心理学 / 传统 / 现代视角。",
-  "结构：[心理视角] 60-100 字 / [周公解梦] 60-100 字 / [现代实用建议] 60-100 字 / [总结一句] 1 句。",
-  "禁用 Markdown 标题（# / ## / ###）和加粗符号（** / __）；只保留 [方括号标签] 作段落前缀，其余用纯文本。",
-  "禁词：大凶 / 倒霉 / 厄运 / 命中注定 / 注定 / 必然 / 凶兆 / 不祥。",
-  "负面信号转柔和说法（先慢一步、沉住气、宜稳）。",
-  "用户填的 4 字段（核心场景/情绪/现实关联/特殊符号）请逐项呼应。",
-].join("\n");
+/**
+ * 解梦 prompt — 已拆到 lib/ai/prompts/dream-interpret.ts
+ * （保留此处注释做导航）
+ */
 
 export async function POST(req: Request) {
   const body = await parseJsonBody(req, bodySchema);
@@ -96,7 +85,14 @@ export async function POST(req: Request) {
   const ownedFail = await requireConversationOwned(db, conversationId, userId);
   if (ownedFail) return ownedFail;
 
-  const userPrompt = buildUserPrompt(data);
+  const { systemPrompt: sysPrompt, userPrompt } = buildDreamPrompt({
+    mode: data.mode,
+    dream: data.mode === "fast" ? data.dream : undefined,
+    core: data.mode === "precise" ? data.core : undefined,
+    emotion: data.mode === "precise" ? data.emotion : undefined,
+    reality: data.mode === "precise" ? data.reality : undefined,
+    special: data.mode === "precise" ? data.special : undefined,
+  });
   const userText =
     data.mode === "fast"
       ? data.dream
@@ -115,9 +111,6 @@ export async function POST(req: Request) {
     content: userText,
     intent: "dream",
   });
-
-  const sysPrompt = data.mode === "fast" ? SYSTEM_PROMPT_FAST : SYSTEM_PROMPT_PRECISE;
-  const resultUi = data.mode === "fast" ? "dream_result_fast" : "dream_result_precise";
 
   const sse = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -176,12 +169,19 @@ export async function POST(req: Request) {
         const cardMeta =
           data.mode === "fast"
             ? { ui: "dream_result_fast" as const, summary: finalText }
-            : {
-                ui: "dream_result_precise" as const,
-                threeViews: extractThreeViews(finalText),
-                summary: finalText.slice(0, 200),
-                suggestions: extractSuggestions(finalText),
-              };
+            : (() => {
+                const sections = extractDreamSections(finalText);
+                return {
+                  ui: "dream_result_precise" as const,
+                  empathy: sections.empathy,
+                  threeViews: sections.threeViews,
+                  coreMeaning: sections.coreMeaning,
+                  suggestions: sections.suggestions,
+                  subconsciousMsg: sections.subconsciousMsg,
+                  conclusion: sections.conclusion,
+                  summary: finalText.slice(0, 200),
+                };
+              })();
 
         const [card] = await db
           .insert(messages)
@@ -230,63 +230,9 @@ export async function POST(req: Request) {
         }
       }
 
-      // suppress unused var lint
-      void resultUi;
     },
   });
 
   return new Response(sse, { headers: SSE_HEADERS });
 }
 
-function buildUserPrompt(data: z.infer<typeof bodySchema>): string {
-  if (data.mode === "fast") {
-    return `用户的梦：${data.dream}\n\n请给一段简短温柔的解读。`;
-  }
-  return [
-    `用户描述的梦境（4 字段）：`,
-    `[核心场景] ${data.core}`,
-    `[情绪感受] ${data.emotion}`,
-    data.reality ? `[现实关联] ${data.reality}` : "",
-    data.special ? `[特殊符号] ${data.special}` : "",
-    "",
-    "请按 [心理视角 / 周公解梦 / 现代实用建议 / 总结] 4 段输出。",
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-/**
- * 从 AI 返回文本里粗粒度切出 3 视角文本。
- * AI 不严格遵守 4 段格式时尽量退化（split 失败 fallback 整段）。
- */
-function extractThreeViews(text: string): {
-  psychology: string;
-  zhouGong: string;
-  modern: string;
-} {
-  const tryFind = (label: RegExp) => {
-    const m = text.match(label);
-    if (!m) return "";
-    const start = m.index ?? 0;
-    const after = text.slice(start + m[0].length);
-    // 取到下个 [ 标签或结束
-    const stopMatch = after.match(/\[[^\]]+\]|总结/);
-    const end = stopMatch ? stopMatch.index : after.length;
-    return after.slice(0, end).trim();
-  };
-
-  return {
-    psychology: tryFind(/\[心理视角\]/) || text,
-    zhouGong: tryFind(/\[周公解梦\]/),
-    modern: tryFind(/\[现代实用建议\]/),
-  };
-}
-
-function extractSuggestions(text: string): string[] {
-  // AI 可能用 - / 1. / • 等列表项；这里粗暴切
-  return text
-    .split(/\n[-•·\d.][\s)]/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0 && s.length < 100)
-    .slice(0, 3);
-}

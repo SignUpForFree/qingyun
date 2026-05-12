@@ -4,9 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { GlassCard, Sparkle } from "@/components/su";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 
 const PHONE_RE = /^1[3-9]\d{9}$/;
 
@@ -23,13 +21,7 @@ interface PhoneLoginFormProps {
 /**
  * PhoneLoginForm — 手机号 + 6 位 OTP 登录表单
  *
- * 用作 LoginSheet 内容；登录前组件，不需要 cookie。
- *
- * 流程：
- *   1. 11 位中国大陆手机号 → POST /api/auth/phone/send-otp
- *   2. 60s 倒计时
- *   3. 6 位 OTP → POST /api/auth/phone/verify → { userId, isNew }
- *   4. 有 onSuccess → 调用回调（弹窗模式）；无 onSuccess → router.replace
+ * 用作 LoginGate / LoginSheet 内容；登录前组件，不需要 cookie。
  */
 export function PhoneLoginForm({ redirectTo, onSuccess }: PhoneLoginFormProps) {
   const router = useRouter();
@@ -69,12 +61,14 @@ export function PhoneLoginForm({ redirectTo, onSuccess }: PhoneLoginFormProps) {
         toast.error(err?.error ?? "验证码送不出去，稍候再试");
         return;
       }
-      const ok = (await res.json().catch(() => ({}))) as { mock?: boolean };
-      toast.success(
-        ok.mock
-          ? "Mock 模式 · 输任意 6 位数字即可登录"
-          : "验证码已发送 · 当前 mock 阶段，看服务器日志取码",
-      );
+      const ok = (await res.json().catch(() => ({}))) as { mock?: boolean; fixedCode?: string };
+      if (ok.mock) {
+        toast.success("Mock 模式 · 输任意 6 位数字即可登录");
+      } else if (ok.fixedCode) {
+        toast.success(`验证码已发送 · 开发模式固定验证码：${ok.fixedCode}`);
+      } else {
+        toast.success("验证码已发送");
+      }
       setCooldown(60);
     } catch (e) {
       if (process.env.NODE_ENV !== "production") console.error("phone login fetch failed", e);
@@ -125,80 +119,83 @@ export function PhoneLoginForm({ redirectTo, onSuccess }: PhoneLoginFormProps) {
   }
 
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        void login();
-      }}
-      data-testid="phone-login-form"
-    >
-      <GlassCard className="space-y-4 p-5" shadow="none">
-        <header className="flex items-center justify-center gap-2">
-          <Sparkle size={9} variant="asterisk" />
-          <h2 className="font-[family-name:var(--font-serif)] text-[14px] tracking-ritual2 text-[var(--color-ink-plum)]">
-            手 机 号 登 录
-          </h2>
-          <Sparkle size={9} variant="asterisk" />
-        </header>
+    <GlassCard className="w-full max-w-md space-y-4 p-5" shadow="none">
+      <header className="flex items-center justify-center gap-2">
+        <Sparkle size={9} variant="asterisk" />
+        <h2 className="font-[family-name:var(--font-serif)] text-[14px] tracking-ritual2 text-[var(--color-ink-plum)]">
+          手 机 号 登 录
+        </h2>
+        <Sparkle size={9} variant="asterisk" />
+      </header>
 
-        <div className="space-y-2">
-          <Label htmlFor="phone-input" className="text-xs text-[var(--color-ink-fade)]">
-            手机号（中国大陆 +86）
-          </Label>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-[var(--color-ink-mist)]">+86</span>
-            <Input
-              id="phone-input"
-              inputMode="numeric"
-              maxLength={11}
-              placeholder="1XX XXXX XXXX"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
-              data-testid="login-phone-input"
-            />
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void login();
+        }}
+        data-testid="phone-login-form"
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="phone-input" className="text-xs text-[var(--color-ink-fade)]">
+              手机号（中国大陆 +86）
+            </Label>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-[var(--color-ink-mist)]">+86</span>
+              <input
+                id="phone-input"
+                inputMode="numeric"
+                maxLength={11}
+                placeholder="请输入手机号"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
+                data-testid="login-phone-input"
+                className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm"
+              />
+            </div>
           </div>
-        </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="phone-code" className="text-xs text-[var(--color-ink-fade)]">
-            验证码（6 位）
-          </Label>
-          <div className="flex items-center gap-2">
-            <Input
-              id="phone-code"
-              inputMode="numeric"
-              maxLength={6}
-              placeholder="6 位数字"
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-              data-testid="login-code-input"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!phoneValid || sending || cooldown > 0}
-              onClick={sendOtp}
-              className="h-10 shrink-0 px-3 text-[11px]"
-              data-testid="login-send-otp"
-            >
-              {cooldown > 0 ? `${cooldown}s` : sending ? "发送中…" : "发送验证码"}
-            </Button>
+          <div className="space-y-2">
+            <Label htmlFor="phone-code" className="text-xs text-[var(--color-ink-fade)]">
+              验证码（6 位）
+            </Label>
+            <div className="flex items-center gap-2">
+              <input
+                id="phone-code"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="6 位数字"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                data-testid="login-code-input"
+                className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm"
+              />
+              <button
+                type="button"
+                disabled={!phoneValid || sending || cooldown > 0}
+                onClick={sendOtp}
+                className="h-10 shrink-0 rounded-lg border border-[var(--color-accent-lavender)]/40 bg-white px-3 text-[11px] text-[var(--color-ink-plum)] disabled:opacity-50"
+                data-testid="login-send-otp"
+              >
+                {cooldown > 0 ? `${cooldown}s` : sending ? "发送中…" : "发送验证码"}
+              </button>
+            </div>
           </div>
+
+          <button
+            type="submit"
+            disabled={!phoneValid || !codeValid || verifying}
+            className="h-12 w-full rounded-[14px] bg-gradient-to-r from-[#F0B8C8] to-[#C9A1D9] font-[family-name:var(--font-serif)] text-[15px] font-bold tracking-ritual text-white shadow-pill hover:opacity-90 disabled:opacity-50"
+            data-testid="login-submit"
+          >
+            {verifying ? "登录中…" : "登 录"}
+          </button>
+
+          <p className="text-center text-[10px] leading-relaxed text-[var(--color-ink-fade)]">
+            手机号仅用于账号识别 · 不会用于营销 · 不会展示给其他用户
+          </p>
         </div>
-
-        <Button
-          type="submit"
-          disabled={!phoneValid || !codeValid || verifying}
-          className="h-12 w-full rounded-[14px] bg-gradient-to-r from-[#F0B8C8] to-[#C9A1D9] font-[family-name:var(--font-serif)] text-[15px] tracking-ritual text-white shadow-pill hover:opacity-90 disabled:opacity-50"
-          data-testid="login-submit"
-        >
-          {verifying ? "登录中…" : "登 录"}
-        </Button>
-
-        <p className="text-center text-[10px] leading-relaxed text-[var(--color-ink-fade)]">
-          手机号仅用于账号识别 · 不会用于营销 · 不会展示给其他用户
-        </p>
-      </GlassCard>
-    </form>
+      </form>
+    </GlassCard>
   );
 }

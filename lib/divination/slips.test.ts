@@ -135,21 +135,21 @@ describe("drawSlip (M3.2)", () => {
 });
 
 describe("pickWeighted 分布", () => {
-  it("BASE_WEIGHTS 总和 100（5 级总数）", () => {
-    const sum = BASE_WEIGHTS.上上 + BASE_WEIGHTS.上吉 + BASE_WEIGHTS.中吉 + BASE_WEIGHTS.中平 + BASE_WEIGHTS.下下;
-    expect(sum).toBe(100);
+  it("BASE_WEIGHTS 总和 112（6 级：8+15+35+30+12+12）", () => {
+    const sum = BASE_WEIGHTS.上上 + BASE_WEIGHTS.上吉 + BASE_WEIGHTS.吉 + BASE_WEIGHTS.平 + BASE_WEIGHTS.渐顺 + BASE_WEIGHTS.慎行;
+    expect(sum).toBe(112);
   });
 
-  it("1000 次抽样：中吉 (W=35) 比下下 (W=12) 命中频率高", () => {
-    let zhongJi = 0;
-    let xiaXia = 0;
+  it("1000 次抽样：吉 (W=35) 比慎行 (W=12) 命中频率高", () => {
+    let ji = 0;
+    let shenXing = 0;
     for (let i = 0; i < 1000; i++) {
       const n = pickWeighted(`seed-${i}`);
       const lvl = getSlip(n).level;
-      if (lvl === "中吉") zhongJi++;
-      else if (lvl === "下下") xiaXia++;
+      if (lvl === "吉") ji++;
+      else if (lvl === "慎行") shenXing++;
     }
-    expect(zhongJi).toBeGreaterThan(xiaXia);
+    expect(ji).toBeGreaterThan(shenXing);
   });
 });
 
@@ -160,18 +160,18 @@ describe("adjustWeights (M3.3 八字喜忌微调)", () => {
     expect(r).not.toBe(BASE_WEIGHTS); // 浅拷贝
   });
 
-  it("身弱（strength<30）→ 下下 +5", () => {
+  it("身弱（strength<30）→ 慎行 +5", () => {
     const r = adjustWeights(BASE_WEIGHTS, WEAK_YONG);
-    expect(r.下下).toBe(BASE_WEIGHTS.下下 + 5);
-    expect(r.中吉).toBe(BASE_WEIGHTS.中吉);
+    expect(r.慎行).toBe(BASE_WEIGHTS.慎行 + 5);
+    expect(r.吉).toBe(BASE_WEIGHTS.吉);
     expect(r.上吉).toBe(BASE_WEIGHTS.上吉);
   });
 
-  it("身强（strength>70）→ 上吉/中吉 +3", () => {
+  it("身强（strength>70）→ 上吉/吉 +3", () => {
     const r = adjustWeights(BASE_WEIGHTS, STRONG_YONG);
     expect(r.上吉).toBe(BASE_WEIGHTS.上吉 + 3);
-    expect(r.中吉).toBe(BASE_WEIGHTS.中吉 + 3);
-    expect(r.下下).toBe(BASE_WEIGHTS.下下);
+    expect(r.吉).toBe(BASE_WEIGHTS.吉 + 3);
+    expect(r.慎行).toBe(BASE_WEIGHTS.慎行);
   });
 
   it("中和（30-70）→ 不调整", () => {
@@ -179,16 +179,16 @@ describe("adjustWeights (M3.3 八字喜忌微调)", () => {
     expect(r).toEqual(BASE_WEIGHTS);
   });
 
-  it("身弱 1000 次抽样：下下命中频率比中和明显高", () => {
-    let weakXia = 0;
-    let neutralXia = 0;
+  it("身弱 1000 次抽样：慎行命中频率比中和明显高", () => {
+    let weakShenXing = 0;
+    let neutralShenXing = 0;
     for (let i = 0; i < 1000; i++) {
       const wWeak = adjustWeights(BASE_WEIGHTS, WEAK_YONG);
       const wNeu = adjustWeights(BASE_WEIGHTS, NEUTRAL_YONG);
-      if (getSlip(pickWeighted(`seed-weak-${i}`, wWeak)).level === "下下") weakXia++;
-      if (getSlip(pickWeighted(`seed-neu-${i}`, wNeu)).level === "下下") neutralXia++;
+      if (getSlip(pickWeighted(`seed-weak-${i}`, wWeak)).level === "慎行") weakShenXing++;
+      if (getSlip(pickWeighted(`seed-neu-${i}`, wNeu)).level === "慎行") neutralShenXing++;
     }
-    expect(weakXia).toBeGreaterThan(neutralXia);
+    expect(weakShenXing).toBeGreaterThan(neutralShenXing);
   });
 });
 

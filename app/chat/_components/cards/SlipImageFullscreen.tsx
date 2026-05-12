@@ -4,7 +4,7 @@ import { GlassCard, Sparkle } from "@/components/su";
 import { cn } from "@/lib/utils";
 import { SlipImageRitualOverlay } from "./SlipImageRitualOverlay";
 
-export type SlipImageLevel = "上上" | "上吉" | "中吉" | "中平" | "下下";
+export type SlipImageLevel = "上上" | "上吉" | "吉" | "平" | "渐顺" | "慎行";
 
 export interface SlipImageFullscreenProps {
   slipNumber: number;
@@ -22,10 +22,13 @@ export interface SlipImageFullscreenProps {
 const LEVEL_TONE: Record<SlipImageLevel, { chip: string; label: string }> = {
   上上: { chip: "bg-[var(--color-wuxing-fire)]/35", label: "上 上 签" },
   上吉: { chip: "bg-[var(--color-wuxing-fire)]/25", label: "上 吉 签" },
-  中吉: { chip: "bg-[var(--color-wuxing-wood)]/25", label: "中 吉 签" },
-  中平: { chip: "bg-[var(--color-wuxing-water)]/25", label: "中 平 签" },
-  下下: { chip: "bg-[var(--color-wuxing-earth)]/30", label: "下 下 签" },
+  吉: { chip: "bg-[var(--color-wuxing-wood)]/25", label: "吉 签" },
+  平: { chip: "bg-[var(--color-wuxing-water)]/25", label: "平 签" },
+  渐顺: { chip: "bg-[var(--color-wuxing-wood)]/20", label: "渐 顺 签" },
+  慎行: { chip: "bg-[var(--color-wuxing-earth)]/30", label: "慎 行 签" },
 };
+
+const DEFAULT_TONE = { chip: "bg-[var(--color-wuxing-water)]/25", label: "签" };
 
 /**
  * 抽签结果图卡（M2.11，spec §4.4 slip_image，image10）
@@ -50,7 +53,7 @@ export function SlipImageFullscreen({
 }: SlipImageFullscreenProps) {
   const [imgError, setImgError] = React.useState(false);
   const [overlayOpen, setOverlayOpen] = React.useState(false);
-  const tone = LEVEL_TONE[level];
+  const tone = LEVEL_TONE[level] ?? DEFAULT_TONE;
 
   return (
     <GlassCard className={cn("space-y-3 p-4", className)}>

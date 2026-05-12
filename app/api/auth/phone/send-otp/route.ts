@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { sendOtp, isMockOtpBypass } from "@/lib/auth/phone-otp";
+import { sendOtp, isMockOtpBypass, getFixedOtpCode } from "@/lib/auth/phone-otp";
 
 /**
  * POST /api/auth/phone/send-otp — 浏览器登录前发码（公开，未登录可访问）
@@ -38,13 +38,23 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
-  const result = sendOtp(parsed.data.phone);
+  const result = await sendOtp(parsed.data.phone);
   if (!result.sent) {
+    if (result.cooldownMs) {
+      return NextResponse.json(
+        { error: "rate_limited", cooldownMs: result.cooldownMs },
+        { status: 429 },
+      );
+    }
     return NextResponse.json(
-      { error: "rate_limited", cooldownMs: result.cooldownMs },
-      { status: 429 },
+      { error: "sms_failed", reason: result.reason ?? "unknown" },
+      { status: 502 },
     );
   }
-  // mock=true 让前端把 toast 文案换成"任意 6 位即可"
-  return NextResponse.json({ ok: true, mock: isMockOtpBypass() });
+  // mock=true → 前端 toast "任意 6 位即可"；fixedCode → 前端 toast 显示固定验证码
+  return NextResponse.json({
+    ok: true,
+    mock: isMockOtpBypass(),
+    fixedCode: getFixedOtpCode(),
+  });
 }

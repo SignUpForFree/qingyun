@@ -112,6 +112,10 @@
   --radius-card: 16px;
   --radius-surface: 32px;
 
+  /* 底栏安全高度：52px 底栏 + env(safe-area-inset-bottom) */
+  --bottom-nav-height: 52px;
+  --bottom-safe-total: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px));
+
   /* 仙气阴影 */
   --shadow-glass: 0 8px 24px rgba(200, 170, 220, 0.15);
   --shadow-pill: 0 2px 16px rgba(201, 161, 217, 0.3);
@@ -220,7 +224,7 @@
 
 @layer utilities {
   .glass {
-    background-color: rgba(255, 255, 255, 0.7);
+    background-color: rgba(255, 255, 255, 0.82);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
   }
@@ -236,6 +240,28 @@
   .tracking-ritual3 {
     letter-spacing: var(--tracking-ritual3);
   }
+  /* 底栏安全区 padding — 替代硬编码 pb-24/pb-28 */
+  .pb-safe-bottom {
+    padding-bottom: var(--bottom-safe-total);
+  }
+}
+
+/* ===== sonner toast 素笺仙气风格 ===== */
+.cn-toast {
+  background: rgba(255, 255, 255, 0.88) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border: 0.5px solid rgba(196, 186, 221, 0.4) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 4px 20px rgba(200, 170, 220, 0.18) !important;
+  color: var(--color-ink-plum) !important;
+  font-family: var(--font-serif), STSongti-SC, serif;
+}
+.cn-toast-success [data-icon] {
+  color: #7c6da0 !important;
+}
+.cn-toast-error [data-icon] {
+  color: #b85c5c !important;
 }
 
 @keyframes wcd {

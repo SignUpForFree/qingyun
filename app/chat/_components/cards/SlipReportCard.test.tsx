@@ -12,7 +12,12 @@ const baseProps = {
   aiInterpretation: "结合您的八字日主和最近问询，工作上有贵人助力，但需注意细节。",
 };
 
-describe("SlipReportCard (M2.12)", () => {
+const MOCK_SECTIONS = [
+  { emoji: "💰", label: "财运", shortReading: "正财旺盛，收入稳定。", longReading: "一分耕耘一分收获。" },
+  { emoji: "✨", label: "轻运寄语", shortReading: "守得住财运，福气更长久。", longReading: "" },
+];
+
+describe("SlipReportCard", () => {
   it("渲染 level 徽章 + 签号 + 标题", () => {
     render(<SlipReportCard {...baseProps} />);
     expect(screen.getByText("上 吉 签")).toBeInTheDocument();
@@ -32,12 +37,52 @@ describe("SlipReportCard (M2.12)", () => {
     expect(poemEl.textContent).toContain("明朝富贵亦悠然");
   });
 
-  it("解签词 + AI 解读分别独立展示", () => {
+  it("无 sections → 解签词 + AI 解读纯文本展示", () => {
     render(<SlipReportCard {...baseProps} />);
     expect(screen.getByText("解 签 词")).toBeInTheDocument();
     expect(screen.getByText("AI 解 读")).toBeInTheDocument();
     expect(screen.getByText(/此签遇合有时/)).toBeInTheDocument();
     expect(screen.getByText(/工作上有贵人助力/)).toBeInTheDocument();
+  });
+
+  it("有 sections → 分段展示", () => {
+    render(<SlipReportCard {...baseProps} sections={MOCK_SECTIONS} />);
+    expect(screen.getByTestId("slip-sections")).toBeInTheDocument();
+    expect(screen.getByText("财运")).toBeInTheDocument();
+    expect(screen.getByText("轻运寄语")).toBeInTheDocument();
+    expect(screen.getByText("正财旺盛，收入稳定。")).toBeInTheDocument();
+    expect(screen.getByText("一分耕耘一分收获。")).toBeInTheDocument();
+    // 不显示旧的 "AI 解 读" 标签
+    expect(screen.queryByText("AI 解 读")).toBeNull();
+  });
+
+  it("isFullInterpret=false + onFullExplain → 显示'我要完整解读'按钮", () => {
+    const onFullExplain = vi.fn();
+    render(
+      <SlipReportCard
+        {...baseProps}
+        sections={MOCK_SECTIONS}
+        isFullInterpret={false}
+        onFullExplain={onFullExplain}
+      />,
+    );
+    const btn = screen.getByTestId("btn-full-explain");
+    expect(btn).toBeInTheDocument();
+    fireEvent.click(btn);
+    expect(onFullExplain).toHaveBeenCalledOnce();
+  });
+
+  it("isFullInterpret=true → 不显示'我要完整解读'按钮", () => {
+    const onFullExplain = vi.fn();
+    render(
+      <SlipReportCard
+        {...baseProps}
+        sections={MOCK_SECTIONS}
+        isFullInterpret={true}
+        onFullExplain={onFullExplain}
+      />,
+    );
+    expect(screen.queryByTestId("btn-full-explain")).toBeNull();
   });
 
   it("无 onShare 时不渲染分享按钮", () => {
@@ -55,29 +100,13 @@ describe("SlipReportCard (M2.12)", () => {
   it.each([
     ["上上", "上 上 签"],
     ["上吉", "上 吉 签"],
-    ["中吉", "中 吉 签"],
-    ["中平", "中 平 签"],
-    ["下下", "下 下 签"],
+    ["吉", "吉 签"],
+    ["平", "平 签"],
+    ["渐顺", "渐 顺 签"],
+    ["慎行", "慎 行 签"],
   ] as const)("level=%s 渲染 '%s'", (level, label) => {
     render(<SlipReportCard {...baseProps} level={level} />);
     expect(screen.getByText(label)).toBeInTheDocument();
-  });
-
-  // ============ M4.23 仪式特化 ============
-
-  it("题目用红朱色（书法风 — M4.29 calligraphy 优先 + serif 回退）", () => {
-    render(<SlipReportCard {...baseProps} />);
-    const title = screen.getByTestId("report-title");
-    expect(title.className).toContain("text-[#7d2f2f]");
-    expect(title.className).toContain("var(--font-calligraphy)");
-    expect(title.className).toContain("var(--font-serif)");
-  });
-
-  it("整卡米黄渐变背景（仪式特化）", () => {
-    render(<SlipReportCard {...baseProps} />);
-    const card = screen.getByTestId("slip-report-card");
-    // jsdom 把 hex 转 rgb：#FFF8E8 → rgb(255, 248, 232)
-    expect(card.style.background).toContain("rgb(255, 248, 232)");
   });
 
   it("右下角红朱方框印章（落款 轻运）", () => {

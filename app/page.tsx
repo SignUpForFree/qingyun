@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/layout";
-import { GlassCard, Sparkle, WatercolorDot, Divider, LogoMark } from "@/components/su";
+import { GlassCard, Sparkle, Divider } from "@/components/su";
 import { Button } from "@/components/ui/button";
 import { FortuneSummaryCard } from "@/components/fortune/FortuneSummaryCard";
 import { LuckyAttrsCard } from "@/components/fortune/LuckyAttrsCard";
@@ -33,7 +33,7 @@ export default async function HomePage() {
     userId = await requireUserId();
   } catch (e: unknown) {
     if (e instanceof UnauthenticatedError) {
-      return <LoginGate />;
+      return <LoginGate showButton />;
     }
     throw e;
   }
@@ -48,24 +48,23 @@ export default async function HomePage() {
   return (
     <>
       <AppHeader
-        left={<LogoMark size={26} />}
+        left={
+          <HomeProfileChip
+            nickname={def.nickname}
+            gender={def.gender}
+            avatarUrl={def.avatar_url}
+          />
+        }
         title={
           <span
-            className="font-[family-name:var(--font-serif)] text-[12px] tracking-ritual text-[var(--color-ink-mist)]"
+            className="font-[family-name:var(--font-serif)] text-[13px] font-bold tracking-ritual text-[var(--color-ink-plum)]"
             data-testid="home-lunar-date"
           >
             {headerText}
           </span>
         }
-        right={<HomeAvatar nickname={def.nickname} />}
       />
-      <div className="relative flex flex-1 flex-col items-center gap-5 p-4 pb-28">
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <WatercolorDot color="lavender" size={140} className="absolute left-[8%] top-[14%]" />
-          <WatercolorDot color="pink" size={120} className="absolute right-[10%] top-[20%]" />
-          <WatercolorDot color="blue" size={140} className="absolute bottom-[18%] left-[35%]" />
-        </div>
-
+      <div className="relative flex flex-1 flex-col items-center gap-5 p-4 pb-safe-bottom">
         <div className="relative z-10 mt-6 w-full max-w-md space-y-4">
           {profileList.length >= 2 && (
             <div className="flex justify-center">
@@ -83,15 +82,33 @@ export default async function HomePage() {
   );
 }
 
-function HomeAvatar({ nickname }: { nickname: string }) {
-  const initial = (nickname || "我").slice(0, 1);
+function HomeProfileChip({
+  nickname,
+  gender,
+  avatarUrl,
+}: {
+  nickname: string;
+  gender: "male" | "female" | "other";
+  avatarUrl: string | null;
+}) {
+  const href = "/me/profiles";
+  // 优先用用户上传的头像，否则用默认 AI 头像
+  const imgSrc = avatarUrl || "/images/ai-avatar.png";
   return (
     <Link
-      href="/me"
+      href={href}
       aria-label="我的"
-      className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-accent-lavender)]/30 font-[family-name:var(--font-serif)] text-[13px] text-[var(--color-ink-plum)] shadow-[0_1px_4px_rgba(160,140,210,0.25)]"
+      className="flex min-w-0 max-w-full items-center gap-2"
     >
-      {initial}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={imgSrc}
+        alt=""
+        className="h-9 w-9 shrink-0 rounded-full object-cover ring-2 ring-white/90 shadow-[0_1px_4px_rgba(160,140,210,0.25)]"
+      />
+      <span className="truncate font-[family-name:var(--font-serif)] text-[14px] font-bold text-[var(--color-ink-plum)]">
+        {nickname || "我"}
+      </span>
     </Link>
   );
 }
@@ -160,6 +177,14 @@ function CompleteProfileCard({ nickname }: { nickname: string }) {
           继续完善信息
         </Button>
       </Link>
+      <form action="/api/auth/logout" method="POST">
+        <button
+          type="submit"
+          className="mt-2 text-[11px] text-[var(--color-ink-fade)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-ink-mist)]"
+        >
+          退出登录
+        </button>
+      </form>
     </GlassCard>
   );
 }

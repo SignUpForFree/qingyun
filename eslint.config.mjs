@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 微信小程序 runtime（CommonJS + this alias 是 wx 官方 demo 风格，不走 ESLint TS rules）
+    "miniprogram/**",
   ]),
 ]);
 

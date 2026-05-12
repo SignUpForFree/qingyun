@@ -7,7 +7,7 @@ import { guardTexts } from "@/lib/safety/guard";
 import { chat } from "@/lib/ai/client";
 import { frame, heartbeat, safeEnqueue, SSE_HEADERS } from "@/lib/chat/sse";
 import { serializeJson } from "@/lib/db/json";
-import { buildChartV2 } from "@/lib/bazi/chart";
+import { baziProvider } from "@/lib/divination-providers";
 import { buildBaziPrompt, type V2DivinationDim } from "@/lib/ai/prompts/bazi-interpret";
 import { sanitizeAiOutput } from "@/lib/ai/output-sanitizer";
 import { parsePillarsCache, serializePillars } from "@/lib/profile/bazi-pillars";
@@ -40,7 +40,7 @@ const HEARTBEAT_MS = 25_000;
  */
 
 const VALID_CATEGORIES = [
-  "综合",
+  "综合运势",
   "事业学业",
   "财运",
   "感情姻缘",
@@ -294,6 +294,11 @@ export async function POST(req: Request) {
   const focus = data.focus!;
   const profileId = data.profileId!;
 
+  // 客户端断流（关页面 / 刷新 / 切路由）→ ac.abort，再透到 chat() 内部 AbortController，
+  // 立刻取消上游 DeepSeek 请求。八字 reasoning enabled 是高 token 路径，最贵；
+  // 不接 abort 的话用户关页 AI 还在跑 30s+，烧钱。详见 launch-readiness §1.7。
+  const ac = new AbortController();
+
   const sse = new ReadableStream<Uint8Array>({
     async start(controller) {
       let heartbeatId: ReturnType<typeof setInterval> | null = setInterval(() => {
@@ -326,7 +331,8 @@ export async function POST(req: Request) {
 
       try {
         // M3.13: V2 算盘 — 真太阳时 + 30+ 神煞 + 大运 8 步 + 流年 5 年 + 用神
-        const chartV2 = buildChartV2(
+        // 通过 BaziProvider 抽象层，后续可切第三方 API（env BAZI_PROVIDER=api）
+        const chartV2 = await baziProvider.buildChart(
           {
             birthTime: parseBirthDateTime(profile.birth_date, profile.birth_time),
             longitude: 121.47, // 上海兜底（M3 后续接 IP geo / 出生地查表）
@@ -373,11 +379,15 @@ export async function POST(req: Request) {
 
         safeEnqueue(controller, frame("progress", { stage: "streaming", percent: 30 }));
 
+        // 八字解读涉及命盘 / 神煞 / 大运 / 流年多维度交叉推理，开 reasoning
+        // 让 v4 Pro 内部思考一遍再输出，质量明显高于 disabled。
         const stream = await chat({
           systemPrompt,
           messages: [{ role: "user", content: userPrompt }],
           stream: true,
+          thinking: "enabled",
           meta: { conversationId: conversationId, userId },
+          abortSignal: ac.signal,
         });
 
         for await (const chunk of stream.textStream) {
@@ -447,18 +457,25 @@ export async function POST(req: Request) {
 
         safeEnqueue(controller, frame("done", {}));
       } catch (e) {
-        if (process.env.NODE_ENV !== "production") {
-          console.error("/api/divination/bazi 失败", e);
+        // 客户端 abort 时 chat() 抛 AbortError，不算"AI 卡了"
+        if ((e as Error)?.name === "AbortError") {
+          if (process.env.NODE_ENV !== "production") {
+            console.info("/api/divination/bazi client aborted");
+          }
+        } else {
+          if (process.env.NODE_ENV !== "production") {
+            console.error("/api/divination/bazi 失败", e);
+          }
+          const isTimeout = e instanceof Error && /timeout|abort/i.test(e.message);
+          safeEnqueue(
+            controller,
+            frame("error", {
+              message: isTimeout ? "AI 演算超时，请重试" : "AI 卡了一下，请稍后再试",
+              code: isTimeout ? "ai_timeout" : "unknown",
+              retryable: true,
+            }),
+          );
         }
-        const isTimeout = e instanceof Error && /timeout|abort/i.test(e.message);
-        safeEnqueue(
-          controller,
-          frame("error", {
-            message: isTimeout ? "AI 演算超时，请重试" : "AI 卡了一下，请稍后再试",
-            code: isTimeout ? "ai_timeout" : "unknown",
-            retryable: true,
-          }),
-        );
       } finally {
         stopHeartbeat();
         try {
@@ -467,6 +484,10 @@ export async function POST(req: Request) {
           /* 已 close 不致命 */
         }
       }
+    },
+    cancel() {
+      // 客户端断开 / 刷页 / 切路由 → 立即 abort 上游 DeepSeek
+      ac.abort(new DOMException("Client disconnected", "AbortError"));
     },
   });
 

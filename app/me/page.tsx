@@ -45,7 +45,7 @@ export default async function MePage() {
           </Link>
         }
       />
-      <div className="flex flex-1 flex-col gap-3 p-4 pb-24">
+      <div className="flex flex-1 flex-col gap-3 p-4 pb-safe-bottom">
         <ProfileCard profile={def} />
         <MenuList />
       </div>

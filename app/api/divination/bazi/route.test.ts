@@ -355,7 +355,7 @@ describe("POST /api/divination/bazi — schema validation", () => {
       new Request("http://test", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ focus: "综合" }),
+        body: JSON.stringify({ focus: "综合运势" }),
       }),
     );
     expect(r.status).toBe(400);

@@ -81,7 +81,7 @@ describe("BaziResultCard (design §8)", () => {
     render(
       <BaziResultCard
         chart={baseChart}
-        focus="综合"
+        focus="综合运势"
         aiText="x"
         ownerLabel="任亮"
         birthSummary="丁丑年 三月初七 辰时"

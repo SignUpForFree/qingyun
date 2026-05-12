@@ -66,7 +66,7 @@ describe("renderSlipToBuffer", () => {
     for (const dim of dims) {
       const buf = await renderSlipToBuffer({
         slipNumber: 1,
-        level: "中吉",
+        level: "吉",
         title: "心定福自来",
         poem: "心定福自来，莫问前程事。云开见月明，稳步自坦然。",
         category: dim,

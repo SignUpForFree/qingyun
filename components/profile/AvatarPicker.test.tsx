@@ -26,9 +26,9 @@ beforeEach(() => {
 });
 
 describe("AvatarPicker", () => {
-  it("无 currentUrl → 渲染首字 fallback", () => {
+  it("无 currentUrl → 渲染默认头像", () => {
     render(<AvatarPicker currentUrl={null} nickname="云水" />);
-    expect(screen.getByText("云")).toBeInTheDocument();
+    expect(screen.getByRole("img")).toHaveAttribute("src", "/images/ai-avatar.png");
   });
 
   it("有 currentUrl → 渲染 img", () => {

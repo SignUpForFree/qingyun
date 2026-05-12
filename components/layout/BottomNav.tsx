@@ -2,14 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
-import { Sparkle } from "@/components/su";
+import { House, MessageCircle, User } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-const TABS = [
-  { href: "/", key: "home", label: "首页" },
-  { href: "/chat", key: "chat", label: "AI问答" },
-  { href: "/me", key: "me", label: "我的" },
-] as const;
+interface TabItem {
+  href: string;
+  key: string;
+  label: string;
+  Icon: LucideIcon;
+}
+
+const TABS: TabItem[] = [
+  { href: "/", key: "home", label: "首页", Icon: House },
+  { href: "/chat", key: "chat", label: "AI问答", Icon: MessageCircle },
+  { href: "/me", key: "me", label: "我的", Icon: User },
+];
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -21,7 +28,7 @@ function isActive(pathname: string, href: string) {
 //   - /onboarding：多步建档专心填表
 //   - /fortune/*：单页详情滑屏
 //   - /feedback：表单页
-const HIDE_NAV_PREFIXES = ["/chat", "/onboarding", "/fortune", "/feedback"];
+const HIDE_NAV_PREFIXES = ["/onboarding", "/fortune", "/feedback"];
 
 function shouldHideNav(pathname: string) {
   return HIDE_NAV_PREFIXES.some(
@@ -29,33 +36,60 @@ function shouldHideNav(pathname: string) {
   );
 }
 
+const ACTIVE_COLOR = "#C870A0";
+const INACTIVE_COLOR = "#8A80A0";
+
 export function BottomNav() {
   const pathname = usePathname();
   if (shouldHideNav(pathname)) return null;
+
   return (
-    <nav className="glass sticky bottom-0 z-30 flex h-14 border-t border-[var(--color-accent-lavender)]/30">
-      {TABS.map((t) => {
-        const active = isActive(pathname, t.href);
-        return (
-          <Link
-            key={t.key}
-            href={t.href}
-            className={cn(
-              "relative flex flex-1 flex-col items-center justify-center gap-0.5 transition-colors duration-300 ease-out",
-              active
-                ? "text-[var(--color-accent-plum)]"
-                : "text-[var(--color-ink-fade)] hover:text-[var(--color-ink-mist)]",
-            )}
-          >
-            {active && (
-              <span className="absolute -top-1.5">
-                <Sparkle size={8} variant="diamond" />
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-50"
+      style={{
+        background: "rgba(255, 255, 255, 0.92)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        borderTop: "1px solid rgba(230, 220, 245, 0.4)",
+        borderRadius: "24px 24px 0 0",
+        boxShadow: "0 -2px 16px rgba(200, 140, 200, 0.08)",
+        // Home 指示条安全区
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
+      }}
+    >
+      <div
+        className="flex items-center justify-around"
+        style={{ height: "52px" }}
+      >
+        {TABS.map(({ key, label, Icon, href }) => {
+          const active = isActive(pathname, href);
+          return (
+            <Link
+              key={key}
+              href={href}
+              className="flex flex-col items-center justify-center gap-0.5"
+              style={{
+                width: "60px",
+                height: "44px",
+              }}
+            >
+              <Icon
+                size={22}
+                style={{ color: active ? ACTIVE_COLOR : INACTIVE_COLOR }}
+              />
+              <span
+                style={{
+                  fontSize: "10px",
+                  color: active ? ACTIVE_COLOR : INACTIVE_COLOR,
+                  fontWeight: 600,
+                }}
+              >
+                {label}
               </span>
-            )}
-            <span className="text-[10px] tracking-ritual">{t.label}</span>
-          </Link>
-        );
-      })}
+            </Link>
+          );
+        })}
+      </div>
     </nav>
   );
 }

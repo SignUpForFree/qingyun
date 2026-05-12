@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { ChevronRight } from "lucide-react";
 import { AppHeader } from "@/components/layout";
@@ -9,6 +8,7 @@ import { LoginGate } from "@/components/auth/LoginGate";
 import { requireUserId, UnauthenticatedError } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { phoneBind } from "@/lib/db/schema";
+import { AccountActions } from "./_AccountActions";
 
 /**
  * /me/settings — 杂项设置（参考"我的"页瘦身后的容器）
@@ -44,9 +44,10 @@ export default async function SettingsPage() {
           </Link>
         }
       />
-      <div className="flex flex-1 flex-col gap-3 p-4 pb-24">
+      <div className="flex flex-1 flex-col gap-3 p-4 pb-safe-bottom">
         <PhoneRow phone={phone} />
         <NavList />
+        <AccountActions />
         <LogoutBlock />
       </div>
     </>

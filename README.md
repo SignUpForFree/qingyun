@@ -55,6 +55,7 @@ curl http://localhost:3000/api/healthz
 
 | 类别 | 路径 |
 |---|---|
+| 生产部署（Docker / `~/occult` / `.env.prod`） | `docs/DEPLOY.md`；速查与腾讯云现机 IP、SSH、防 env 丢失见根目录 `CLAUDE.md` §2 |
 | 设计方案（spec） | `docs/superpowers/specs/2026-04-24-qingyun-ai-design.md` |
 | P1 骨架（W1-W2） | `docs/superpowers/plans/2026-04-24-qingyun-ai-p1-skeleton.md` |
 | P2 功能（W3-W4） | `docs/superpowers/plans/2026-04-24-qingyun-ai-p2-features.md` |

@@ -1,0 +1,48 @@
+# docker-compose override —— 在主 compose 之上加 caddy 反代
+#
+# 用法（替代裸 docker compose up -d）：
+#   docker compose -f docker-compose.yml -f deploy/docker-compose.caddy.yml up -d
+#
+# 行为：
+#   - qingyun 容器的端口改为只绑 127.0.0.1:3000，外网通过 caddy 进
+#   - caddy 80/443 开放，自动签 Let's Encrypt 证书
+#   - 加共享网络 frontend，让 caddy 能解析 qingyun:3000
+
+services:
+  qingyun:
+    # 收回外网暴露：只留本机访问，强制走 caddy
+    ports: !override
+      - "127.0.0.1:3000:3000"
+    networks:
+      - frontend
+
+  caddy:
+    image: caddy:2.10-alpine
+    container_name: qingyun-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data         # 证书 + ACME account 持久化
+      - caddy_config:/config
+    networks:
+      - frontend
+    depends_on:
+      qingyun:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "caddy", "version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  frontend:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:

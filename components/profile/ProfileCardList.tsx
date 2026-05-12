@@ -179,21 +179,9 @@ function AddProfileCard() {
 }
 
 function Avatar({ nickname, url }: { nickname: string; url: string | null }) {
-  if (url) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return (
-      <img
-        src={url}
-        alt={nickname}
-        className="h-12 w-12 rounded-full object-cover"
-      />
-    );
-  }
-  const initial = (nickname || "我").slice(0, 1);
+  // eslint-disable-next-line @next/next/no-img-element
   return (
-    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-accent-lavender)]/30 font-[family-name:var(--font-serif)] text-[18px] text-[var(--color-ink-plum)]">
-      {initial}
-    </div>
+    <img src={url || "/images/ai-avatar.png"} alt={nickname} className="h-12 w-12 rounded-full object-cover" />
   );
 }
 

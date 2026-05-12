@@ -1,0 +1,19 @@
+<view class="container">
+  <view wx:if="{{loading}}" class="card">
+    <text>加载中...</text>
+  </view>
+  <view wx:elif="{{error}}" class="card">
+    <text>加载失败：{{error}}</text>
+    <view class="btn btn--ghost" bindtap="fetchToday">重试</view>
+  </view>
+  <block wx:elif="{{fortune}}">
+    <view class="card">
+      <view style="font-size: 64rpx; font-weight: 700;">{{fortune.overall}}</view>
+      <view style="margin-top: 8rpx;">{{fortune.oneLiner}}</view>
+    </view>
+    <view class="card">
+      <text style="font-size: 28rpx; color: #555;">{{fortune.reading}}</text>
+    </view>
+    <view class="btn" bindtap="goChat">问问 AI</view>
+  </block>
+</view>

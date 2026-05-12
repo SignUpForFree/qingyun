@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { buildSlipPrompt } from "./slip-interpret";
+import { buildSlipPrompt, extractSlipSections } from "./slip-interpret";
 
 const SAMPLE_POEM = ["心定福自来", "莫问前程事", "云开见月明", "稳步自坦然"];
 
-describe("buildSlipPrompt (M3.4)", () => {
+describe("buildSlipPrompt", () => {
   it("返回 systemPrompt + userPrompt", () => {
     const r = buildSlipPrompt({
       slipNumber: 1,
@@ -17,7 +17,7 @@ describe("buildSlipPrompt (M3.4)", () => {
     expect(r.userPrompt.length).toBeGreaterThan(0);
   });
 
-  it("systemPrompt 含 4 段 + 字数 + 禁词锁", () => {
+  it("systemPrompt 含禁词锁", () => {
     const r = buildSlipPrompt({
       slipNumber: 1,
       level: "上上",
@@ -26,8 +26,6 @@ describe("buildSlipPrompt (M3.4)", () => {
       category: "事业学业",
       reading: "ok",
     });
-    expect(r.systemPrompt).toContain("4 段");
-    expect(r.systemPrompt).toContain("300-500");
     expect(r.systemPrompt).toContain("禁词");
     expect(r.systemPrompt).toContain("大凶");
     expect(r.systemPrompt).toContain("命中注定");
@@ -43,9 +41,9 @@ describe("buildSlipPrompt (M3.4)", () => {
       category: "事业学业",
       reading: "ok",
     });
-    const xiaXia = buildSlipPrompt({
+    const shenXing = buildSlipPrompt({
       slipNumber: 99,
-      level: "下下",
+      level: "慎行",
       title: "y",
       poemLines: SAMPLE_POEM,
       category: "事业学业",
@@ -53,33 +51,45 @@ describe("buildSlipPrompt (M3.4)", () => {
     });
     expect(upUp.systemPrompt).toContain("上上");
     expect(upUp.systemPrompt).toContain("祝福");
-    expect(xiaXia.systemPrompt).toContain("下下");
-    expect(xiaXia.systemPrompt).toContain("善意提醒");
-    // 下下 tone hint 不再造硬词（hint 内不复用"凶险"等，仅在禁词列表里出现）
-    expect(xiaXia.systemPrompt).toContain("禁词");
+    expect(shenXing.systemPrompt).toContain("慎行");
+    expect(shenXing.systemPrompt).toContain("善意提醒");
   });
 
-  it("中平 / 中吉 各自走自己的 hint", () => {
-    const zp = buildSlipPrompt({
-      slipNumber: 50,
-      level: "中平",
+  it("isFullInterpret=false → 只生成 category 对应的 1 块 + ✨ 轻运寄语", () => {
+    const r = buildSlipPrompt({
+      slipNumber: 1,
+      level: "上上",
       title: "x",
       poemLines: SAMPLE_POEM,
-      category: "事业学业",
+      category: "财运",
       reading: "ok",
+      isFullInterpret: false,
     });
-    expect(zp.systemPrompt).toContain("中平");
-    expect(zp.systemPrompt).toContain("宜稳");
+    expect(r.systemPrompt).toContain("只生成 2 块");
+    expect(r.systemPrompt).toContain("💰 财运");
+    expect(r.systemPrompt).toContain("✨ 轻运寄语");
+    expect(r.systemPrompt).toContain("200-350");
+  });
 
-    const zj = buildSlipPrompt({
-      slipNumber: 30,
-      level: "中吉",
+  it("isFullInterpret=true → 生成全部 7 块", () => {
+    const r = buildSlipPrompt({
+      slipNumber: 1,
+      level: "上上",
       title: "x",
       poemLines: SAMPLE_POEM,
-      category: "事业学业",
+      category: "财运",
       reading: "ok",
+      isFullInterpret: true,
     });
-    expect(zj.systemPrompt).toContain("中吉");
+    expect(r.systemPrompt).toContain("7 块");
+    expect(r.systemPrompt).toContain("📊 综合运势");
+    expect(r.systemPrompt).toContain("💼 事业学业");
+    expect(r.systemPrompt).toContain("💰 财运");
+    expect(r.systemPrompt).toContain("❤ 感情姻缘");
+    expect(r.systemPrompt).toContain("🤝 人际贵人");
+    expect(r.systemPrompt).toContain("🍵 平安健康");
+    expect(r.systemPrompt).toContain("✨ 轻运寄语");
+    expect(r.systemPrompt).toContain("700-1000");
   });
 
   it("userPrompt 含签号 + 签名 + 等级 + 4 行签诗", () => {
@@ -125,29 +135,77 @@ describe("buildSlipPrompt (M3.4)", () => {
     expect(r.userPrompt).toContain("我下个月要不要换工作？");
     expect(r.userPrompt).toContain("用户具体问题");
   });
+});
 
-  it("无 userQuestion 时 userPrompt 不含相关字段", () => {
-    const r = buildSlipPrompt({
-      slipNumber: 1,
-      level: "上上",
-      title: "x",
-      poemLines: SAMPLE_POEM,
-      category: "事业学业",
-      reading: "ok",
-    });
-    expect(r.userPrompt).not.toContain("用户具体问题");
+describe("extractSlipSections", () => {
+  it("完整 7 块解析", () => {
+    const text = [
+      "📊 综合运势",
+      "今日整体运势极佳，心态安稳则万事顺遂。",
+      "",
+      "这支上上签，是给你最温柔的底气。按自己的节奏来，事情就会顺理成章地往好的方向走。",
+      "",
+      "💼 事业学业",
+      "事业稳步上扬，思路清晰，执行顺畅。",
+      "",
+      "今天你的状态非常在线，适合推进重要项目。只要稳扎稳打，成果一定会超出预期。",
+      "",
+      "💰 财运",
+      "正财旺盛，收入稳定。",
+      "",
+      "一分耕耘一分收获，踏实做好本职工作，财富自然会来。",
+      "",
+      "❤ 感情姻缘",
+      "感情和顺甜蜜。",
+      "",
+      "单身的朋友，今天很容易遇到让你心动的正缘。有伴的朋友，和伴侣心意相通。",
+      "",
+      "🤝 人际贵人",
+      "人缘极佳，沟通顺畅。",
+      "",
+      "遇到困难时，会有贵人主动出手相助，帮你少走很多弯路。",
+      "",
+      "🍵 平安健康",
+      "身心安稳舒畅。",
+      "",
+      "适合做一些放松的事，好好滋养自己，让身心都得到休息。",
+      "",
+      "✨ 轻运寄语",
+      "心定福自来，从容行万里。",
+    ].join("\n");
+
+    const sections = extractSlipSections(text);
+    expect(sections.length).toBe(7);
+    expect(sections[0].label).toBe("综合运势");
+    expect(sections[0].shortReading).toContain("整体运势极佳");
+    expect(sections[0].longReading).toContain("温柔的底气");
+    expect(sections[1].label).toBe("事业学业");
+    expect(sections[6].label).toBe("轻运寄语");
+    expect(sections[6].shortReading).toContain("心定福自来");
   });
 
-  it("userPrompt 含 [开场 → 4 段意象 → 收尾] 结构指令", () => {
-    const r = buildSlipPrompt({
-      slipNumber: 1,
-      level: "上上",
-      title: "x",
-      poemLines: SAMPLE_POEM,
-      category: "事业学业",
-      reading: "ok",
-    });
-    expect(r.userPrompt).toContain("4 段意象");
-    expect(r.userPrompt).toContain("300-500");
+  it("部分解读（2 块）", () => {
+    const text = [
+      "💰 财运",
+      "正财旺盛，收入稳定。",
+      "",
+      "一分耕耘一分收获，踏实做好本职工作，财富自然会来。",
+      "",
+      "✨ 轻运寄语",
+      "守得住财运，福气更长久。",
+    ].join("\n");
+
+    const sections = extractSlipSections(text);
+    expect(sections.length).toBe(2);
+    expect(sections[0].label).toBe("财运");
+    expect(sections[1].label).toBe("轻运寄语");
+  });
+
+  it("无 emoji 标签 → fallback 整段作为综合运势", () => {
+    const text = "这段没有任何标签的纯文本解读";
+    const sections = extractSlipSections(text);
+    expect(sections.length).toBe(1);
+    expect(sections[0].label).toBe("综合运势");
+    expect(sections[0].longReading).toContain("纯文本解读");
   });
 });

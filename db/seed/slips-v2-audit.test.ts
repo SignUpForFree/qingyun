@@ -3,7 +3,7 @@ import { SLIPS_V2 } from "./slips-v2";
 import {
   ALL_FORBIDDEN,
 } from "@/lib/ai/prompts/forbidden-words";
-import { seedToSpecLevel, type SpecLevel } from "@/lib/divination/slip-level";
+import { type SlipLevel } from "@/lib/divination/slip-level";
 import { BASE_WEIGHTS } from "@/lib/divination/slips";
 
 const DIMS = [
@@ -104,29 +104,29 @@ describe("100 签 audit (M3.31)", () => {
     }
   });
 
-  it("等级分布合理：5 档都有 + 总和 100 + 上上和下下不超 30%", () => {
-    const counter: Record<SpecLevel, number> = {
+  it("等级分布合理：6 级都有 + 总和 100 + 上上和慎行不超 30%", () => {
+    const counter: Record<SlipLevel, number> = {
       上上: 0,
       上吉: 0,
-      中吉: 0,
-      中平: 0,
-      下下: 0,
+      吉: 0,
+      平: 0,
+      渐顺: 0,
+      慎行: 0,
     };
     for (const slip of SLIPS_V2) {
-      const lvl = seedToSpecLevel(slip.level);
-      counter[lvl] += 1;
+      counter[slip.level] += 1;
     }
     const total = Object.values(counter).reduce((a, b) => a + b, 0);
     expect(total).toBe(100);
 
-    // 5 档每档至少 1 个（避免某级别为零）
-    for (const lvl of Object.keys(BASE_WEIGHTS) as SpecLevel[]) {
+    // 6 级每级至少 1 个（避免某级别为零）
+    for (const lvl of Object.keys(BASE_WEIGHTS) as SlipLevel[]) {
       expect(counter[lvl], `${lvl} 等级签数为 0`).toBeGreaterThanOrEqual(1);
     }
 
-    // 极端档（上上 + 下下）合计不超 30%（避免极端化）
-    const extreme = counter.上上 + counter.下下;
-    expect(extreme, `极端档 上上+下下 共 ${extreme}，过多`).toBeLessThanOrEqual(30);
+    // 极端档（上上 + 慎行）合计不超 30%（避免极端化）
+    const extreme = counter.上上 + counter.慎行;
+    expect(extreme, `极端档 上上+慎行 共 ${extreme}，过多`).toBeLessThanOrEqual(30);
   });
 
   it("6 类 readings 中『综合运势』必非空且不与其它 5 类完全相同", () => {

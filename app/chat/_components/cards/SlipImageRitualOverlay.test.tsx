@@ -45,14 +45,14 @@ describe("SlipImageRitualOverlay (M4.22)", () => {
         open
         imageUrl="/img.png"
         slipNumber={42}
-        level="中吉"
+        level="吉"
         title="心定福自来"
         poemLines={POEM}
         onClose={() => {}}
       />,
     );
     expect(screen.getByText(/第 42 签/)).toBeInTheDocument();
-    expect(screen.getByText(/中吉/)).toBeInTheDocument();
+    expect(screen.getByText(/吉/)).toBeInTheDocument();
     // 签名以《...》包裹
     expect(screen.getByText(/《心定福自来》/)).toBeInTheDocument();
   });

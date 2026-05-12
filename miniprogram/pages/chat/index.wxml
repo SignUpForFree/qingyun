@@ -1,0 +1,17 @@
+<view class="container">
+  <scroll-view scroll-y style="height: 70vh;">
+    <view wx:for="{{messages}}" wx:key="index" class="card">
+      <view style="font-size: 24rpx; color: #888;">{{item.role}}</view>
+      <view>{{item.content}}</view>
+    </view>
+  </scroll-view>
+  <view style="display: flex; gap: 12rpx;">
+    <input
+      style="flex: 1; height: 80rpx; padding: 0 16rpx; background: #fff; border-radius: 12rpx;"
+      value="{{input}}"
+      placeholder="跟轻运 AI 聊聊..."
+      bindinput="onInput"
+    />
+    <button class="btn" bindtap="send" disabled="{{sending}}">发送</button>
+  </view>
+</view>

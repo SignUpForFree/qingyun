@@ -227,6 +227,8 @@ export async function streamChatReply(args: {
   conversationId: string;
   userId: string;
   text: string;
+  /** 客户端断流时 abort，透传给 chat() 让上游 DeepSeek 取消（防 token 浪费） */
+  abortSignal?: AbortSignal;
 }): Promise<void> {
   const db = getDb();
   const [conv] = await db
@@ -264,6 +266,7 @@ export async function streamChatReply(args: {
     systemPrompt: SYSTEM_PROMPT,
     stream: true,
     meta: { conversationId: args.conversationId, userId: args.userId },
+    abortSignal: args.abortSignal,
   });
 
   let assistantText = "";
@@ -300,6 +303,8 @@ export interface RouteIntentArgs {
   userId: string;
   text: string;
   intent: Intent;
+  /** 客户端断流时 abort，透传到 streamChatReply → chat() 节省上游 token */
+  abortSignal?: AbortSignal;
 }
 
 /**
@@ -314,6 +319,7 @@ export async function routeIntent(args: RouteIntentArgs): Promise<void> {
       conversationId: args.conversationId,
       userId: args.userId,
       text: args.text,
+      abortSignal: args.abortSignal,
     });
     return;
   }

@@ -17,14 +17,13 @@ interface SlipImageCardProps {
 const LEVEL_TONE: Record<SlipLevel, { chip: string; label: string }> = {
   上上: { chip: "bg-[var(--color-wuxing-fire)]/35", label: "上 上 签" },
   上吉: { chip: "bg-[var(--color-wuxing-fire)]/25", label: "上 吉 签" },
-  中吉: { chip: "bg-[var(--color-wuxing-wood)]/30", label: "中 吉 签" },
   吉: { chip: "bg-[var(--color-wuxing-wood)]/30", label: "吉 签" },
   平: { chip: "bg-[var(--color-wuxing-water)]/25", label: "平 签" },
-  中平: { chip: "bg-[var(--color-wuxing-water)]/25", label: "中 平 签" },
-  渐顺: { chip: "bg-[var(--color-wuxing-wood)]/25", label: "渐 顺 签" },
+  渐顺: { chip: "bg-[var(--color-wuxing-wood)]/20", label: "渐 顺 签" },
   慎行: { chip: "bg-[var(--color-wuxing-earth)]/30", label: "慎 行 签" },
-  下下: { chip: "bg-[var(--color-wuxing-metal)]/25", label: "下 下 签" },
 };
+
+const DEFAULT_TONE = { chip: "bg-[var(--color-wuxing-water)]/25", label: "签" };
 
 /**
  * 灵签结果卡（V1.0 文档 §6 抽签）
@@ -43,7 +42,7 @@ export function SlipImageCard({
   dimension,
   className,
 }: SlipImageCardProps) {
-  const tone = LEVEL_TONE[level];
+  const tone = LEVEL_TONE[level] ?? DEFAULT_TONE;
   const imageUrl = `/api/divination/slip-image/${slipNumber}`;
   const [imgError, setImgError] = React.useState(false);
 

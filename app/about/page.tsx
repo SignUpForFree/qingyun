@@ -15,7 +15,7 @@ export default function AboutPage() {
   return (
     <>
       <AppHeader title="关于轻运" />
-      <div className="flex flex-1 flex-col gap-4 p-4 pb-20">
+      <div className="flex flex-1 flex-col gap-4 p-4 pb-safe-bottom">
         <GlassCard className="space-y-3 p-5">
           <h2 className="font-[family-name:var(--font-serif)] text-[18px] tracking-ritual text-[var(--color-ink-plum)]">
             轻运 AI <Sparkle size={11} variant="diamond" />

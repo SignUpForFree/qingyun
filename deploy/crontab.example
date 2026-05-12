@@ -1,0 +1,23 @@
+# 轻运 AI · 服务器 crontab 示例
+#
+# 安装：
+#   ssh ubuntu@192.144.226.27
+#   crontab -e
+#   把下面的内容粘进去
+#
+# 时区：服务器默认 UTC；这里用 CST=UTC+8 思维写好，再用 TZ 强制
+#
+# 注意：脚本路径假设代码在 ~/occult；若不同请改
+
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin
+TZ=Asia/Shanghai
+
+# ===== 数据库备份（每天凌晨 2:30）=====
+30 2 * * * /home/ubuntu/occult/scripts/backup-db.sh >> /home/ubuntu/qingyun-backup.log 2>&1
+
+# ===== Docker 健康检查日志归档（每周日 3:00 滚动）=====
+0 3 * * 0 docker compose -f /home/ubuntu/occult/docker-compose.yml logs --tail=5000 qingyun > /home/ubuntu/qingyun-app-$(date +\%Y\%m\%d).log 2>&1
+
+# ===== 磁盘容量告警（每天 8:00；超过 80% 邮件）=====
+# 0 8 * * * df -h / | awk 'NR==2{ if ($5+0 > 80) print "[disk] "$5" used"}' | mail -s "qingyun disk alert" admin@example.com

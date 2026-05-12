@@ -2,20 +2,32 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { sendOtp, verifyOtp, __resetForTests } from "./phone-otp";
 
 /**
- * M1.10 phone OTP — pure unit tests (no DB, no HTTP)
+ * phone-otp v2 (KVStore + SmsProvider)
  *
  * 5 路径覆盖：
- *   1. 6 位数字 code 生成 + 写入
+ *   1. 6 位数字 code 生成 + mock provider 收到 [code, ttlMin] params
  *   2. 同 phone 60s rate limit
  *   3. 10 分钟有效窗口内验证通过
  *   4. 错误窗口外（>10min）返回 expired
  *   5. 连续 3 次错误后锁定
+ *
+ * 注意：v2 起 sendOtp 走 SmsProvider；测试用 MockSmsProvider 的 console.info
+ *      `[sms:mock] phone=... template=... params=["xxxxxx","10"]` 抓 code。
  */
+
+function lastSmsParams(): string[] {
+  const calls = vi.mocked(console.info).mock.calls;
+  for (let i = calls.length - 1; i >= 0; i--) {
+    const log = String(calls[i][0]);
+    const m = log.match(/params=(\[.*\])/);
+    if (m) return JSON.parse(m[1]) as string[];
+  }
+  throw new Error("MockSmsProvider console.info not captured");
+}
 
 describe("phone-otp", () => {
   beforeEach(() => {
     __resetForTests();
-    // 静音 console.info（生产 OTP 在 M1 仅打日志，测试无需噪声）
     vi.spyOn(console, "info").mockImplementation(() => {});
   });
 
@@ -25,44 +37,35 @@ describe("phone-otp", () => {
   });
 
   it("generates 6-digit code on send", async () => {
-    const result = sendOtp("+8613800138000");
+    const result = await sendOtp("+8613800138000");
     expect(result.sent).toBe(true);
     expect(result.cooldownMs).toBeUndefined();
 
-    // 通过 console.info 抓取 code（唯一暴露 code 的地方）
-    const calls = vi.mocked(console.info).mock.calls;
-    expect(calls.length).toBe(1);
-    const logged = String(calls[0][0]);
-    const match = logged.match(/\b(\d{6})\b/);
-    expect(match).not.toBeNull();
-    const code = match![1];
-    expect(code).toMatch(/^\d{6}$/);
+    const params = lastSmsParams();
+    expect(params[0]).toMatch(/^\d{6}$/);
 
-    // 该 code 必须能验证通过（证明它真的写进了 store）
-    expect(await verifyOtp("+8613800138000", code)).toEqual({ ok: true });
+    expect(await verifyOtp("+8613800138000", params[0])).toEqual({ ok: true });
   });
 
-  it("rate limits 1/60s per phone", () => {
+  it("rate limits 1/60s per phone", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-27T00:00:00Z"));
 
-    const first = sendOtp("+8613800138000");
+    const first = await sendOtp("+8613800138000");
     expect(first.sent).toBe(true);
 
-    // 30s 后再发：应被限流
     vi.advanceTimersByTime(30_000);
-    const second = sendOtp("+8613800138000");
+    const second = await sendOtp("+8613800138000");
     expect(second.sent).toBe(false);
     expect(second.cooldownMs).toBeGreaterThan(0);
-    expect(second.cooldownMs).toBeLessThanOrEqual(30_000);
+    // KV ttl 取整到秒，cooldownMs 上限可能略 >30000ms
+    expect(second.cooldownMs).toBeLessThanOrEqual(31_000);
 
-    // 60s 边界后：应再次允许
-    vi.advanceTimersByTime(31_000); // 累计 61s
-    const third = sendOtp("+8613800138000");
+    vi.advanceTimersByTime(31_000);
+    const third = await sendOtp("+8613800138000");
     expect(third.sent).toBe(true);
 
-    // 不同手机号不互相影响
-    const other = sendOtp("+8613900139000");
+    const other = await sendOtp("+8613900139000");
     expect(other.sent).toBe(true);
   });
 
@@ -70,12 +73,9 @@ describe("phone-otp", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-27T00:00:00Z"));
 
-    sendOtp("+8613800138000");
-    const code = String(vi.mocked(console.info).mock.calls[0][0]).match(
-      /\b(\d{6})\b/,
-    )![1];
+    await sendOtp("+8613800138000");
+    const code = lastSmsParams()[0];
 
-    // 9 分 59 秒后仍可验证
     vi.advanceTimersByTime(9 * 60_000 + 59_000);
     expect(await verifyOtp("+8613800138000", code)).toEqual({ ok: true });
   });
@@ -84,30 +84,23 @@ describe("phone-otp", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-27T00:00:00Z"));
 
-    sendOtp("+8613800138000");
-    const code = String(vi.mocked(console.info).mock.calls[0][0]).match(
-      /\b(\d{6})\b/,
-    )![1];
+    await sendOtp("+8613800138000");
+    const code = lastSmsParams()[0];
 
-    // 10 分 1 秒后超时
     vi.advanceTimersByTime(10 * 60_000 + 1_000);
     const r = await verifyOtp("+8613800138000", code);
     expect(r.ok).toBe(false);
     expect(r.reason).toBe("expired");
 
-    // 过期条目应被删除：再 verify 仍是 expired（不是 wrong，避免泄露 phone 已存在）
     const r2 = await verifyOtp("+8613800138000", code);
     expect(r2.ok).toBe(false);
     expect(r2.reason).toBe("expired");
   });
 
   it("rejects after 3 wrong attempts", async () => {
-    sendOtp("+8613800138000");
-    const realCode = String(vi.mocked(console.info).mock.calls[0][0]).match(
-      /\b(\d{6})\b/,
-    )![1];
+    await sendOtp("+8613800138000");
+    const realCode = lastSmsParams()[0];
 
-    // 3 次错误尝试都返回 wrong
     expect(await verifyOtp("+8613800138000", "000000")).toEqual({
       ok: false,
       reason: "wrong",
@@ -121,13 +114,11 @@ describe("phone-otp", () => {
       reason: "wrong",
     });
 
-    // 第 4 次（即使是正确的 code）也应被锁定
     expect(await verifyOtp("+8613800138000", realCode)).toEqual({
       ok: false,
       reason: "too_many_attempts",
     });
 
-    // 锁定后条目已删除：再 verify 返回 expired
     expect(await verifyOtp("+8613800138000", realCode)).toEqual({
       ok: false,
       reason: "expired",

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { SLIPS_V2 } from "@/db/seed/slips-v2";
-import { seedToSpecLevel, type SpecLevel } from "./slip-level";
+import { type SlipLevel } from "./slip-level";
 import type { YongShenResult } from "@/lib/bazi/yong-shen";
 
 /**
@@ -9,7 +9,7 @@ import type { YongShenResult } from "@/lib/bazi/yong-shen";
  * - pickSlip：纯 number 选取（旧 V1 接口，保留兼容）
  * - drawSlip：6 类 + profileId/date/question 输入，确定性加权 → 返回完整 slip + 当前维度解读
  *
- * 加权基线（spec §4.3）：上上 8 / 上吉 15 / 中吉 35 / 中平 30 / 下下 12（共 100 签）
+ * 加权基线（6 级）：上上 8 / 上吉 15 / 吉 35 / 平 30 / 渐顺 12 / 慎行 12（共 100 签）
  */
 
 export interface SlipPick {
@@ -40,38 +40,39 @@ export const DIVINATION_DIMS = [
 ] as const;
 export type DivinationDim = (typeof DIVINATION_DIMS)[number];
 
-export const BASE_WEIGHTS: Record<SpecLevel, number> = {
+export const BASE_WEIGHTS: Record<SlipLevel, number> = {
   上上: 8,
   上吉: 15,
-  中吉: 35,
-  中平: 30,
-  下下: 12,
+  吉: 35,
+  平: 30,
+  渐顺: 12,
+  慎行: 12,
 };
 
 /**
  * M3.3 八字喜忌微调权重
  *
  * "弱用神"信号：profile 的 yongShen 关联格局是 身弱 / 从弱 / strength<30
- *   → 命主能量偏弱，更需要慎行提醒，下下签权重 +5（绝对值，从 12 → 17）
+ *   → 命主能量偏弱，更需要慎行提醒，慎行签权重 +5（绝对值，从 12 → 17）
  *
  * "强用神"信号：strength>70（身强/从强）
- *   → 主动作为更利，上吉/中吉权重 +3（小幅）
+ *   → 主动作为更利，上吉/吉权重 +3（小幅）
  *
  * 中和不调整（30-70）。
  *
  * 设计目的：不替代 user 的 question 主体性，仅做微调，避免极端化。
  */
 export function adjustWeights(
-  base: Record<SpecLevel, number>,
+  base: Record<SlipLevel, number>,
   yongShen?: YongShenResult | null,
-): Record<SpecLevel, number> {
+): Record<SlipLevel, number> {
   if (!yongShen) return { ...base };
   const adjusted = { ...base };
   if (yongShen.strength < 30) {
-    adjusted.下下 = base.下下 + 5;
+    adjusted.慎行 = base.慎行 + 5;
   } else if (yongShen.strength > 70) {
     adjusted.上吉 = base.上吉 + 3;
-    adjusted.中吉 = base.中吉 + 3;
+    adjusted.吉 = base.吉 + 3;
   }
   return adjusted;
 }
@@ -87,7 +88,7 @@ export interface DrawSlipArgs {
 
 export interface SlipFull {
   number: number;
-  level: SpecLevel;
+  level: SlipLevel;
   title: string;
   poem: string;
   poemLines: readonly string[];
@@ -124,10 +125,10 @@ export function drawSlip(args: DrawSlipArgs): DrawnSlip {
  */
 export function pickWeighted(
   seed: string,
-  weights: Record<SpecLevel, number> = BASE_WEIGHTS,
+  weights: Record<SlipLevel, number> = BASE_WEIGHTS,
 ): number {
   const totalWeight = SLIPS_V2.reduce(
-    (acc, s) => acc + weights[seedToSpecLevel(s.level)],
+    (acc, s) => acc + weights[s.level],
     0,
   );
 
@@ -140,7 +141,7 @@ export function pickWeighted(
 
   let cursor = 0;
   for (const s of SLIPS_V2) {
-    const w = weights[seedToSpecLevel(s.level)];
+    const w = weights[s.level];
     cursor += w;
     if (target < cursor) return s.number;
   }
@@ -155,7 +156,7 @@ export function getSlip(number: number): SlipFull {
   }
   return {
     number: found.number,
-    level: seedToSpecLevel(found.level),
+    level: found.level,
     title: found.title,
     poem: found.poem,
     poemLines: splitPoemLines(found.poem),

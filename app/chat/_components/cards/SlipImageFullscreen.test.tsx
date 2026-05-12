@@ -78,9 +78,10 @@ describe("SlipImageFullscreen (M2.11)", () => {
   it.each([
     ["上上", "上 上 签"],
     ["上吉", "上 吉 签"],
-    ["中吉", "中 吉 签"],
-    ["中平", "中 平 签"],
-    ["下下", "下 下 签"],
+    ["吉", "吉 签"],
+    ["平", "平 签"],
+    ["渐顺", "渐 顺 签"],
+    ["慎行", "慎 行 签"],
   ] as const)("level=%s 渲染徽章 '%s'", (level, label) => {
     render(<SlipImageFullscreen {...baseProps} level={level} />);
     expect(screen.getByText(label)).toBeInTheDocument();

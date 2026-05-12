@@ -27,20 +27,31 @@ exit
 
 腾讯云控制台 → 安全组：放行 **3000/tcp**（或反代后只放 80/443）。
 
-## 三、部署
+## 三、部署（生产服务器 `~/occult`）
+
+> 腾讯云现机：用 `scp` / `rsync` / `git apply` 同步代码到 `~/occult` 亦可；**不必**在本机再 `git clone` 一遍，以你服务器上实际目录为准。
+
+**1）进入目录**
 
 ```bash
-git clone <你的仓库> occult
-cd occult
+ssh -i /path/to/key.pem ubuntu@<服务器IP>
+cd ~/occult
+```
 
-# 第一次：拷模板
+**2）配置 `.env.prod`**
+
+```bash
 cp .env.prod.example .env.prod
-
-# 编辑 env 填 ofox.ai 网关
 nano .env.prod
 ```
 
-`.env.prod` 关键三行：
+至少保证：
+
+- **AI 网关**：`AI_GATEWAY_API_KEY`；完整 ofox 三行见下
+- **会话**：`SESSION_SECRET` — 在 shell 运行 `openssl rand -base64 64`，将**输出字符串**写入 `SESSION_SECRET=`（compose 读 `env_file` 时不会执行 `$(...)`）
+- **微信**（若接登录）：`WECHAT_APPID`、`WECHAT_APPSECRET`；其余见模板
+
+ofox 聚合三行（与 `lib/ai/gateway.ts` 一致）：
 
 ```env
 AI_GATEWAY_BASE_URL=https://api.ofox.ai/v1
@@ -55,17 +66,38 @@ AI_GATEWAY_MODEL=deepseek/deepseek-v4-pro
 > deepseek-v4-pro 价格参考：输入 $1.74/M、输出 $3.48/M、缓存读 $0.145/M，
 > 1M 上下文窗口、384K 输出。
 
+**3）一键部署或手动构建**
+
 ```bash
 bash deploy.sh
+# 或（Dockerfile / 依赖变动大时与 patch 上线同策略）
+docker compose build --no-cache
+docker compose up -d
 ```
 
-脚本会：
+`deploy.sh` 会：
 
-1. 检查 docker
-2. 校验 `.env.prod` 至少填了一个 AI key
-3. 创建 `./data` 目录（SQLite + WAL 文件落盘处）
-4. `docker compose build` + `up -d`
-5. 60 秒内轮询 `/api/healthz` 直到 200
+1. 检查 docker（必要时安装）
+2. 若无 `.env.prod` 则从模板复制并提示编辑后重跑
+3. 校验 `AI_GATEWAY_API_KEY` 或 `DEEPSEEK_API_KEY` 至少其一非空
+4. 创建 `./data`
+5. `docker compose build` + `up -d`（脚本内**未**默认 `--no-cache`；大改镜像时请用手动两行）
+6. 60 秒内轮询 `/api/healthz` 直到 200
+
+**4）验证（防 env 被覆盖丢失）**
+
+```bash
+curl -sS http://127.0.0.1:3000/api/healthz
+docker compose exec qingyun env | grep AI_GATEWAY_API_KEY
+```
+
+**5）数据卷权限**
+
+容器内进程 uid **1001**，宿主机目录常为 ubuntu **1000**。出现 SQLite 打不开时执行：
+
+```bash
+sudo chown -R 1001:1001 ~/occult/data
+```
 
 健康检查通过后访问 `http://<服务器IP>:3000`。
 
@@ -127,12 +159,17 @@ SQLite 落在 `./data/qingyun.db`。简单备份：
 
 ### 升级
 
+有 **git 仓库** 时：
+
 ```bash
 git pull
-docker compose up -d --build
+docker compose build --no-cache
+docker compose up -d
 ```
 
-镜像缓存命中时 30 秒内重启完成。
+生产机若仅是 `~/occult` 目录（非 clone），用本地 `git diff` 打 patch、`scp` 覆盖文件或 `rsync` 同步后，同样 **`build --no-cache`** 再 `up -d`，避免旧 layer 导致“看似部署成功、代码未变”。
+
+镜像缓存命中时重启可很快；**改了 Dockerfile / 依赖结构时不要用缓存**。
 
 ### 排错
 

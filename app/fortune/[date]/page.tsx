@@ -1,19 +1,25 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import * as React from "react";
 import { AppHeader } from "@/components/layout";
 import { GlassCard, WatercolorDot } from "@/components/su";
 import { DimensionBars7Vertical } from "@/components/fortune/DimensionBars7Vertical";
 import { AttributesGrid8 } from "@/components/fortune/AttributesGrid8";
 import { FortuneReadingsBlock } from "@/components/fortune/FortuneReadingsBlock";
 import { DeepAskButton } from "@/components/fortune/DeepAskButton";
-import { FortuneScopeNav } from "./_FortuneScopeNav";
+import { ReadingAutoRegen } from "@/components/fortune/ReadingAutoRegen";
+import {
+  FortuneScopeNav,
+  FortuneScopeNavFallback,
+} from "./_FortuneScopeNav";
 import { LoginGate } from "@/components/auth/LoginGate";
 import { requireUserId, UnauthenticatedError } from "@/lib/auth/session";
 import { listProfiles } from "@/lib/profile/repository";
+import { NoDefaultProfileError } from "@/lib/fortune/fetch-today";
 import {
-  fetchTodayFortune,
-  NoDefaultProfileError,
-} from "@/lib/fortune/fetch-today";
+  fetchFortuneDetail,
+} from "@/lib/fortune/fetch-fortune-detail";
+import { parseFortuneScope } from "@/lib/fortune/fortune-scope";
 
 /**
  * /fortune/[date] — 参考"轻运阁"运势详情：
@@ -24,10 +30,13 @@ export const dynamic = "force-dynamic";
 
 export default async function FortuneDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ date: string }>;
+  searchParams: Promise<{ scope?: string }>;
 }) {
   const { date } = await params;
+  const sp = await searchParams;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     redirect("/");
   }
@@ -44,9 +53,11 @@ export default async function FortuneDetailPage({
   const def = profileList.find((p) => p.is_default);
   if (!def) redirect("/onboarding");
 
+  const scope = parseFortuneScope(sp.scope);
+
   let fortune;
   try {
-    fortune = fetchTodayFortune({ userId, date });
+    fortune = fetchFortuneDetail({ userId, date, scope });
   } catch (e) {
     if (e instanceof NoDefaultProfileError) redirect("/onboarding");
     throw e;
@@ -66,7 +77,7 @@ export default async function FortuneDetailPage({
           </Link>
         }
       />
-      <div className="relative flex flex-1 flex-col gap-4 p-4 pb-20">
+      <div className="relative flex flex-1 flex-col gap-4 p-4 pb-safe-bottom">
         <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
           <WatercolorDot color="lavender" size={140} className="absolute left-[8%] top-[8%]" />
           <WatercolorDot color="pink" size={120} className="absolute right-[10%] top-[16%]" />
@@ -74,12 +85,19 @@ export default async function FortuneDetailPage({
 
         <ProfileRow nickname={def.nickname} avatarUrl={def.avatar_url} />
 
-        <FortuneScopeNav date={date} />
+        <React.Suspense fallback={<FortuneScopeNavFallback />}>
+          <FortuneScopeNav date={date} />
+        </React.Suspense>
 
         <GlassCard className="space-y-4 p-5" data-testid="fortune-detail-summary">
+          {fortune.periodHint && (
+            <p className="text-center text-[11px] leading-relaxed text-[var(--color-ink-fade)]">
+              {fortune.periodHint}
+            </p>
+          )}
           <div className="text-center">
             <p className="font-[family-name:var(--font-serif)] text-[14px] tracking-ritual2 text-[var(--color-ink-fade)]">
-              轻 运 分 数{" "}
+              {fortune.scope === "day" ? "轻 运 分 数" : fortune.scope === "week" ? "本 周 均 分" : "本 月 均 分"}{" "}
               <span className="num-mono ml-1 text-[22px] font-semibold text-[var(--color-ink-plum)]">
                 {fortune.overall}
               </span>
@@ -101,7 +119,13 @@ export default async function FortuneDetailPage({
         </GlassCard>
 
         <DeepAskButton
-          prefill={`针对今日（${date}）的整体运势深入聊聊：`}
+          prefill={
+            fortune.scope === "day"
+              ? `针对今日（${date}）的整体运势深入聊聊：`
+              : fortune.scope === "week"
+                ? `针对本周运势（${fortune.periodHint ?? `锚点 ${date}`}）深入聊聊：`
+                : `针对本月运势（${fortune.periodHint ?? date}）深入聊聊：`
+          }
           label="深 入 追 问 →"
         />
 
@@ -110,6 +134,15 @@ export default async function FortuneDetailPage({
           scores={fortune.scores}
           reading={fortune.reading}
         />
+
+        {/* 日 / 周 / 月 三种粒度都走 fallback → AI 升级（每个 scope 一个 endpoint） */}
+        {fortune.readingRegenDate ? (
+          <ReadingAutoRegen
+            source={fortune.readingSource}
+            date={fortune.readingRegenDate}
+            scope={fortune.scope}
+          />
+        ) : null}
       </div>
     </>
   );
@@ -122,17 +155,14 @@ function ProfileRow({
   nickname: string;
   avatarUrl: string | null;
 }) {
-  const initial = (nickname || "我").slice(0, 1);
   return (
     <div className="flex items-center gap-3 px-1" data-testid="fortune-detail-profile-row">
-      <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[var(--color-accent-lavender)]/30 font-[family-name:var(--font-serif)] text-[14px] text-[var(--color-ink-plum)]">
-        {avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatarUrl} alt={nickname} className="h-full w-full object-cover" />
-        ) : (
-          initial
-        )}
-      </div>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={avatarUrl || "/images/ai-avatar.png"}
+        alt={nickname}
+        className="h-10 w-10 rounded-full object-cover"
+      />
       <span className="font-[family-name:var(--font-serif)] text-[14px] tracking-ritual text-[var(--color-ink-plum)]">
         {nickname || "未填写昵称"}
       </span>

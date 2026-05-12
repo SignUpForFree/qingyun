@@ -6,7 +6,7 @@ import { ensureUserId } from "@/lib/auth/session";
 import { chat } from "@/lib/ai/client";
 import { frame, heartbeat, safeEnqueue, SSE_HEADERS } from "@/lib/chat/sse";
 import { serializeJson } from "@/lib/db/json";
-import { buildSlipPrompt } from "@/lib/ai/prompts/slip-interpret";
+import { buildSlipPrompt, extractSlipSections } from "@/lib/ai/prompts/slip-interpret";
 import { sanitizeAiOutput } from "@/lib/ai/output-sanitizer";
 import { enforceRateLimit, jsonError, parseJsonBody } from "@/lib/chat/route-helpers";
 
@@ -28,12 +28,13 @@ const HEARTBEAT_MS = 25_000;
 
 const bodySchema = z.object({
   messageId: z.string().min(1),
+  fullInterpret: z.boolean().optional().default(false),
 });
 
 interface SlipImageMeta {
   ui: "slip_image";
   slipNumber: number;
-  level: "上上" | "上吉" | "中吉" | "中平" | "下下";
+  level: "上上" | "上吉" | "吉" | "平" | "渐顺" | "慎行";
   title: string;
   poemLines: string[];
   category: string;
@@ -44,7 +45,7 @@ interface SlipImageMeta {
 export async function POST(req: Request) {
   const body = await parseJsonBody(req, bodySchema);
   if (body.error) return body.error;
-  const { messageId } = body.data;
+  const { messageId, fullInterpret } = body.data;
 
   const userId = await ensureUserId();
   const limited = await enforceRateLimit(userId, "divination", "解签 AI 调用");
@@ -124,6 +125,7 @@ export async function POST(req: Request) {
     poemLines: meta.poemLines,
     category: meta.category,
     reading: meta.reading,
+    isFullInterpret: fullInterpret,
   });
 
   const sse = new ReadableStream<Uint8Array>({
@@ -181,6 +183,7 @@ export async function POST(req: Request) {
         }
 
         // 写 slip_report 卡
+        const sections = extractSlipSections(finalText);
         const reportMeta = {
           ui: "slip_report" as const,
           slipNumber: meta.slipNumber,
@@ -190,6 +193,8 @@ export async function POST(req: Request) {
           dimension: meta.category,
           reading: meta.reading,
           aiInterpretation: finalText,
+          isFullInterpret: fullInterpret,
+          sections,
           sourceMessageId: messageId,
         };
 

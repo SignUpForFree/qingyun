@@ -1,0 +1,242 @@
+================================================================================
+轻运 AI · 待办与进度（最近一次同步：2026-05-08）
+================================================================================
+
+约定：
+  [x] = 已完成
+  [-] = 部分完成 / 仍有遗留细节
+  [ ] = 未开始 / 仍待外部协作
+
+--------------------------------------------------------------------------------
+A. 测试 bug 修复进度（来源：产品设计以及需求管理/测试bug /测试bug.xlsx）
+--------------------------------------------------------------------------------
+
+[x] R2  首页底部导航栏：字号过小 + 透明
+        - components/layout/BottomNav.tsx：背景换实色 + backdrop-blur，文字 12px font-medium，
+          颜色 ink-plum/90。
+        - components/layout/AppShell.tsx：main 改 min-h-0 flex-1，确保底栏不被挤掉。
+
+[-] R3  AI 对话顶部介绍 + 形象头像
+        - app/chat/page.tsx：顶栏左侧已加品牌图标 + "轻运 AI · 国学小助手，陪你聊运势与心事"。
+        - app/chat/_components/EmptyLauncher.tsx：空状态加形象区（icon + 文案）。
+        - 仍缺：真正的"卡通形象头像"素材（目前用 /icon.svg 临时占位，等设计出图替换）。
+
+[x] R4  解梦"精准"模式 4 字段文案对齐需求文档
+        - app/chat/_components/cards/form-fields.ts：DREAM_PRECISE_FIELDS 4 项标签 / 占位
+          逐字对齐 xlsx D 列。
+        - app/chat/_components/use-card-handlers.ts：fast / precise 共用同一份 4 条引导话术。
+
+[ ] R5  档案信息编辑器：年月日时分一框、省市区一框
+        - 当前 onboarding 走 components/onboarding/DatePicker + RegionPicker，已经是合一控件，
+          但 chat 内的 BAZI_QUICK_FIELDS（form-fields.ts）仍是 birth_time/birth_place 两个
+          纯文本 input。
+        - 待办：在 FormCard 增加 type:"date_picker" / "region_picker"，复用 onboarding 同款，
+          并改 dream / 八字 / 档案编辑共享一套字段渲染。
+        - 影响面较大（涉及 FormCard、字段类型 schema、4 处使用方），单独排期。
+
+[x] R6  登录页文案
+        - components/auth/PhoneLoginForm.tsx：手机号 placeholder 已改为「请输入手机号」。
+        - components/auth/LoginGate.tsx：去掉大块「请先登录」卡片，仅保留极轻的占位 +
+          兜底「未弹出？点这里登录」按钮，弹层不再叠字。
+
+[-] R7  首页文案 / 头像 / 字体
+        - app/page.tsx：头像 + 昵称已挪到左上，去掉 LogoMark 与水彩点；FortuneSummaryCard
+          关键字段加大加粗 (轻运分数 / oneLiner / 详情入口)。
+        - 性别区分：默认头像目前用渐变背景 + 首字（女=粉紫渐变 / 男 & other=蓝紫渐变），
+          仍未替换为「卡通男 / 卡通女」插画头像（同 R3，等设计出图）。
+
+[x] R8  问 AI 页面：底栏保留 / 抽签提示文案 / 输入框文案
+        - components/layout/BottomNav.tsx HIDE_NAV_PREFIXES 移除 /chat，底栏在 chat 也显示。
+        - app/chat/_components/use-card-handlers.ts：抽签 picker → input 引导改为
+          「请描述你遇到的事情和想问的问题，描述越具体，解读越精准哦。」
+        - app/chat/_components/cards/form-fields.ts：SLIP_QUESTION_FIELDS 去掉「心事 /
+          想问的事」label（避免与卡片标题重复），placeholder 改为「请描述你遇到的事情
+          和想问的问题」。
+        - app/chat/_components/ChatWindow.tsx：ChatInput 默认 placeholder 也设为同款。
+
+[ ] R9  抽签：100 签字面 / 诗签 / 签图美化
+        - 100 签内容：db/seed/slips-v2.ts 当前是 V1 占位文案，需按需求文档 100 支签
+          重写「level / title / poem / readings(6 维)」并跑 db/seed/slips-v2-audit.test.ts
+          复核。文档中"100 支表"待业务方提供 final 文本。
+        - 签图美化：lib/canvas/slip-render.ts 当前是简易模版，待设计出新底图与字体规范。
+
+[x] R10 / R11  解梦回复模版优化
+        - app/api/divination/dream/route.ts：SYSTEM_PROMPT_FAST 改为 1 段 120-220 字，
+          SYSTEM_PROMPT_PRECISE 改为 4 段固定结构（梦境画面 / 心理解读 / 现实关联 /
+          行动建议 + 安抚），段落不带方括号 / 编号前缀，禁词 / 风格锁加强。
+
+[x] R12  八字解读模版优化
+        - lib/ai/prompts/bazi-interpret.ts：SYSTEM_BASE 改为 4 段固定结构（命格定调 /
+          维度解读 / 趋势节点 / 行动建议 + 收尾），字数 380-520，禁断言式结论。
+        - 同步 lib/ai/prompts/bazi-interpret.test.ts 字数断言。
+
+[x] R13  「八字 → 综合运势」点击 400
+        - lib/chat/router.ts 用「综合运势」作为第 1 个 picker key，
+          但 app/api/divination/bazi/route.ts 之前 VALID_CATEGORIES 是「综合」，
+          导致 zod 校验 400。
+        - 已改：VALID_CATEGORIES + V2DivinationDim + 相关测试统一为「综合运势」。
+
+--------------------------------------------------------------------------------
+B. 编译器报红（lib/fortune/fetch-today.ts、app/api/chat/route.ts）
+--------------------------------------------------------------------------------
+
+[x] Drizzle SQL/Column 类型不一致（pnpm 装出 2 份 drizzle-orm × 2 份 @opentelemetry/api）
+    - package.json pnpm.overrides 锁 @opentelemetry/api=1.9.0
+    - 删 node_modules 后 pnpm install，确认只剩：
+        @opentelemetry+api@1.9.0
+        drizzle-orm@0.45.2_@opentelemetry+api@1.9.0_..._better-sqlite3@12.9.0
+    - pnpm typecheck 0 错；ReadLints 上述两文件均无报错。
+
+--------------------------------------------------------------------------------
+C. 上线前置（域名 / 备案 / 三方平台 / 法务，需外部协作）
+--------------------------------------------------------------------------------
+
+[ ] 1.  域名 ICP 备案（最长 20 天，没备案直连 IP 不能上小程序）
+[ ] 2.  微信小程序申请 AppID（类目避开"算命/占卜"，写"国学陪伴 / 传统文化"）
+[ ] 3.  微信小程序：业务域名白名单（必须 https）
+[ ] 4.  腾讯云 SMS：申请短信签名（1-2 天）+ OTP 模板审核
+[ ] 5.  腾讯云 COS bucket（DB 备份用）
+[ ] 6.  法务过一遍 /legal/terms /legal/privacy 文案
+
+--------------------------------------------------------------------------------
+D. 上线前工程任务
+--------------------------------------------------------------------------------
+
+[x] 7.  HTTPS 反代（Caddy）
+        - deploy/Caddyfile + deploy/docker-compose.caddy.yml 已就绪，待绑域名后切换。
+
+[x] 8.  Sentry 接入
+        - instrumentation.ts + app/global-error.tsx + lib/observability/sentry.ts。
+        - DSN 通过 NEXT_PUBLIC_SENTRY_DSN / SENTRY_DSN 注入；dev 无 DSN 时 SDK 不进 bundle。
+
+[x] 9.  SQLite 备份脚本 + crontab
+        - scripts/backup-db.sh + scripts/restore-db.sh + deploy/crontab.example。
+        - COS 上传部分占位（脚本已留 hook，待 §C-5 bucket 准备好后接）。
+
+[-] 10. 敏感词库扩充：政治 / 医疗预测 / 自伤引导
+        - lib/safety/sensitive.ts 已分 4 组（政治法律 / 医疗 / 自伤 / 暴恐）。
+        - 待补：关键词广度（建议接腾讯云 TMS / 阿里绿网做兜底）+ 与 §C-6 法务最终敏感词清单合并。
+
+[x] 11. 周 / 月 fortune AI reading（复用 day SWR 模式）
+        - db/migrations-sqlite/0003_fortunes_weekly_monthly_reading_source.sql
+        - app/api/fortune/{weekly,monthly}/regenerate/route.ts
+        - components/fortune/ReadingAutoRegen.tsx 自动触发升级
+        - onConflictDoUpdate 不覆盖 reading + reading_source（防 ai 版被 fallback 重算覆盖）。
+
+[x] 12. bazi / meihua 路由 AbortSignal 透传（防 token 烧钱）
+        - app/api/chat/route.ts、app/api/divination/{bazi,meihua}/route.ts 均把
+          ReadableStream cancel() → ac.abort() → 透到 chat({ abortSignal })。
+
+[x] 13. AI 网关 backup 切换逻辑
+        - lib/ai/gateway.ts + lib/ai/client.ts：non-stream 路径 primary 失败自动 retry
+          BACKUP_*；env 任一为空忽略，不瞎 retry。
+        - 流式路径暂未做主备（SSE 半途切换复杂度高，先观察）。
+
+[x] 14. 注册 cron task：每日运势推送 + 摘要打点
+        - instrumentation.ts register() → registerJob(daily-fortune-push / daily-summary)
+        - lib/cron/index.ts 用 node-cron，CRON_ENABLED=1 才真调度，HMR 重复注册静默跳过。
+
+[ ] 15. WAF / DDoS 防护开
+        - 等服务器迁正式域名后在腾讯云 / Cloudflare 控制台开。
+
+[x] 16. /api/me/account/delete + /api/me/account/export（PIPL）
+        - app/api/me/account/delete/route.ts （cascade 删 users → 所有附表）
+        - app/api/me/account/export/route.ts
+        - app/me/settings/_AccountActions.tsx UI 入口已挂在「设置」页。
+
+[x] 反馈系统：/feedback + /api/feedback
+        - app/feedback/_FeedbackForm.tsx + app/api/feedback/route.ts
+        - lib/email 抽象（dev mock，预留 SES/SMTP）。
+
+--------------------------------------------------------------------------------
+E. 上线前真实链路验证
+--------------------------------------------------------------------------------
+
+[ ] 17. 微信小程序：审核排期（首版 1-7 天，预留 buffer）
+[ ] 18. 验证：微信 H5 → onboarding → chat → 八字 → 梅花 → 解梦 → 历史
+[ ] 19. 验证：微信小程序 wx.login → 拿 JWT → /api/fortune/today → 跳转 H5 webview chat
+[ ] 20. 验证：手机号 OTP 真收短信 → 验证 → 登录
+[ ] 21. 验证：unionid 合并（H5 注册过的用户用同微信扫码登小程序，user_id 同一个）
+[ ] 22. 验证：bazi 跑 reasoning enabled 真 reading 不漏 <think>
+[ ] 23. 验证：思考链 100 条抽样 grep '<think|思考过程：'，0 命中
+[ ] 24. 压测：50 并发 SSE 不挂；docker-compose logs 无 OOM
+
+--------------------------------------------------------------------------------
+F. 上线 checklist
+--------------------------------------------------------------------------------
+
+[ ] 25. .env.prod 的 12 个核心 env 全验证：
+       AI_GATEWAY_API_KEY / SESSION_SECRET / WECHAT_APPID/SECRET /
+       TENCENT_SMS_* (5 件套) / WECHAT_MINI_APPID/SECRET / KV_STORE
+       docker compose exec qingyun env | grep -cE '^(AI_GATEWAY_|WECHAT_|TENCENT_|SESSION_|KV_)' 应 ≥12
+[ ] 26. 健康检查：curl https://your-domain/api/healthz 200
+[ ] 27. 备份脚本第一次跑：~/backup/qingyun-$(date).db 真生成
+[ ] 28. Sentry 触发一次假错误，DSN 真收到
+
+--------------------------------------------------------------------------------
+G. 当前测试与 IDE 状态
+--------------------------------------------------------------------------------
+
+  · pnpm typecheck         → 0 错误
+  · pnpm test              → 122 files / 1373 passed / 2 skipped
+  · ReadLints 关键文件     → 0 错误（chat/route.ts、fortune/fetch-today.ts 红杠已消）
+
+================================================================================
+H. 2026-05-12 ~ 05-13 改动记录（卜易居爬虫 + 64卦数据补全 + 会员系统 + UI修复）
+================================================================================
+
+[x] Task 7：卜易居64卦数据爬取
+        - scripts/boyiju-crawler/：独立 Node.js 项目，含 fetcher / parsers / transform
+        - src/fetcher.ts：限速 1.5s/请求、3次重试、GBK→UTF-8 自动转码
+        - src/parsers/gua64.ts：列表页 + 详情页解析器
+          · 修复 extractSection：<br> 替换为换行符，解决 61/64 卦爻辞提取为空
+          · 修复 parseGuaYaoCi 正则：支持"，"分隔格式 + 补上"九四"
+        - src/crawl-gua64.ts：主入口，64/64 成功，爻辞分布 5-7 条
+        - src/transform.ts：按卦名匹配 lib/meihua/hexagrams.ts（修复卦序错位）
+        - 64 卦全部含：卦辞、爻辞、大象传、彖辞、小象传、运势/爱情/疾病维度
+
+[x] 64卦 seed 数据补全
+        - db/seed/hexagrams.ts：
+          · JUDGMENT_BY_NUMBER：替换简短版为卜易居完整卦辞
+          · IMAGE_BY_NUMBER：替换"象辞 W4 补"占位为真实大象传（如"天行健，君子以自强不息"）
+          · LINES_BY_NUMBER：替换空数组为6爻爻辞
+        - db/seed/gua64.ts：
+          · Gua64Entry 接口新增 da_xiang: string 字段
+          · 64 卦大象传全部从卜易居数据注入
+        - lib/divination/meihua-v2.ts：
+          · GuaDictView 接口新增 daXiang: string
+          · buildDictView() 从 entry.da_xiang 填充
+        - lib/ai/prompts/meihua-interpret.ts：
+          · user prompt 新增「大象传：${result.benDict.daXiang}」行
+          · system prompt 文献列表增加"大象传"
+
+[x] Task 6：会员系统 + 按钮控制
+        - db/migrations-sqlite/0004_subscriptions.sql：subscriptions 表
+        - components/auth/MembershipGate.tsx：会员门控组件
+        - components/ui/MemberBadge.tsx：会员徽章组件
+        - lib/subscription/repository.ts：订阅仓储
+        - app/api/me/subscription/route.ts：订阅状态 API
+        - app/layout.tsx：SubscriptionProvider 包裹 AppShell
+        - app/chat/_components/cards/SlipReportCard.tsx：
+          "我要完整解读"按钮加 MembershipGate 门控
+          DEFAULT_CHIP / DEFAULT_LABEL fallback
+
+[x] UI 修复
+        - R3 形象头像：EmptyLauncher 改为直接展示 /images/ai-avatar.png（h-24 w-24），
+          去掉圆形裁剪和旁边的"轻运 AI / 温柔国学小助手"文案；顶部 AppHeader 保持不变
+        - R8 底栏覆盖：BottomNav HIDE_NAV_PREFIXES 不含 /chat，
+          改为 AppShell main 加 paddingBottom: calc(52px + safe-area) 避让
+        - LEVEL_TONE undefined 崩溃修复：
+          SlipImageCard / SlipImageFullscreen / SlipReportCard / slip-interpret.ts
+          加 ?? DEFAULT_TONE / DEFAULT_CHIP fallback
+        - AppShell SSR 崩溃：加 "use client" 指令（usePathname 依赖客户端）
+
+[-] 遗留问题
+        - 恒卦（#32）缺上六爻辞：卜易居页面 HTML 截断，需人工补或从其他数据源补
+        - 部分罕见字 GBK→UTF-8 编码丢失（显示为空格），可后续从 iching-shifa 包交叉校正
+        - deploy-remote.sh 部署脚本待排查：服务器正常但脚本执行失败，待用户提供报错信息
+
+验证：
+  · pnpm typecheck         → 0 错误
+  · pnpm test              → 123 files / 1388 passed / 2 skipped
+  · pnpm db:reset          → 正常

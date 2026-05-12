@@ -78,9 +78,9 @@ describe("SlipResultCard (design §7)", () => {
     expect(financeBtn.disabled).toBe(true);
   });
 
-  it("覆盖全部 9 种 level 都能正常渲染（不 undefined）", () => {
+  it("覆盖全部 6 种 level 都能正常渲染（不 undefined）", () => {
     const allLevels = [
-      "上上", "上吉", "中吉", "吉", "平", "中平", "渐顺", "慎行", "下下",
+      "上上", "上吉", "吉", "平", "渐顺", "慎行",
     ] as const;
     for (const lv of allLevels) {
       const { unmount } = render(<SlipResultCard {...BASE_PROPS} level={lv} />);

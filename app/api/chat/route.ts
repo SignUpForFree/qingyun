@@ -128,6 +128,10 @@ export async function POST(req: Request) {
     .set({ last_intent: intent, last_message_at: new Date().toISOString() })
     .where(eq(conversations.id, finalConvId));
 
+  // 客户端断流（用户关页 / SSE 主动 cancel）→ abort 透传到上游 DeepSeek
+  // 防御 §3.2-J：之前 cancel() 是空的，stream 还在烧 token 直到自然结束（最坏 60s）。
+  const ac = new AbortController();
+
   const sse = new ReadableStream<Uint8Array>({
     async start(controller) {
       let heartbeatId: ReturnType<typeof setInterval> | null = setInterval(() => {
@@ -157,19 +161,23 @@ export async function POST(req: Request) {
           userId,
           text,
           intent,
+          abortSignal: ac.signal,
         });
         safeEnqueue(controller, frame("done", {}));
       } catch (e) {
-        if (process.env.NODE_ENV !== "production") {
-          console.error("/api/chat 失败", e);
+        // 用户主动断流不算错，吞掉静默
+        if ((e as Error)?.name !== "AbortError") {
+          if (process.env.NODE_ENV !== "production") {
+            console.error("/api/chat 失败", e);
+          }
+          safeEnqueue(
+            controller,
+            frame("error", {
+              message: "AI 卡了一下，请稍后再试",
+              retryable: true,
+            }),
+          );
         }
-        safeEnqueue(
-          controller,
-          frame("error", {
-            message: "AI 卡了一下，请稍后再试",
-            retryable: true,
-          }),
-        );
       } finally {
         stopHeartbeat();
         try {
@@ -181,7 +189,9 @@ export async function POST(req: Request) {
       }
     },
     cancel() {
-      // 客户端断开 → 由 finally 的 stopHeartbeat 处理（start 还在跑会清理）
+      // 客户端断开 → 触发 abort，让 chat() 内部 fetch 立刻取消，
+      // 已在 start() 的 finally 由 stopHeartbeat / controller.close 收尾。
+      ac.abort(new DOMException("Client disconnected", "AbortError"));
     },
   });
 

@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/util/api-fetch";
 import {
@@ -10,6 +9,12 @@ import {
   type SseCardData,
   type SseCallbacks,
 } from "@/lib/chat/sse-client";
+import {
+  consumeStreamChunk,
+  createStreamThinkState,
+  flushStreamThinkState,
+  stripThinkChain,
+} from "@/lib/ai/strip-think-chain";
 import type { DisplayMessage } from "./MessageBubble";
 
 interface SubActionJsonResponse {
@@ -52,14 +57,17 @@ export interface UseChatStreamReturn {
  * 责任：
  * - send(text)：走 /api/chat，处理 meta + token(RAF 节流) + card + progress + done + error
  * - postSubAction(url, label, body)：sub-action 路由的 JSON 卡（Branch A/B/C）或 SSE（Branch D）
- * - convId 自动从 meta 事件提取，并 router.replace(`/chat?cid=...`)
- * - 卸载时 abort 进行中的请求
+ * - convId 自动从 meta 事件提取
+ *
+ * 关于会话切换：
+ * - 新会话首发后只用 `history.replaceState` 改 URL，不调 router.replace —— 避免触发
+ *   Next.js Server Component 重新渲染 + 把空的 initialMessages 推下来覆盖本地 state
+ * - 切换到已有会话由 ChatPage 给 <ChatWindow key={cid}> 完成，整组件重挂
  */
 export function useChatStream({
   initialConvId,
   initialMessages,
 }: UseChatStreamOptions): UseChatStreamReturn {
-  const router = useRouter();
   const [convId, setConvId] = React.useState<string | null>(initialConvId);
   const [messages, setMessages] = React.useState<DisplayMessage[]>(initialMessages);
   const [streamingText, setStreamingText] = React.useState<string | null>(null);
@@ -68,7 +76,11 @@ export function useChatStream({
   const abortRef = React.useRef<AbortController | null>(null);
   const dreamFastWaitingRef = React.useRef(false);
 
-  React.useEffect(() => () => abortRef.current?.abort(), []);
+  // 注意：不要在 unmount 时主动 abort 进行中的 fetch。
+  // React 18+ StrictMode 下 dev 双跑（mount → cleanup → mount）会把第一次 mount
+  // 期间 useMountActions 触发的 send 杀掉，第二次 mount 又被 sentRef 锁住跳过 send，
+  // 用户看到「点了没反应 + AbortError: signal is aborted without reason」。
+  // 真要取消请求由 send 内部「新请求覆盖旧请求」处理；用户关页/导航走 = 浏览器自动断流。
 
   const markDreamFastWaiting = React.useCallback(() => {
     dreamFastWaitingRef.current = true;
@@ -87,6 +99,8 @@ export function useChatStream({
       let assistantText = "";
       const cards: DisplayMessage[] = [];
       let rafId: number | null = null;
+      // 跨 chunk 拼半截 <think> 也能识别，UI 上完全不会闪现思考链
+      const thinkState = createStreamThinkState();
       const flush = () => {
         rafId = null;
         setStreamingText(assistantText);
@@ -100,8 +114,11 @@ export function useChatStream({
         await consumeSseStream(body, {
           ...extra,
           onToken: (chunk) => {
-            assistantText += chunk;
-            sched();
+            const visible = consumeStreamChunk(thinkState, chunk);
+            if (visible) {
+              assistantText += visible;
+              sched();
+            }
           },
           onCard: (card) => cards.push(toDisplayCard(card)),
           onProgress: (data) => {
@@ -120,6 +137,11 @@ export function useChatStream({
           toast.error("信号断了，请再试一次");
         }
       } finally {
+        // flush carry：确保最后一帧的尾巴（若不在 think 块内）能写出
+        const tail = flushStreamThinkState(thinkState);
+        if (tail) assistantText += tail;
+        // 兜底再过一遍同步版（防漏行首"思考过程："这种）
+        assistantText = stripThinkChain(assistantText);
         if (rafId !== null) cancelAnimationFrame(rafId);
         setProgressHint(null);
       }
@@ -199,11 +221,14 @@ export function useChatStream({
       }
       if (!convId && data.conversationId) {
         setConvId(data.conversationId);
-        router.replace(`/chat?cid=${data.conversationId}`);
+        // 仅改 URL，不触发 Next.js Server Component 重渲，避免空 initialMessages 覆盖本地 state
+        if (typeof window !== "undefined") {
+          window.history.replaceState(null, "", `/chat?cid=${data.conversationId}`);
+        }
       }
       setBusy(false);
     },
-    [convId, router, streamingText, busy, consumeStream],
+    [convId, streamingText, busy, consumeStream],
   );
 
   const send = React.useCallback(
@@ -221,7 +246,9 @@ export function useChatStream({
         return;
       }
 
-      abortRef.current?.abort();
+      // 给 abort 显式传 reason，避免浏览器抛 "signal is aborted without reason"
+      // 触发 Next dev overlay 误报（已在下方 catch 中识别 AbortError 静默）。
+      abortRef.current?.abort(new DOMException("New request started", "AbortError"));
       abortRef.current = new AbortController();
 
       const userMsg: DisplayMessage = {
@@ -242,6 +269,11 @@ export function useChatStream({
           signal: abortRef.current.signal,
         });
       } catch (e) {
+        // 用户主动取消 / 旧请求被新请求覆盖：静默
+        if ((e as Error).name === "AbortError") {
+          setStreamingText(null);
+          return;
+        }
         if (process.env.NODE_ENV !== "production") {
           console.error("/api/chat fetch failed", e);
         }
@@ -274,7 +306,10 @@ export function useChatStream({
         onMeta: (data) => {
           if (data.conversationId && !convId) {
             setConvId(data.conversationId);
-            router.replace(`/chat?cid=${data.conversationId}`);
+            // 仅改 URL，不触发 Next.js Server Component 重渲，避免空 initialMessages 覆盖本地 state
+            if (typeof window !== "undefined") {
+              window.history.replaceState(null, "", `/chat?cid=${data.conversationId}`);
+            }
           }
         },
       });
@@ -282,7 +317,7 @@ export function useChatStream({
       setMessages((m) => commitTurn(m, assistantText, cards));
       setStreamingText(null);
     },
-    [convId, router, streamingText, busy, consumeStream, postSubAction],
+    [convId, streamingText, busy, consumeStream, postSubAction],
   );
 
   return {
@@ -314,7 +349,9 @@ function commitTurn(
   cards: DisplayMessage[],
 ): DisplayMessage[] {
   const next = [...prev];
-  if (assistantText) {
+  // 若有卡片（bazi/meihua/explain 等 SSE 路径），则卡片 content 已含完整文字，
+  // 不再额外插入纯文本气泡，避免用户看到两条内容相同的消息。
+  if (assistantText && cards.length === 0) {
     next.push({
       id: `tmp-asst-${Date.now()}`,
       role: "assistant",

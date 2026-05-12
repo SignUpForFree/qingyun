@@ -34,6 +34,7 @@ export async function GET(req: Request) {
       attributes: r.attributes,
       one_liner: r.oneLiner,
       reading: r.reading,
+      readingSource: r.readingSource,
     });
   } catch (e) {
     if (e instanceof NoDefaultProfileError) {

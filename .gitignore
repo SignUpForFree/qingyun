@@ -60,6 +60,32 @@ next-env.d.ts
 /dev.db
 /dev.db-wal
 /dev.db-shm
+# vitest 隔离 db (globalSetup 自动建)
+/dev.test.db
+/dev.test.db-wal
+/dev.test.db-shm
 *.sqlite
 *.sqlite-journal
 .gstack/
+
+# database files
+data/
+*.db
+*.db-shm
+*.db-wal
+dev.db
+
+# build artifacts
+*.tar.gz
+qingyun.tar
+
+# template preview
+template-preview/
+
+# crawler output (raw data)
+scripts/boyiju-crawler/src/output/*.json
+
+# env files
+.env
+.env.local
+.env.prod

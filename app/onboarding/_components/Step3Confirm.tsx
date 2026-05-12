@@ -80,7 +80,12 @@ export function Step3Confirm({
       if (!targetId) {
         const listRes = await apiFetch("/api/me/profiles");
         if (!listRes.ok) {
-          toast.error(`加载档案失败 (${listRes.status})`);
+          if (listRes.status === 401) {
+            // apiFetch 已经 dispatch 弹登录窗，提示用户登录后重试
+            toast.error("登录已过期，请登录后重试");
+          } else {
+            toast.error(`加载档案失败 (${listRes.status})`);
+          }
           return;
         }
         const parsed = ProfileListResponse.safeParse(await listRes.json());
@@ -90,7 +95,21 @@ export function Step3Confirm({
         }
         const defaultProfile = parsed.data.data.find((p) => p.is_default);
         if (!defaultProfile) {
-          toast.error("默认档案缺失，请重新登录");
+          // 兜底：找不到 default profile（onboarding RSC 应已 ensureUserWithPlaceholderProfile，
+          // 但极端场景如 transaction 失败仍可能落到这里）→ 直接 POST 创建一条
+          // server 端 createProfile 0 profile 时强制 is_default=true（修在 lib/profile/repository.ts）
+          const createRes = await apiFetch("/api/me/profiles", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(patch),
+          });
+          if (!createRes.ok) {
+            const err = await createRes.json().catch(() => ({}));
+            toast.error(err?.error ?? `建档失败 (${createRes.status})`);
+            return;
+          }
+          toast.success(successMessage ?? "档案已建好");
+          router.replace(redirectTo ?? "/");
           return;
         }
         targetId = defaultProfile.id;
@@ -133,8 +152,8 @@ export function Step3Confirm({
 
   return (
     <StepShell
-      step={3}
-      total={3}
+      step={2}
+      total={2}
       title={editing ? "确认更新" : "确认信息"}
       desc={editing ? "改完就替换默认档案" : "信息无误即可建档"}
       nextLabel={editing ? "保存" : "提交并建档"}

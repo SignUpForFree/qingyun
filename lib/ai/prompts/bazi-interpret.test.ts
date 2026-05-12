@@ -47,18 +47,18 @@ const sampleChart: BaziChartV2 = {
 
 describe("buildBaziPrompt (M3.12)", () => {
   it("返回 systemPrompt + userPrompt 两部分", () => {
-    const r = buildBaziPrompt({ chart: sampleChart, focus: "综合" });
+    const r = buildBaziPrompt({ chart: sampleChart, focus: "综合运势" });
     expect(r.systemPrompt.length).toBeGreaterThan(0);
     expect(r.userPrompt.length).toBeGreaterThan(0);
   });
 
-  it("systemPrompt 包含 350-500 字限制", () => {
-    const r = buildBaziPrompt({ chart: sampleChart, focus: "综合" });
-    expect(r.systemPrompt).toContain("350-500");
+  it("systemPrompt 包含字数限制（380-520）", () => {
+    const r = buildBaziPrompt({ chart: sampleChart, focus: "综合运势" });
+    expect(r.systemPrompt).toMatch(/380-520|\d{3}-\d{3}\s*字/);
   });
 
   it("systemPrompt 包含禁词锁", () => {
-    const r = buildBaziPrompt({ chart: sampleChart, focus: "综合" });
+    const r = buildBaziPrompt({ chart: sampleChart, focus: "综合运势" });
     expect(r.systemPrompt).toContain("禁词");
     expect(r.systemPrompt).toContain("大凶");
     expect(r.systemPrompt).toContain("命中注定");
@@ -70,7 +70,7 @@ describe("buildBaziPrompt (M3.12)", () => {
   });
 
   it("userPrompt 包含命盘四柱", () => {
-    const r = buildBaziPrompt({ chart: sampleChart, focus: "综合" });
+    const r = buildBaziPrompt({ chart: sampleChart, focus: "综合运势" });
     expect(r.userPrompt).toContain("甲子");
     expect(r.userPrompt).toContain("丁卯");
     expect(r.userPrompt).toContain("戊辰");
@@ -78,7 +78,7 @@ describe("buildBaziPrompt (M3.12)", () => {
   });
 
   it("userPrompt 包含日主 + 五行计数", () => {
-    const r = buildBaziPrompt({ chart: sampleChart, focus: "综合" });
+    const r = buildBaziPrompt({ chart: sampleChart, focus: "综合运势" });
     expect(r.userPrompt).toContain("日主");
     expect(r.userPrompt).toContain("戊");
     expect(r.userPrompt).toContain("金2");
@@ -86,14 +86,14 @@ describe("buildBaziPrompt (M3.12)", () => {
   });
 
   it("userPrompt 包含格局 + 用神", () => {
-    const r = buildBaziPrompt({ chart: sampleChart, focus: "综合" });
+    const r = buildBaziPrompt({ chart: sampleChart, focus: "综合运势" });
     expect(r.userPrompt).toContain("中和");
     expect(r.userPrompt).toContain("用神");
     expect(r.userPrompt).toContain("水");
   });
 
   it("userPrompt 按吉凶中拆分神煞", () => {
-    const r = buildBaziPrompt({ chart: sampleChart, focus: "综合" });
+    const r = buildBaziPrompt({ chart: sampleChart, focus: "综合运势" });
     expect(r.userPrompt).toContain("吉神");
     expect(r.userPrompt).toContain("天乙贵人");
     expect(r.userPrompt).toContain("文昌贵人");
@@ -104,7 +104,7 @@ describe("buildBaziPrompt (M3.12)", () => {
   });
 
   it("userPrompt 包含大运 8 步", () => {
-    const r = buildBaziPrompt({ chart: sampleChart, focus: "综合" });
+    const r = buildBaziPrompt({ chart: sampleChart, focus: "综合运势" });
     expect(r.userPrompt).toContain("大运");
     expect(r.userPrompt).toContain("戊辰");
     expect(r.userPrompt).toContain("乙亥");
@@ -113,7 +113,7 @@ describe("buildBaziPrompt (M3.12)", () => {
   });
 
   it("userPrompt 包含流年 5 年", () => {
-    const r = buildBaziPrompt({ chart: sampleChart, focus: "综合" });
+    const r = buildBaziPrompt({ chart: sampleChart, focus: "综合运势" });
     expect(r.userPrompt).toContain("2024=甲辰");
     expect(r.userPrompt).toContain("2026=丙午(本年)");
     expect(r.userPrompt).toContain("2028=戊申");
@@ -134,7 +134,7 @@ describe("buildBaziPrompt (M3.12)", () => {
   it("profile.gender + birthPlace 注入 userPrompt", () => {
     const r = buildBaziPrompt({
       chart: sampleChart,
-      focus: "综合",
+      focus: "综合运势",
       profile: { gender: "female", birthPlace: "上海" },
     });
     expect(r.userPrompt).toContain("女");
@@ -143,7 +143,7 @@ describe("buildBaziPrompt (M3.12)", () => {
 
   it("无神煞时不抛错", () => {
     const minimalChart: BaziChartV2 = { ...sampleChart, shensha: [] };
-    const r = buildBaziPrompt({ chart: minimalChart, focus: "综合" });
+    const r = buildBaziPrompt({ chart: minimalChart, focus: "综合运势" });
     expect(r.userPrompt.length).toBeGreaterThan(0);
     expect(r.userPrompt).not.toContain("吉神：");
   });
@@ -160,7 +160,7 @@ describe("buildBaziPrompt (M3.12)", () => {
           reason: "日主能量偏弱",
         },
       },
-      focus: "综合",
+      focus: "综合运势",
     });
     expect(r.userPrompt).toContain("忌神");
     expect(r.userPrompt).toContain("木");

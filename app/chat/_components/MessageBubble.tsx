@@ -222,7 +222,7 @@ export function MessageBubble({
       return (
         <CardWrap className={className}>
           <FormCard
-            title="梦境描述"
+            title={message.content || "补充梦境信息"}
             fields={DREAM_PRECISE_FIELDS}
             submitLabel="精准解梦"
             busy={busy}
@@ -261,7 +261,7 @@ export function MessageBubble({
       return (
         <CardWrap className={className}>
           <FormCard
-            title={message.content || "请描述你的心事"}
+            title={message.content || "请描述你遇到的事情和想问的问题，描述越具体，解读越精准哦。"}
             fields={SLIP_QUESTION_FIELDS}
             submitLabel="开始抽签"
             busy={busy}
@@ -319,7 +319,14 @@ export function MessageBubble({
             dimension={m.dimension}
             reading={m.reading}
             aiInterpretation={m.aiInterpretation || message.content}
+            sections={m.sections}
+            isFullInterpret={m.isFullInterpret}
             onShare={() => onCardAction?.(message.id, ui, "share")}
+            onFullExplain={
+              !m.isFullInterpret
+                ? () => onCardAction?.(message.id, ui, "full_explain")
+                : undefined
+            }
           />
         </CardWrap>
       );
@@ -359,12 +366,29 @@ export function MessageBubble({
         </CardWrap>
       );
 
-    case "dream_result_precise":
+    case "dream_result_precise": {
+      const m = meta as unknown as DreamResultMeta;
       return (
         <CardWrap className={className}>
-          <DreamResultCard mode="precise" aiText={message.content} />
+          <DreamResultCard
+            mode="precise"
+            aiText={message.content}
+            sections={
+              m.empathy
+                ? {
+                    empathy: m.empathy,
+                    threeViews: m.threeViews ?? { zhouGong: "", freud: "", jung: "" },
+                    coreMeaning: m.coreMeaning ?? "",
+                    suggestions: m.suggestions ?? [],
+                    subconsciousMsg: m.subconsciousMsg ?? "",
+                    conclusion: m.conclusion ?? "",
+                  }
+                : null
+            }
+          />
         </CardWrap>
       );
+    }
 
     case "dream_result": {
       // V1.0 别名 — 用 metadata.mode 区分

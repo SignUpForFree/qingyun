@@ -1,0 +1,20 @@
+{
+  "miniprogramRoot": "",
+  "appid": "REPLACE_WITH_WECHAT_MINI_APPID",
+  "compileType": "miniprogram",
+  "projectname": "qingyun",
+  "description": "轻运 AI 小程序",
+  "setting": {
+    "urlCheck": true,
+    "es6": true,
+    "enhance": true,
+    "postcss": false,
+    "minified": false,
+    "newFeature": true,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    }
+  }
+}

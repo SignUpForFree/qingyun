@@ -50,7 +50,7 @@ export default async function ProfilesPage() {
           </Link>
         }
       />
-      <div className="flex flex-1 flex-col p-4 pb-24">
+      <div className="flex flex-1 flex-col p-4 pb-safe-bottom">
         <ProfileCardList profiles={items} />
       </div>
     </>

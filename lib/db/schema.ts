@@ -175,6 +175,13 @@ export const fortunesDaily = sqliteTable(
     one_liner: text("one_liner"),
     attributes: text("attributes").notNull(), // JSON
     reading: text("reading").notNull(),
+    /**
+     * reading 来源（M5 / 2026-05-04 加列）
+     *   - "fallback"：本地模板池兜底（lib/fortune/reading-fallback.ts，21 选 1 hash 抽）
+     *   - "ai"：DeepSeek v4 Pro 生成（lib/ai/prompts/fortune-reading.ts）
+     * 客户端 ReadingAutoRegen 检测 != "ai" 时一次性触发 /api/fortune/today/regenerate
+     */
+    reading_source: text("reading_source").notNull().default("fallback"),
     generated_at: tsNow("generated_at"),
   },
   (t) => [
@@ -195,6 +202,8 @@ export const fortunesWeekly = sqliteTable(
     scores: text("scores"), // JSON
     one_liner: text("one_liner"),
     reading: text("reading"),
+    /** "fallback" | "ai"（与 fortunes_daily 同义；2026-05-07 加列） */
+    reading_source: text("reading_source").notNull().default("fallback"),
     generated_at: tsNow("generated_at"),
   },
   (t) => [primaryKey({ columns: [t.profile_id, t.week_start] })],
@@ -212,6 +221,8 @@ export const fortunesMonthly = sqliteTable(
     scores: text("scores"), // JSON
     one_liner: text("one_liner"),
     reading: text("reading"),
+    /** "fallback" | "ai"（与 fortunes_daily 同义；2026-05-07 加列） */
+    reading_source: text("reading_source").notNull().default("fallback"),
     generated_at: tsNow("generated_at"),
   },
   (t) => [primaryKey({ columns: [t.profile_id, t.month] })],
@@ -221,7 +232,7 @@ export const fortunesMonthly = sqliteTable(
 export const slips = sqliteTable("slips", {
   number: integer("number").primaryKey(),
   level: text("level", {
-    enum: ["上上", "上吉", "中吉", "中平", "下下"],
+    enum: ["上上", "上吉", "吉", "平", "渐顺", "慎行"],
   }).notNull(),
   title: text("title").notNull(),
   poem: text("poem").notNull(),
@@ -282,6 +293,27 @@ export const wechatToken = sqliteTable("wechat_token", {
   expires_at: integer("expires_at").notNull(), // ms epoch
 });
 
+// ---------- 15. subscriptions ----------
+export const subscriptions = sqliteTable(
+  "subscriptions",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    user_id: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    plan: text("plan", { enum: ["free", "premium"] }).notNull().default("free"),
+    started_at: text("started_at"),
+    expires_at: text("expires_at"),
+    provider: text("provider"), // "wechat_pay" | "manual" 等
+    trade_no: text("trade_no"),
+    created_at: tsNow("created_at"),
+    updated_at: tsNow("updated_at"),
+  },
+  (t) => [index("idx_subscriptions_user").on(t.user_id)],
+);
+
 // ---------- 类型 export（drizzle $inferSelect / $inferInsert） ----------
 export type User = typeof users.$inferSelect;
 export type UserInsert = typeof users.$inferInsert;
@@ -324,4 +356,7 @@ export type WechatTemplateLogInsert = typeof wechatTemplateLog.$inferInsert;
 
 export type WechatToken = typeof wechatToken.$inferSelect;
 export type WechatTokenInsert = typeof wechatToken.$inferInsert;
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export type SubscriptionInsert = typeof subscriptions.$inferInsert;
 

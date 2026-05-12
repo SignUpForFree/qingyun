@@ -68,24 +68,13 @@ export function TextBubble({
  * 复用 ProfileCardList 的同款样式，保持视觉一致。
  */
 function UserAvatar({ url, nickname }: { url: string | null; nickname: string }) {
-  if (url) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return (
-      <img
-        src={url}
-        alt={nickname}
-        className="mt-1 h-7 w-7 shrink-0 rounded-full object-cover"
-      />
-    );
-  }
-  const initial = nickname.slice(0, 1) || "我";
+  // eslint-disable-next-line @next/next/no-img-element
   return (
-    <div
-      aria-label={nickname}
-      className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-lavender)]/30 font-[family-name:var(--font-serif)] text-[12px] text-[var(--color-ink-plum)]"
-    >
-      {initial}
-    </div>
+    <img
+      src={url || "/images/ai-avatar.png"}
+      alt={nickname}
+      className="mt-1 h-7 w-7 shrink-0 rounded-full object-cover"
+    />
   );
 }
 

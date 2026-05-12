@@ -128,9 +128,13 @@ describe("isCardMeta — 正样本（每个 ui type 至少一条最小样本）"
       "dream_result_precise",
       {
         ui: "dream_result_precise",
-        threeViews: { psychology: "心理学视角", zhouGong: "周公解梦", modern: "现代解读" },
+        empathy: "这不是厄运，是潜意识的预警",
+        threeViews: { zhouGong: "一夜安寝", freud: "焦虑投射", jung: "成长信号" },
+        coreMeaning: "整体寓意：提醒你关注内心",
+        suggestions: ["多休息", "调整作息"],
+        subconsciousMsg: "你一直在努力",
+        conclusion: "调整后就能顺利化解",
         summary: "汇总",
-        suggestions: ["建议1", "建议2"],
       },
     ],
     [

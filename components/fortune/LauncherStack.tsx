@@ -75,7 +75,7 @@ function CompactLauncherCard({ def }: { def: LauncherDef }) {
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-[var(--color-accent-lavender)]/25 to-[var(--color-accent-plum)]/15 text-[var(--color-ink-plum)]">
               <FunctionIcon name={def.icon} size={14} />
             </span>
-            <span className="font-[family-name:var(--font-serif)] text-[15px] tracking-ritual text-[var(--color-ink-plum)]">
+            <span className="font-[family-name:var(--font-serif)] text-[15px] font-bold tracking-ritual text-[var(--color-ink-plum)]">
               {def.label}
             </span>
           </span>
@@ -99,7 +99,7 @@ function WideLauncherCard({ def }: { def: LauncherDef }) {
           <FunctionIcon name={def.icon} size={18} />
         </span>
         <div className="flex-1">
-          <p className="font-[family-name:var(--font-serif)] text-[15px] tracking-ritual text-[var(--color-ink-plum)]">
+          <p className="font-[family-name:var(--font-serif)] text-[15px] font-bold tracking-ritual text-[var(--color-ink-plum)]">
             {def.label}
           </p>
           <p className="mt-0.5 text-[11px] text-[var(--color-ink-fade)]">{def.desc}</p>

@@ -49,6 +49,8 @@ export interface GuaDictView {
   panCi: string;
   yaoCi: ReadonlyArray<string>;
   tuanCi: string;
+  /** 大象传（象曰），卜易居数据补全 */
+  daXiang: string;
   /** dongYao 位的爻辞（V1 已传 dongYao 1-6） */
   dongYaoCi?: string;
 }
@@ -111,6 +113,7 @@ function buildDictView(
       panCi: "",
       yaoCi: [],
       tuanCi: "",
+      daXiang: "",
     };
   }
   const yaoArr: ReadonlyArray<string> = JSON.parse(entry.yao_ci);
@@ -119,6 +122,7 @@ function buildDictView(
     panCi: entry.pan_ci,
     yaoCi: yaoArr,
     tuanCi: entry.tuan_ci,
+    daXiang: entry.da_xiang,
   };
   if (dongYao && dongYao >= 1 && dongYao <= 6 && yaoArr[dongYao - 1]) {
     return { ...view, dongYaoCi: yaoArr[dongYao - 1] };

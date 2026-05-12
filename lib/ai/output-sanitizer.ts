@@ -3,6 +3,9 @@ import {
   FORBIDDEN_CORE,
   FORBIDDEN_DIVINATION_EXTRA,
 } from "./prompts/forbidden-words";
+import { stripThinkChain } from "./strip-think-chain";
+
+export { stripThinkChain };
 
 /**
  * AI 输出兜底净化器 (M3.34)
@@ -37,11 +40,16 @@ export interface SanitizeResult {
 }
 
 /**
- * 替换禁词为柔和说法 + 去掉 Markdown 装饰（标题 / 加粗）
+ * 替换禁词为柔和说法 + 去掉 Markdown 装饰（标题 / 加粗）+ 剥离思考链
  *
  * Prompt 已经禁用 # / ## / ### 和 ** **，但 DeepSeek 偶尔仍会写出
  * （训练语料里教科书风格强烈）。持久化前最后一道清扫，避免 UI 上
  * 出现裸的 "### 火旺耗身" 标题。
+ *
+ * 思考链剥离（2026-05-06）：
+ *   v4 Pro 偶尔会把内部 reasoning 段以 <think>...</think> 或 [思考]...[/思考]
+ *   或行首"思考过程：" 形式漏到 textStream 里（尤其 thinking: enabled 的
+ *   bazi/meihua 长 prompt）。统一在写库 / 透客户端前剥掉。
  *
  * @param text AI 原始输出
  * @param scope core (chat) | divination (含开源签强词)
@@ -51,11 +59,11 @@ export function sanitizeAiOutput(
   scope: "core" | "divination" = "core",
 ): SanitizeResult {
   const list = scope === "divination" ? ALL_FORBIDDEN : FORBIDDEN_CORE;
-  // dream 路由额外两词（凶兆/不祥）— 单独 includes
   const extraDream = ["凶兆", "不祥"] as const;
   const all = scope === "divination" ? [...list, ...extraDream] : [...list, ...extraDream];
 
-  let cleaned = stripMarkdownDecoration(text);
+  let cleaned = stripThinkChain(text);
+  cleaned = stripMarkdownDecoration(cleaned);
   const hitWords: string[] = [];
   for (const word of all) {
     if (cleaned.includes(word)) {
@@ -70,6 +78,7 @@ export function sanitizeAiOutput(
     hitWords,
   };
 }
+
 
 /**
  * 去掉 AI 输出里残留的 Markdown 装饰：

@@ -35,7 +35,7 @@ export default function MeihuaPreviewPage() {
   return (
     <>
       <AppHeader title="梅 花 卦 卡 预 览" />
-      <div className="flex flex-1 flex-col items-center gap-4 p-4 pb-20">
+      <div className="flex flex-1 flex-col items-center gap-4 p-4 pb-safe-bottom">
         <p className="px-2 text-center text-xs text-[var(--color-ink-fade)]">
           design lab · 5 个不同 relation 的卦
         </p>

@@ -15,6 +15,20 @@
       "when": 1777298000000,
       "tag": "0001_add_birth_is_leap_month",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1777892674412,
+      "tag": "0002_fortunes_reading_source",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1778457600000,
+      "tag": "0003_fortunes_weekly_monthly_reading_source",
+      "breakpoints": true
     }
   ]
 }

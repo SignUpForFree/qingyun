@@ -121,9 +121,19 @@ describe("MessageBubble (M2.14 — 22 ui dispatch)", () => {
 
   // ============ forms ============
 
-  it("dream_precise_form → FormCard with 4 fields title", () => {
+  it("dream_precise_form → FormCard with default title", () => {
     render(<MessageBubble message={assistantMsg({ ui: "dream_precise_form" })} />);
-    expect(screen.getByText("梦境描述")).toBeInTheDocument();
+    expect(screen.getByText("补充梦境信息")).toBeInTheDocument();
+  });
+
+  it("dream_precise_form → FormCard shows assistant intro from content", () => {
+    render(
+      <MessageBubble
+        message={assistantMsg({ ui: "dream_precise_form" }, "第一段说明\n第二行")}
+      />,
+    );
+    const title = screen.getByText(/^第一段说明/);
+    expect(title.textContent).toContain("第二行");
   });
 
   it("bazi_quick_form → FormCard with 八字 title", () => {
@@ -136,13 +146,18 @@ describe("MessageBubble (M2.14 — 22 ui dispatch)", () => {
     expect(screen.getByText("请给我 1-3 个 1-9 的数字")).toBeInTheDocument();
   });
 
-  it("slip_question_input → FormCard with 心事 title", () => {
+  it("slip_question_input → FormCard with guide copy", () => {
     render(
       <MessageBubble
-        message={assistantMsg({ ui: "slip_question_input" }, "请描述你的心事")}
+        message={assistantMsg(
+          { ui: "slip_question_input" },
+          "请描述你遇到的事情和想问的问题，描述越具体，解读越精准哦。",
+        )}
       />,
     );
-    expect(screen.getByText("请描述你的心事")).toBeInTheDocument();
+    expect(
+      screen.getByText("请描述你遇到的事情和想问的问题，描述越具体，解读越精准哦。"),
+    ).toBeInTheDocument();
   });
 
   // ============ results ============

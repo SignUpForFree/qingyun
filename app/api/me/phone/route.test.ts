@@ -82,7 +82,7 @@ function makeReq(path: string, body: unknown) {
 
 describe("POST /api/me/phone/verify", () => {
   it("returns { sent: true } on successful send", async () => {
-    vi.mocked(sendOtp).mockReturnValueOnce({ sent: true });
+    vi.mocked(sendOtp).mockResolvedValueOnce({ sent: true });
 
     const r = await VerifyPOST(makeReq("/api/me/phone/verify", { phone: "+8613800138000" }));
     expect(r.status).toBe(200);
@@ -92,7 +92,7 @@ describe("POST /api/me/phone/verify", () => {
   });
 
   it("returns 429 with cooldownMs when rate-limited", async () => {
-    vi.mocked(sendOtp).mockReturnValueOnce({ sent: false, cooldownMs: 42_000 });
+    vi.mocked(sendOtp).mockResolvedValueOnce({ sent: false, cooldownMs: 42_000 });
 
     const r = await VerifyPOST(makeReq("/api/me/phone/verify", { phone: "+8613800138000" }));
     expect(r.status).toBe(429);

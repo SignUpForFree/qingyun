@@ -4,6 +4,10 @@ import { getDb } from "@/lib/db/client";
 import { profiles, type Profile } from "@/lib/db/schema";
 
 /**
+ * 注：本模块仍是当前 onboarding / api/me/profiles 的直接调用点。
+ * 长期方向：调用方迁到 `dataAccess.profiles`（lib/db/data-access-sqlite.ts），
+ * 本文件的导出函数保留作为 thin wrapper 不立即废弃。
+ *
  * M1.9 多档案 Repository（spec §3.3 A3 / plan §M1.9）
  *
  * - 每个用户至少 1 个档案；默认档由 M1.7 OAuth callback 自动创建（占位数据），
@@ -55,10 +59,20 @@ export async function createProfile(
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
 
+  // 用户当前 0 profile → 强制 is_default=true（onboarding 兜底路径必须）
+  // 否则保持非默认（多档案路径 / 已有 default 路径不变）
+  // 详见 docs/superpowers/specs/2026-05-04-fortune-reading-ai-mcp.md（建档兜底）
+  const existingCount = await db
+    .select({ id: profiles.id })
+    .from(profiles)
+    .where(eq(profiles.user_id, userId))
+    .limit(1);
+  const isDefault = existingCount.length === 0;
+
   await db.insert(profiles).values({
     id,
     user_id: userId,
-    is_default: false, // 新增档案默认非默认；改默认走 updateProfile({ is_default: true })
+    is_default: isDefault,
     nickname: input.nickname,
     avatar_url: input.avatar_url,
     gender: input.gender,

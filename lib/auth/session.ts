@@ -1,7 +1,10 @@
 import "server-only";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import type { NextResponse } from "next/server";
 import { shouldSecureCookie } from "./cookie-flags";
+import { ensureUserWithPlaceholderProfile } from "./ensure-placeholder-profile";
+import { SESSION_COOKIE_KEY } from "./cookie-keys";
+import { extractBearer, JwtError, verifyJwt } from "./jwt";
 
 /**
  * 微信绑定的 session（V2.0）
@@ -12,20 +15,69 @@ import { shouldSecureCookie } from "./cookie-flags";
  * - middleware.ts (M1.8) 强制：无 cookie -> 302 /api/auth/wechat（页面）/ 401（API）
  *
  * V1.0 的匿名 proxy.ts 已废弃 — V2.0 不再 bootstrap 匿名用户。
+ *
+ * 注意：SESSION_COOKIE_KEY 单独抽到 ./cookie-keys.ts，让 middleware（edge runtime）
+ * 直接 import 常量而不串进 db 依赖链，避免 edge "node:path 找不到" 错误。
  */
-export const SESSION_COOKIE_KEY = "qy_uid";
+export { SESSION_COOKIE_KEY };
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 
 export async function getCurrentUserId(): Promise<string | null> {
   const store = await cookies();
-  return store.get(SESSION_COOKIE_KEY)?.value ?? null;
+  const fromCookie = store.get(SESSION_COOKIE_KEY)?.value ?? null;
+  if (fromCookie) return fromCookie;
+  // 小程序：Authorization: Bearer <JWT>，签名失败 / 过期 → 视为未登录
+  return await getUserIdFromBearer();
 }
+
+async function getUserIdFromBearer(): Promise<string | null> {
+  try {
+    const h = await headers();
+    const token = extractBearer(h.get("authorization"));
+    if (!token) return null;
+    const payload = verifyJwt(token);
+    return typeof payload.sub === "string" ? payload.sub : null;
+  } catch (e) {
+    if (e instanceof JwtError) return null;
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[session] bearer parse error", e);
+    }
+    return null;
+  }
+}
+
+/**
+ * dev-only：进程内已 ensure 过的 user_id 缓存，避免每次 ensureUserId 都打一次 db。
+ * 重启进程清空（dev 不重要；prod 永远跳过这段逻辑）。
+ */
+const devBootstrappedUsers = new Set<string>();
 
 export async function ensureUserId(): Promise<string> {
   const existing = await getCurrentUserId();
-  if (existing) return existing;
+  if (existing) {
+    // dev 自愈：cookie 有 uid 但 db 没该 user（典型场景：刚跑过 db:reset，浏览器旧 cookie）
+    // 自动建占位 user + profile，避免下游 13 个 route 全部撞 FOREIGN KEY constraint failed。
+    // prod 模式跳过：V2.0 强制微信 OAuth 登录，cookie ↔ db 必须一致；不一致就是真异常应浮现。
+    if (process.env.NODE_ENV !== "production" && !devBootstrappedUsers.has(existing)) {
+      try {
+        ensureUserWithPlaceholderProfile(existing);
+        devBootstrappedUsers.add(existing);
+      } catch (e) {
+        console.error("[dev] ensureUserId auto-bootstrap 失败", e);
+      }
+    }
+    return existing;
+  }
   const fresh = crypto.randomUUID();
   await setUserId(fresh);
+  if (process.env.NODE_ENV !== "production") {
+    try {
+      ensureUserWithPlaceholderProfile(fresh);
+      devBootstrappedUsers.add(fresh);
+    } catch (e) {
+      console.error("[dev] ensureUserId fresh-bootstrap 失败", e);
+    }
+  }
   return fresh;
 }
 

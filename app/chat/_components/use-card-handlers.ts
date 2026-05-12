@@ -3,6 +3,7 @@
 import * as React from "react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/util/api-fetch";
+import { saveImageToAlbum } from "@/lib/util/save-image";
 import type { DisplayMessage } from "./MessageBubble";
 import type { CardActionCallback, CardPickCallback, CardSubmitCallback } from "./MessageBubble";
 
@@ -44,31 +45,37 @@ export function useCardHandlers({
         slipDimRef.current = key;
         setMessages((m) => [
           ...m,
-          makeLocalCard(`local-slip-q-${Date.now()}`, `好的，关于「${key}」，请把你心里默念的事写下来，越具体越准。`, {
-            ui: "slip_question_input",
-          }),
+          makeLocalCard(
+            `local-slip-q-${Date.now()}`,
+            "请描述你遇到的事情和想问的问题，描述越具体，解读越精准哦。",
+            {
+              ui: "slip_question_input",
+            },
+          ),
         ]);
         return;
       }
       if (ui === "dream_choice") {
+        // 文案对齐 测试bug.xlsx R4 的 4 条说明（fast / precise 同一份引导，避免再用差异话术）
+        const dreamGuide = [
+          "请描述你的梦境内容（包含以下信息，描述越详细越精准）",
+          "1、描述梦境中的画面和人 / 物 / 地点以及发生的故事",
+          "2、在梦境里你是什么情绪感受，醒来后情绪有没有变化？",
+          "3、最近的现实生活中，有没有类似的场景、情绪，或者让你在意的事情？",
+          "4、该梦境是否有比较特别的，让你觉得奇怪或是印象深刻的？",
+        ].join("\n");
         if (key === "fast") {
           markDreamFastWaiting();
           setMessages((m) => [
             ...m,
-            makeLocalCard(
-              `local-dream-fast-${Date.now()}`,
-              "好的，请把梦境内容讲给我（10-2000 字）。",
-              { ui: "text" },
-            ),
+            makeLocalCard(`local-dream-fast-${Date.now()}`, dreamGuide, { ui: "text" }),
           ]);
         } else if (key === "precise") {
           setMessages((m) => [
             ...m,
-            makeLocalCard(
-              `local-dream-precise-${Date.now()}`,
-              "请按下面 4 个维度填写",
-              { ui: "dream_precise_form" },
-            ),
+            makeLocalCard(`local-dream-precise-${Date.now()}`, dreamGuide, {
+              ui: "dream_precise_form",
+            }),
           ]);
         }
         return;
@@ -216,6 +223,26 @@ export function useCardHandlers({
         });
         return;
       }
+      if (ui === "slip_report" && action === "full_explain") {
+        if (!convId) {
+          toast.error("会话尚未建立，请先与轻运打个招呼");
+          return;
+        }
+        // 找到对应的 slip_image 消息 ID
+        const msg = messages.find((m) => m.id === msgId);
+        let sourceMessageId = msgId;
+        if (msg?.metadata) {
+          try {
+            const meta = JSON.parse(msg.metadata) as { sourceMessageId?: string };
+            if (meta.sourceMessageId) sourceMessageId = meta.sourceMessageId;
+          } catch { /* fallback to msgId */ }
+        }
+        await postSubAction("/api/divination/qianwen/explain", "完整解读", {
+          messageId: sourceMessageId,
+          fullInterpret: true,
+        });
+        return;
+      }
       if (ui === "slip_image" && action === "share") {
         const msg = messages.find((m) => m.id === msgId);
         if (!msg?.metadata) {
@@ -231,16 +258,15 @@ export function useCardHandlers({
             toast.error("签图未生成");
             return;
           }
-          const a = document.createElement("a");
-          a.href = meta.imageUrl;
-          a.download = `lingqian-${meta.slipNumber ?? "slip"}.png`;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          toast.success("已开始下载，长按图片可保存到相册");
+          await saveImageToAlbum(
+            meta.imageUrl,
+            `轻运签-${meta.slipNumber ?? "slip"}.png`,
+          );
+          toast.success("已保存到相册");
         } catch {
           toast.error("保存失败，请稍候再试");
         }
+        return;
       }
     },
     [convId, messages, postSubAction],

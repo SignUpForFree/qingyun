@@ -17,9 +17,15 @@ vi.mock("@/lib/safety/guard", () => ({
 vi.mock("@/lib/ai/client", () => ({
   chat: vi.fn(async () => ({
     textStream: (async function* () {
-      yield "[心理视角] 焦虑；";
-      yield "[周公解梦] 一夜安寝；";
-      yield "[现代实用建议] 多休息。";
+      yield "🌙 这不是厄运，是潜意识的预警\n\n";
+      yield "🔮 三重维度专业解读\n";
+      yield "周公解梦 · 民俗意象解读\n一夜安寝\n\n";
+      yield "弗洛伊德 · 愿望满足理论\n焦虑投射\n\n";
+      yield "荣格 · 集体无意识与原型\n成长信号\n\n";
+      yield "📜 核心寓意与重要节点指引\n整体寓意：提醒\n\n";
+      yield "💡 可落地的规避方案\n- 多休息\n- 调整作息\n\n";
+      yield "💌 潜意识想对你说的真心话\n你一直在努力\n\n";
+      yield "🌷 结语\n调整后就能顺利化解";
     })(),
     usage: Promise.resolve({ totalTokens: 80 }),
   })),
@@ -168,7 +174,7 @@ describe("POST /api/divination/dream — happy path", () => {
     expect(text).toContain('"mode":"fast"');
   });
 
-  it("mode=precise → SSE 流 + dream_result_precise + threeViews", async () => {
+  it("mode=precise → SSE 流 + dream_result_precise + structured sections", async () => {
     const r = await POST(
       new Request("http://test", {
         method: "POST",
@@ -187,6 +193,10 @@ describe("POST /api/divination/dream — happy path", () => {
     const text = await readSse(r);
     expect(text).toContain("dream_result_precise");
     expect(text).toContain("threeViews");
+    expect(text).toContain("empathy");
+    expect(text).toContain("coreMeaning");
+    expect(text).toContain("subconsciousMsg");
+    expect(text).toContain("conclusion");
     expect(text).toContain('"mode":"precise"');
   });
 
