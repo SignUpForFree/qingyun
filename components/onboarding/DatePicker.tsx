@@ -182,7 +182,7 @@ export function DatePicker({ value, onChange, className, disabled }: DatePickerP
         onClick={openSheet}
         data-testid="onboarding-birth-trigger"
         className={cn(
-          "hairline glass flex w-full items-center gap-2 rounded-[8px] px-3 py-2.5 text-sm transition-colors",
+          "flex w-full items-center gap-2 rounded-[8px] border border-input bg-white px-3 py-2.5 text-sm transition-colors",
           "hover:bg-[var(--color-accent-lavender)]/10 disabled:opacity-50",
           value ? "text-[var(--color-ink-plum)]" : "text-[var(--color-ink-fade)]",
         )}

@@ -6,9 +6,8 @@ import { getDayPillar } from "@/lib/bazi/today";
 import { getChartV2ForProfile } from "./chart-from-profile";
 import { computeDaily7, type DimensionScores7 } from "./daily-7dim";
 import { computeAttributes, type Attributes } from "./attributes";
-import { pickOneLiner } from "./one-liner";
+import { pickOneLiner7 } from "./one-liner";
 import { buildReadingFallback } from "./reading-fallback";
-import { computeDailyScores } from "./scorer";
 /**
  * 共享版 today fortune fetch (M4.4)
  *
@@ -109,14 +108,7 @@ function computeAndCacheFortune(
     day: today,
   });
   const attributes = computeAttributes(today);
-  const dailyV1 = computeDailyScores(
-    {
-      dayMaster: chartV2.dayMaster,
-      fiveElements: chartV2.fiveElements,
-    },
-    today,
-  );
-  const oneLiner = pickOneLiner(dailyV1);
+  const oneLiner = pickOneLiner7(daily7.scores, today.date);
   const reading = buildReadingFallback(today.date, daily7.scores);
 
   try {

@@ -35,17 +35,6 @@ export const DAILY_7_DIMS = [
 ] as const;
 export type DailyDim7 = (typeof DAILY_7_DIMS)[number];
 
-/** plan §M3.24 加权系数 */
-export const DAILY_7_WEIGHTS: Record<DailyDim7, number> = {
-  爱情: 0.15,
-  财富: 0.2,
-  事业: 0.2,
-  学习: 0.1,
-  健康: 0.15,
-  人际: 0.1,
-  心情: 0.1,
-};
-
 export type DimensionScores7 = Record<DailyDim7, number>;
 
 export interface Daily7Result {
@@ -134,7 +123,7 @@ export function computeDaily7(args: ComputeDaily7Args): Daily7Result {
   }
 
   const overall = Math.round(
-    DAILY_7_DIMS.reduce((sum, dim) => sum + scores[dim] * DAILY_7_WEIGHTS[dim], 0),
+    DAILY_7_DIMS.reduce((sum, dim) => sum + scores[dim], 0) / DAILY_7_DIMS.length,
   );
 
   return {

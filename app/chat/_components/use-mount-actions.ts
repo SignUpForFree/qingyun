@@ -4,7 +4,7 @@ import * as React from "react";
 
 const INTENT_AUTO_TEXT: Record<string, string> = {
   divination: "我要抽灵签",
-  dream: "我要 AI 解梦",
+  dream: "我要解梦",
   bazi: "我要八字解读",
   meihua: "我要测算",
 };

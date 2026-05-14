@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { computeDaily7, DAILY_7_DIMS, DAILY_7_WEIGHTS } from "./daily-7dim";
+import { computeDaily7, DAILY_7_DIMS } from "./daily-7dim";
 import type { Wuxing } from "@/lib/bazi/stems-branches";
 
 const FIVE_BALANCED = { 金: 2, 木: 1, 水: 2, 火: 2, 土: 1 } as Record<Wuxing, number>;
 
 describe("computeDaily7 (M3.24 7 维度首页评分)", () => {
-  it("DAILY_7_DIMS 是 7 项 + 加权和=1", () => {
+  it("DAILY_7_DIMS 是 7 项", () => {
     expect([...DAILY_7_DIMS]).toEqual([
       "爱情",
       "财富",
@@ -15,8 +15,7 @@ describe("computeDaily7 (M3.24 7 维度首页评分)", () => {
       "人际",
       "心情",
     ]);
-    const sum = DAILY_7_DIMS.reduce((s, d) => s + DAILY_7_WEIGHTS[d], 0);
-    expect(sum).toBeCloseTo(1.0, 5);
+    expect(DAILY_7_DIMS.length).toBe(7);
   });
 
   it("7 维度都在 [55, 95]", () => {
@@ -30,13 +29,13 @@ describe("computeDaily7 (M3.24 7 维度首页评分)", () => {
     }
   });
 
-  it("overall = 加权和（取整）", () => {
+  it("overall = 7 维简单平均（取整）", () => {
     const r = computeDaily7({
       chart: { dayMaster: "辛", fiveElements: FIVE_BALANCED },
       day: { date: "2026-04-26", gan: "戊", zhi: "辰" },
     });
     const expected = Math.round(
-      DAILY_7_DIMS.reduce((s, d) => s + r.scores[d] * DAILY_7_WEIGHTS[d], 0),
+      DAILY_7_DIMS.reduce((s, d) => s + r.scores[d], 0) / DAILY_7_DIMS.length,
     );
     expect(r.overall).toBe(expected);
   });

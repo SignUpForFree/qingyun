@@ -35,7 +35,7 @@ const COMPACT: ReadonlyArray<LauncherDef> = [
 const WIDE: ReadonlyArray<LauncherDef> = [
   {
     intent: "dream",
-    text: "我要 AI 解梦",
+    text: "我要解梦",
     label: "AI 解梦",
     desc: "梦有深意，一语道破",
     icon: "dream",
