@@ -1,4 +1,4 @@
-# 轻运 AI · P2 功能期（W3–W4）实现计划
+# 福小运 · P2 功能期（W3–W4）实现计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -140,7 +140,7 @@ app/
 
 **Files:**
 - Create: `db/seed/100_slips.sql`
-- Reference: 需求文档（`/Users/edy/Downloads/轻运AI需求文档.docx`）第 69–169 行
+- Reference: 需求文档（`/Users/edy/Downloads/福小运需求文档.docx`）第 69–169 行
 
 - [ ] **Step 1: 从需求文档提取 100 签数据**
 
@@ -151,7 +151,7 @@ app/
 `db/seed/100_slips.sql` 开头样例（先写前 3 支做示范，后面 97 支同结构）：
 
 ```sql
--- 轻运 AI · 100 支灵签 seed
+-- 福小运 · 100 支灵签 seed
 -- 来源：需求文档 69–169 行
 
 INSERT INTO divination_slips (number, level, title, poem, readings) VALUES
@@ -2290,7 +2290,7 @@ Run: `psql $SUPABASE_DB_URL -f db/seed/prompts.sql`
 ```sql
 INSERT INTO prompts (key, version, system_prompt, user_prompt_tpl, active) VALUES
 ('chat.general', 1,
-'你是轻运 AI，一位温柔、年轻化的国学陪伴助手。
+'你是福小运，一位温柔、年轻化的国学陪伴助手。
 
 风格:
 - 简短、治愈、像朋友聊天

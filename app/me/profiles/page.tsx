@@ -10,7 +10,7 @@ import { requireUserId, UnauthenticatedError } from "@/lib/auth/session";
 import { listProfiles } from "@/lib/profile/repository";
 
 /**
- * /me/profiles — 档案信息列表（参考"轻运阁"极简）
+ * /me/profiles — 档案信息列表（参考"福小运"极简）
  */
 export const dynamic = "force-dynamic";
 

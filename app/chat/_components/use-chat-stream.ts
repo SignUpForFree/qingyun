@@ -283,7 +283,7 @@ export function useChatStream({
       }
 
       if (!res.ok || !res.body) {
-        let friendly = "轻运一时走神，请再说一次";
+        let friendly = "福小运一时走神，请再说一次";
         try {
           const j = (await res.clone().json()) as {
             errorCard?: { message?: string };
@@ -302,7 +302,7 @@ export function useChatStream({
         return;
       }
 
-      const { assistantText, cards } = await consumeStream(res.body, "轻运", {
+      const { assistantText, cards } = await consumeStream(res.body, "福小运", {
         onMeta: (data) => {
           if (data.conversationId && !convId) {
             setConvId(data.conversationId);

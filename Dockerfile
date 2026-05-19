@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.6
 #
-# 轻运 AI · Next.js 16 + SQLite Docker 镜像
+# 福小运 · Next.js 16 + SQLite Docker 镜像
 # 多阶段构建：deps → builder → runner
 #
 # 构建：docker compose build

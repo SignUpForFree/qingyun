@@ -1,5 +1,5 @@
 #!/bin/bash
-# 轻运 AI · 增量修复部署 + health-gate
+# 福小运 · 增量修复部署 + health-gate
 #
 # 用法:
 #   bash scripts/deploy-fix.sh <file1> <file2> ...

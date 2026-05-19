@@ -1,4 +1,4 @@
-# Caddyfile — 轻运 AI 反向代理（自动 HTTPS / Let's Encrypt）
+# Caddyfile — 福小运 反向代理（自动 HTTPS / Let's Encrypt）
 #
 # 部署：
 #   1. 把 qingyun.example.com 替换为你的真实域名

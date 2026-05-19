@@ -78,7 +78,7 @@ function UserAvatar({ url, nickname }: { url: string | null; nickname: string })
   );
 }
 
-/** 轻运 brand 头像（assistant 气泡左侧） */
+/** 福小运 brand 头像（assistant 气泡左侧） */
 function AssistantAvatar() {
   return (
     <div

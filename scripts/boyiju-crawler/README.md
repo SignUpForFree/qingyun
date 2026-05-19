@@ -1,10 +1,10 @@
 # 卜易居数据爬取工具
 
-从 [卜易居](https://www.buyiju.com/) 爬取周易 64 卦原文数据，补全轻运 AI 项目中 `db/seed/hexagrams.ts` 的占位字段。
+从 [卜易居](https://www.buyiju.com/) 爬取周易 64 卦原文数据，补全福小运 项目中 `db/seed/hexagrams.ts` 的占位字段。
 
 ## 用途
 
-轻运 AI 梅花易数功能需要 64 卦的卦辞、彖辞、象传、爻辞作为 AI prompt 输入。当前 `hexagrams.ts` 中 `image`（象辞）和 `lines`（爻辞）是占位数据，需爬取补全。
+福小运 梅花易数功能需要 64 卦的卦辞、彖辞、象传、爻辞作为 AI prompt 输入。当前 `hexagrams.ts` 中 `image`（象辞）和 `lines`（爻辞）是占位数据，需爬取补全。
 
 ## 数据来源
 

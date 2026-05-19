@@ -1,5 +1,5 @@
 #!/bin/bash
-# 轻运 AI · V2.0 milestone 部署脚本（M0.9）
+# 福小运 · V2.0 milestone 部署脚本（M0.9）
 #
 # 用法: bash scripts/deploy.sh M{n}
 #   e.g. bash scripts/deploy.sh M0

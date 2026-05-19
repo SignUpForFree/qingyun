@@ -35,11 +35,11 @@ const maShanZheng = Ma_Shan_Zheng({
 });
 
 export const metadata: Metadata = {
-  title: "轻运 AI",
+  title: "福小运",
   description: "AI 占卜与每日运势 · 1 人 5 周 MVP",
   appleWebApp: {
     capable: true,
-    title: "轻运",
+    title: "福小运",
     statusBarStyle: "default",
   },
   icons: {

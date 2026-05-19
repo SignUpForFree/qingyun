@@ -21,7 +21,7 @@ export interface SlipReportCardProps {
   aiInterpretation: string;
   /** 结构化解读段落（可选，有则分段渲染，无则 fallback aiInterpretation 纯文本） */
   sections?: SlipSection[] | null;
-  /** 是否是完整解读（7 块），false = 部分解读（1 块 + 轻运寄语） */
+  /** 是否是完整解读（7 块），false = 部分解读（1 块 + 福小运寄语） */
   isFullInterpret?: boolean;
   onShare?: () => void;
   onFullExplain?: () => void;
@@ -177,15 +177,16 @@ export function SlipReportCard({
       <div
         aria-hidden
         data-testid="report-seal"
-        className="absolute bottom-3 right-3 flex h-9 w-9 flex-col items-center justify-center rounded-md border-[1.5px] border-[#a83333]/55"
+        className="absolute bottom-3 right-3 flex h-11 w-9 flex-col items-center justify-center rounded-md border-[1.5px] border-[#a83333]/55"
         style={{
           color: "rgba(168,51,51,0.65)",
           fontFamily: "var(--font-serif)",
           lineHeight: 1,
         }}
       >
-        <span className="text-[11px]">轻</span>
-        <span className="text-[11px]">运</span>
+        <span className="text-[9px] leading-none">福</span>
+        <span className="text-[9px] leading-none">小</span>
+        <span className="text-[9px] leading-none">运</span>
       </div>
 
       {onShare && (

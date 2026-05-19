@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# backup-db.sh — 轻运 AI · SQLite 备份
+# backup-db.sh — 福小运 · SQLite 备份
 #
 # 在线热备：用 sqlite3 .backup 命令（不会锁库，比裸 cp + WAL 更安全）。
 # 默认每天保留 14 天，本地 + 可选异地（腾讯云 COS）。

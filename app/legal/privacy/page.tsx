@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "隐私政策 · 轻运 AI",
-  description: "轻运 AI 隐私政策",
+  title: "隐私政策 · 福小运",
+  description: "福小运 隐私政策",
 };
 
 export const dynamic = "force-static";
@@ -30,7 +30,7 @@ export default function PrivacyPage() {
       </p>
 
       <h2 className="mt-6 text-lg font-medium">1. 我们收集的信息</h2>
-      <p>使用轻运 AI 时，我们仅在你授权的范围内收集以下信息：</p>
+      <p>使用福小运 时，我们仅在你授权的范围内收集以下信息：</p>
       <ul className="list-disc pl-5">
         <li>微信公开信息：昵称、头像（通过微信网页授权获取，scope 为 snsapi_userinfo）</li>
         <li>档案信息：性别、出生时间、出生地（用于八字排盘 / 运势计算）</li>

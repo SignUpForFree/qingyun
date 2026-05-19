@@ -4,7 +4,7 @@ import * as React from "react";
 import Picker from "react-mobile-picker";
 import { MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
+import { findCity } from "@/lib/regions/data";
 import {
   Sheet,
   SheetContent,
@@ -39,12 +39,12 @@ interface DraftValue {
 }
 
 /**
- * 出生地选择器 — 省/市/区 三级联动抽屉 + 经纬度手动输入
+ * 出生地选择器 — 省/市/区 三级联动抽屉
  *
  * - 触发行：显示选中结果（如"北京市 · 市辖区 · 东城区"），点击打开 Sheet
  * - Sheet 内：3 列滚轮（省/市/区），联动
  * - Sheet 底部：取消/确定
- * - 经纬度手动输入
+ * - 确定后按省/市从内置表自动填充经纬度（用于八字真太阳时）
  */
 
 export function RegionPicker({
@@ -63,12 +63,13 @@ export function RegionPicker({
   };
 
   const handleConfirm = () => {
+    const coords = resolveRegionCoords(draft.province, draft.city);
     onChange({
       province: draft.province,
       city: draft.city,
       district: draft.district,
-      longitude: value?.longitude ?? 0,
-      latitude: value?.latitude ?? 0,
+      longitude: coords.longitude,
+      latitude: coords.latitude,
     });
     setOpen(false);
   };
@@ -114,28 +115,13 @@ export function RegionPicker({
     return { province: p, city: c, district: d };
   }, [draft, provinces]);
 
-  const longitude = value?.longitude ?? 0;
-  const latitude = value?.latitude ?? 0;
-
-  const handleLngChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!value) return;
-    const v = parseFloat(e.target.value);
-    onChange({ ...value, longitude: Number.isNaN(v) ? 0 : v });
-  };
-
-  const handleLatChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!value) return;
-    const v = parseFloat(e.target.value);
-    onChange({ ...value, latitude: Number.isNaN(v) ? 0 : v });
-  };
-
   // trigger 行展示文案
   const triggerLabel = value
     ? [value.province, value.city, value.district].filter(Boolean).join(" · ")
     : "选择出生地（省 / 市 / 区）";
 
   return (
-    <div className={cn("space-y-3", className)}>
+    <div className={className}>
       <button
         type="button"
         disabled={disabled}
@@ -230,33 +216,30 @@ export function RegionPicker({
         </SheetContent>
       </Sheet>
 
-      {/* 经纬度手动输入 */}
-      <div className="grid grid-cols-2 gap-2">
-        <Input
-          type="number"
-          step="0.0001"
-          placeholder="经度 (如 116.4074)"
-          value={longitude || ""}
-          onChange={handleLngChange}
-          disabled={disabled}
-        />
-        <Input
-          type="number"
-          step="0.0001"
-          placeholder="纬度 (如 39.9042)"
-          value={latitude || ""}
-          onChange={handleLatChange}
-          disabled={disabled}
-        />
-      </div>
-      <p className="text-xs text-[var(--color-ink-fade)]">
-        经纬度用于八字真太阳时换算，可从地图软件获取
-      </p>
     </div>
   );
 }
 
 // ───────── helpers ─────────
+
+function resolveRegionCoords(
+  province: string,
+  city: string,
+): Pick<RegionPickerValue, "longitude" | "latitude"> {
+  const provinceKey = normalizeRegionName(province);
+  let cityKey = normalizeRegionName(city);
+  if (!cityKey || cityKey === "市辖区") {
+    cityKey = provinceKey;
+  }
+  const row = findCity(provinceKey, cityKey);
+  return { longitude: row?.lng ?? 0, latitude: row?.lat ?? 0 };
+}
+
+function normalizeRegionName(name: string): string {
+  return name
+    .replace(/壮族自治区|回族自治区|维吾尔自治区|特别行政区|自治区|省|市$/u, "")
+    .trim();
+}
 
 function valueToDraft(value: RegionPickerValue | null): DraftValue {
   if (!value) {

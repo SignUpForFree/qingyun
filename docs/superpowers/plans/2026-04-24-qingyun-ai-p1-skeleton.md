@@ -1,4 +1,4 @@
-# 轻运 AI · P1 骨架期（W1–W2）实现计划
+# 福小运 · P1 骨架期（W1–W2）实现计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -330,7 +330,7 @@ Expected: `http://localhost:3000` 出 Next 默认页
 export default function HomePage() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8 text-center">
-      <h1 className="text-3xl font-semibold mb-2">轻运 AI</h1>
+      <h1 className="text-3xl font-semibold mb-2">福小运</h1>
       <p className="text-muted-foreground">骨架期占位页 — P1 完成后将由 W4 替换为真实运势卡。</p>
     </main>
   );
@@ -634,7 +634,7 @@ export async function GET() {
 `/Users/edy/Desktop/workspace/occult/README.md`：
 
 ```md
-# 轻运 AI · V1.0 MVP
+# 福小运 · V1.0 MVP
 
 ## 启动
 
@@ -1240,7 +1240,7 @@ git commit -m "chore(supabase): cloud-only CLI 接入"
 
 ```sql
 -- ============================================================
--- 轻运 AI · 0001 init schema
+-- 福小运 · 0001 init schema
 -- 来源：docs/superpowers/specs/2026-04-24-qingyun-ai-design.md 第 4 节
 -- ============================================================
 
@@ -3485,7 +3485,7 @@ export async function POST(req: Request) {
   });
 
   // P1 仅做通用 chat 兜底；P2 在此 switch intent → 不同 prompt + handler
-  const systemPrompt = "你是轻运 AI，一位温柔、年轻化的国学陪伴助手。回复要简短、治愈，禁用'大凶/倒霉/厄运'等负面词。";
+  const systemPrompt = "你是福小运，一位温柔、年轻化的国学陪伴助手。回复要简短、治愈，禁用'大凶/倒霉/厄运'等负面词。";
   const stream = await chat({
     messages: [{ role: "user", content: text }],
     systemPrompt,
@@ -3981,7 +3981,7 @@ export function HistoryDrawer() {
 ```tsx
 <header className="p-3 border-b flex items-center gap-2">
   <HistoryDrawer />
-  <span className="text-sm">轻运 AI</span>
+  <span className="text-sm">福小运</span>
 </header>
 ```
 
@@ -4015,7 +4015,7 @@ export default async function HomePage() {
   const profile = await getCurrentProfile();
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8 text-center gap-4">
-      <h1 className="text-3xl font-semibold">轻运 AI</h1>
+      <h1 className="text-3xl font-semibold">福小运</h1>
       {!profile ? (
         <>
           <p className="text-muted-foreground text-sm">先建一个档案，AI 才能给你看运势</p>
@@ -4095,7 +4095,7 @@ export default function NotFound() {
 **`/me` 页：**
 - [ ] Header title "我 的" serif 15px `tracking-ritual2`
 - [ ] 档案卡用 `<GlassCard>`；昵称 serif 18px，副信息 sans 11px ink-fade
-- [ ] 入口列表 spec 第 9 节 4 行（编辑档案 / 历史记录 / 吐槽反馈 / 关于轻运）— P1 仅展示 + 跳转占位，编辑/反馈在 P3 P1 / V1.1 实现
+- [ ] 入口列表 spec 第 9 节 4 行（编辑档案 / 历史记录 / 吐槽反馈 / 关于福小运）— P1 仅展示 + 跳转占位，编辑/反馈在 P3 P1 / V1.1 实现
 - [ ] 每行 48px 高 + 左 icon + serif 14px label + 右 chevron `>` ink-fade
 - [ ] 行间用渐隐 hairline + `<Sparkle>` 装饰
 

@@ -10,7 +10,7 @@ import { listProfiles } from "@/lib/profile/repository";
 import type { Profile } from "@/lib/db/schema";
 
 /**
- * /me — 参考"轻运阁"极简：← 我的 / 头像卡（头像+昵称+出生+编辑）/ 档案信息 / 设置
+ * /me — 参考"福小运"极简：← 我的 / 头像卡（头像+昵称+出生+编辑）/ 档案信息 / 设置
  *
  * 杂项（手机绑定、隐私、协议、退出登录）收到 /me/settings 子页。
  */

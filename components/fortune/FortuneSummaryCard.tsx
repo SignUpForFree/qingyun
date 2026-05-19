@@ -25,7 +25,7 @@ export function FortuneSummaryCard({
       <div className="grid grid-cols-[auto_1fr] items-center gap-3">
         <div className="flex flex-col items-center gap-1.5">
           <span className="text-[12px] font-bold tracking-ritual text-[var(--color-ink-mist)]">
-            轻 运 分 数
+            福 小 运 分 数
           </span>
           <ScoreRing score={overall} size={120} strokeWidth={9} caption="" sparkles={false} />
         </div>

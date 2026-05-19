@@ -1,9 +1,9 @@
-# 轻运 AI · V1.0 MVP 设计方案
+# 福小运 · V1.0 MVP 设计方案
 
 > **日期**：2026-04-24（V1 初稿）
 > **作者**：edy + Claude（brainstorming skill）
 > **状态**：已确认 + 三份实现计划已落（P1/P2/P3）
-> **源需求**：`/Users/edy/Downloads/轻运AI需求文档.docx`
+> **源需求**：`/Users/edy/Downloads/福小运需求文档.docx`
 >
 > **修订摘要（按时间倒序）**：
 > - **2026-04-26（深夜）**：P1 骨架按 user 反馈大改 — (1) 砍 docker，B 节走 Supabase Cloud 单一路径（A4 砍 Vercel + GitHub remote，部署完整推到 P3 P2）；(2) 八字 ground truth 推迟，C1/C5 改为 case 1 self-consistency baseline + case 2/3 `it.skip` 占位；(3) 加"执行顺序调整"章节，A→S→C→D→E（27h，零外部账号 / 零 docker）前置到 W1，B/F/G 推到 W2。.env.example 全占位，W1 D1-D5 不需要任何真实 key。Definition of Done 不变。

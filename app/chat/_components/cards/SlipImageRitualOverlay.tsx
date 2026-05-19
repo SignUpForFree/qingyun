@@ -19,7 +19,7 @@ interface SlipImageRitualOverlayProps {
  * - 木纹背景（CSS gradient + repeating-linear-gradient 自画，不下载图）
  * - 顶部「第 N 签 · 等级」书法字红朱
  * - 中央放 PNG 大图（zoom-fit max 90vh）
- * - 左下角红朱印章方框（"轻运" 落款）
+ * - 左下角红朱印章方框（"福小运" 落款）
  * - 右下角 ✕ 关闭
  * - ESC + 点击背景关闭
  *
@@ -103,15 +103,16 @@ export function SlipImageRitualOverlay({
         <div
           aria-hidden
           data-testid="ritual-seal"
-          className="absolute bottom-3 left-3 flex h-12 w-12 flex-col items-center justify-center rounded-md border-2 border-[#a83333]/65"
+          className="absolute bottom-3 left-3 flex h-14 w-12 flex-col items-center justify-center rounded-md border-2 border-[#a83333]/65"
           style={{
             color: "rgba(168,51,51,0.78)",
             fontFamily: "var(--font-serif)",
             lineHeight: 1,
           }}
         >
-          <span className="text-[14px]">轻</span>
-          <span className="text-[14px]">运</span>
+          <span className="text-[12px] leading-none">福</span>
+          <span className="text-[12px] leading-none">小</span>
+          <span className="text-[12px] leading-none">运</span>
         </div>
 
         {/* 关闭按钮 */}

@@ -33,7 +33,7 @@ interface FortuneReadingsBlockProps {
 }
 
 /**
- * "轻运解读" 段：7 维度独立白卡 + 每卡"深入追问 →" 跳 /chat?prefill=
+ * "福小运解读" 段：7 维度独立白卡 + 每卡"深入追问 →" 跳 /chat?prefill=
  */
 export function FortuneReadingsBlock({
   date,
@@ -46,7 +46,7 @@ export function FortuneReadingsBlock({
   return (
     <div className="space-y-3" data-testid="fortune-readings-block">
       <h2 className="px-1 font-[family-name:var(--font-serif)] text-[15px] tracking-ritual2 text-[var(--color-ink-plum)]">
-        轻 运 解 读
+        福 小 运 解 读
       </h2>
       {dims.map((dim) => {
         const v = scores[dim] ?? 60;

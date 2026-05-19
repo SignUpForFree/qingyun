@@ -9,8 +9,8 @@ import type { MetadataRoute } from "next";
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "轻运 AI",
-    short_name: "轻运",
+    name: "福小运",
+    short_name: "福小运",
     description: "AI 占卜与每日运势 · 1 人 5 周 MVP",
     start_url: "/",
     display: "standalone",

@@ -1,4 +1,4 @@
-# 轻运 AI · P3 上线期（W5 + V1.0.5）实现计划
+# 福小运 · P3 上线期（W5 + V1.0.5）实现计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -1120,8 +1120,8 @@ git commit -m "feat(error): 错误页 / 加载页 素笺仙气版"
 
 ```json
 {
-  "name": "轻运 AI",
-  "short_name": "轻运",
+  "name": "福小运",
+  "short_name": "福小运",
   "description": "你的国学陪伴助手",
   "start_url": "/",
   "display": "standalone",
@@ -1138,13 +1138,13 @@ git commit -m "feat(error): 错误页 / 加载页 素笺仙气版"
 
 ```tsx
 export const metadata = {
-  title: "轻运 AI",
+  title: "福小运",
   description: "你的国学陪伴助手",
   manifest: "/manifest.webmanifest",
   themeColor: "#1a1a1a",
   appleWebApp: {
     capable: true,
-    title: "轻运 AI",
+    title: "福小运",
     statusBarStyle: "default",
   },
   icons: {
@@ -1499,7 +1499,7 @@ Vercel 自动 promote main 到 production。
 - [ ] **Step 5: README 顶部加上线徽章**
 
 ```md
-# 轻运 AI · V1.0
+# 福小运 · V1.0
 > 🎉 V1.0 已上线：https://<your-domain>.vercel.app
 ```
 

@@ -14,7 +14,7 @@ const baseProps = {
 
 const MOCK_SECTIONS = [
   { emoji: "💰", label: "财运", shortReading: "正财旺盛，收入稳定。", longReading: "一分耕耘一分收获。" },
-  { emoji: "✨", label: "轻运寄语", shortReading: "守得住财运，福气更长久。", longReading: "" },
+  { emoji: "✨", label: "福小运寄语", shortReading: "守得住财运，福气更长久。", longReading: "" },
 ];
 
 describe("SlipReportCard", () => {
@@ -49,7 +49,7 @@ describe("SlipReportCard", () => {
     render(<SlipReportCard {...baseProps} sections={MOCK_SECTIONS} />);
     expect(screen.getByTestId("slip-sections")).toBeInTheDocument();
     expect(screen.getByText("财运")).toBeInTheDocument();
-    expect(screen.getByText("轻运寄语")).toBeInTheDocument();
+    expect(screen.getByText("福小运寄语")).toBeInTheDocument();
     expect(screen.getByText("正财旺盛，收入稳定。")).toBeInTheDocument();
     expect(screen.getByText("一分耕耘一分收获。")).toBeInTheDocument();
     // 不显示旧的 "AI 解 读" 标签
@@ -109,10 +109,11 @@ describe("SlipReportCard", () => {
     expect(screen.getByText(label)).toBeInTheDocument();
   });
 
-  it("右下角红朱方框印章（落款 轻运）", () => {
+  it("右下角红朱方框印章（落款 福小运）", () => {
     render(<SlipReportCard {...baseProps} />);
     const seal = screen.getByTestId("report-seal");
-    expect(seal).toHaveTextContent("轻");
+    expect(seal).toHaveTextContent("福");
+    expect(seal).toHaveTextContent("小");
     expect(seal).toHaveTextContent("运");
   });
 });

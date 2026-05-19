@@ -70,15 +70,14 @@ export function ChatWindow({
   const inputBusy = stream.streamingText !== null || stream.busy;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      {/* 隐藏内嵌 trigger，左 ☰ 已被 AppHeader right 的 HistoryDrawer 接管。
-          这里只保留受控 open state（M2.X 自动打开 drawer 流程依赖）。 */}
-      <HistoryDrawer
-        currentId={stream.convId ?? undefined}
-        open={drawer.open}
-        onOpenChange={drawer.setOpen}
-        hideTrigger
-      />
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div className="absolute left-4 top-[max(0.75rem,env(safe-area-inset-top))] z-40">
+        <HistoryDrawer
+          currentId={stream.convId ?? undefined}
+          open={drawer.open}
+          onOpenChange={drawer.setOpen}
+        />
+      </div>
       <MessageList
         messages={stream.messages}
         streamingText={stream.streamingText}

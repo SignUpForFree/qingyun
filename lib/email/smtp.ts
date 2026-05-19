@@ -7,7 +7,7 @@ import type { EmailProvider, SendEmailParams, SendEmailResult } from "./provider
  *   1. 安装：pnpm add nodemailer && pnpm add -D @types/nodemailer
  *   2. .env.prod：
  *      EMAIL_PROVIDER=smtp
- *      EMAIL_FROM="轻运 AI <feedback@qingyun-ai.com>"
+ *      EMAIL_FROM="福小运 <feedback@qingyun-ai.com>"
  *      SMTP_HOST=smtp.example.com
  *      SMTP_PORT=465
  *      SMTP_SECURE=1

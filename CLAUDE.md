@@ -1,4 +1,4 @@
-# 轻运 AI（occult） — 工程入口
+# 福小运（occult） — 工程入口
 
 > 给未来 Claude session 看：本仓库的运行/部署/排错的"立刻能用"的关键信息。
 > 详细设计在 `docs/superpowers/specs|plans/`，本文只放上手就用的事实。

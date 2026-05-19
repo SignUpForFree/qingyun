@@ -74,7 +74,7 @@ export function useCardHandlers({
       }
       if (ui === "bazi_focus_picker") {
         if (!convId) {
-          toast.error("会话尚未建立，请先与轻运打个招呼");
+          toast.error("会话尚未建立，请先与福小运打个招呼");
           return;
         }
         const focusMsg = messages.find((m) => m.id === msgId);
@@ -105,7 +105,7 @@ export function useCardHandlers({
       }
       if (ui === "profile_picker") {
         if (!convId) {
-          toast.error("会话尚未建立，请先与轻运打个招呼");
+          toast.error("会话尚未建立，请先与福小运打个招呼");
           return;
         }
         const msg = messages.find((m) => m.id === msgId);
@@ -141,7 +141,7 @@ export function useCardHandlers({
   const handleCardSubmit = React.useCallback<CardSubmitCallback>(
     async (msgId, ui, values) => {
       if (!convId) {
-        toast.error("会话尚未建立，请先与轻运打个招呼");
+        toast.error("会话尚未建立，请先与福小运打个招呼");
         return;
       }
       if (ui === "slip_question_input") {
@@ -215,7 +215,7 @@ export function useCardHandlers({
     async (msgId, ui, action) => {
       if (ui === "slip_image" && action === "explain") {
         if (!convId) {
-          toast.error("会话尚未建立，请先与轻运打个招呼");
+          toast.error("会话尚未建立，请先与福小运打个招呼");
           return;
         }
         await postSubAction("/api/divination/qianwen/explain", "解读", {
@@ -225,7 +225,7 @@ export function useCardHandlers({
       }
       if (ui === "slip_report" && action === "full_explain") {
         if (!convId) {
-          toast.error("会话尚未建立，请先与轻运打个招呼");
+          toast.error("会话尚未建立，请先与福小运打个招呼");
           return;
         }
         // 找到对应的 slip_image 消息 ID
@@ -260,7 +260,7 @@ export function useCardHandlers({
           }
           await saveImageToAlbum(
             meta.imageUrl,
-            `轻运签-${meta.slipNumber ?? "slip"}.png`,
+            `福小运签-${meta.slipNumber ?? "slip"}.png`,
           );
           toast.success("已保存到相册");
         } catch (e) {

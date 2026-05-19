@@ -3,22 +3,22 @@ import { AppHeader } from "@/components/layout";
 import { GlassCard, Sparkle, Divider } from "@/components/su";
 
 /**
- * /about 关于轻运（spec §9 我的页入口）
+ * /about 关于福小运（spec §9 我的页入口）
  *
  * 静态：项目介绍 + 数据声明 + 技术栈
  */
 export const metadata = {
-  title: "关于轻运 · 轻运 AI",
+  title: "关于福小运 · 福小运",
 };
 
 export default function AboutPage() {
   return (
     <>
-      <AppHeader title="关于轻运" />
+      <AppHeader title="关于福小运" />
       <div className="flex flex-1 flex-col gap-4 p-4 pb-safe-bottom">
         <GlassCard className="space-y-3 p-5">
           <h2 className="font-[family-name:var(--font-serif)] text-[18px] tracking-ritual text-[var(--color-ink-plum)]">
-            轻运 AI <Sparkle size={11} variant="diamond" />
+            福小运 <Sparkle size={11} variant="diamond" />
           </h2>
           <p className="text-sm leading-relaxed text-[var(--color-ink-mist)]">
             一个温和的国学陪伴工具：抽签、解梦、八字、梅花易数、每日运势。

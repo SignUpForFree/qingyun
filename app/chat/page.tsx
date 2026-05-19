@@ -1,7 +1,5 @@
 import { and, asc, eq } from "drizzle-orm";
-import { AppHeader } from "@/components/layout";
 import { ChatWindow } from "./_components/ChatWindow";
-import { HistoryDrawer } from "./_components/HistoryDrawer";
 import { ensureUserId } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { conversations, messages, profiles } from "@/lib/db/schema";
@@ -83,10 +81,6 @@ export default async function ChatPage({ searchParams }: PageProps) {
 
   return (
     <>
-      <AppHeader
-        solid
-        left={<HistoryDrawer currentId={resolvedConvId ?? undefined} />}
-      />
       <ChatWindow
         key={resolvedConvId ?? "new"}
         conversationId={resolvedConvId}

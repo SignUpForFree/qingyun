@@ -32,16 +32,16 @@ export function LoginSheet() {
         showCloseButton={false}
         className="rounded-t-[16px] border-t border-[var(--color-accent-lavender)]/30 bg-[var(--color-bg-paper)] p-0"
       >
-        <SheetHeader className="space-y-1 pb-2">
-          <SheetTitle className="text-center font-[family-name:var(--font-serif)] text-[15px] tracking-ritual text-[var(--color-ink-plum)]">
-            欢 迎 回 来
-          </SheetTitle>
-          <SheetDescription className="sr-only">
-            手机号 + 6 位验证码登录
-          </SheetDescription>
+        <SheetHeader className="sr-only">
+          <SheetTitle>登录</SheetTitle>
+          <SheetDescription>手机号 + 6 位验证码登录</SheetDescription>
         </SheetHeader>
-        <div className="px-4 pb-6">
+        <div className="px-5 pb-6 pt-2">
+          <p className="mb-5 text-center font-[family-name:var(--font-serif)] text-[17px] tracking-ritual text-[var(--color-ink-plum)]">
+            欢迎回来
+          </p>
           <PhoneLoginForm
+            layout="compact"
             onSuccess={({ isNew }: { isNew: boolean }) => {
               setOpen(false);
               if (isNew) {

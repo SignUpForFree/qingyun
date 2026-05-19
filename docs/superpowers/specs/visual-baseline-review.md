@@ -28,9 +28,9 @@
 
 ### `/` 首页（未建档态）
 
-- ✓ 中央 GlassCard：标题 "轻运 AI ✦" + 副文 + Divider + 隐私一句话 + "开始建档"渐变 CTA
+- ✓ 中央 GlassCard：标题 "福小运 ✦" + 副文 + Divider + 隐私一句话 + "开始建档"渐变 CTA
 - ✓ 4 个 WatercolorDot 装饰点（lavender / pink / blue 三色，模糊 8px）
-- ✓ AppHeader 顶部 "轻运 AI" serif tracking-ritual2
+- ✓ AppHeader 顶部 "福小运" serif tracking-ritual2
 - ✓ BottomNav 底部 3 tab，"首页"为 active
 - desktop 居中布局留白合理；iPhone 单卡撑满宽度
 
@@ -64,9 +64,9 @@
 
 - ✓ "还 没 有 档 案 ✦" GlassCard + "去建档" CTA
 - ✓ 4 行 MenuList：编辑档案 / 历史记录（启用，链接到 /onboarding 和 /chat）
-  + 吐槽反馈 / 关于轻运（disabled 灰显示 + 标注 "P3 P1 实装" / "占位"）
+  + 吐槽反馈 / 关于福小运（disabled 灰显示 + 标注 "P3 P1 实装" / "占位"）
 - ✓ 行间渐隐 hairline 分隔
-- ✓ 页脚 "轻运 AI · 1 人 5 周 MVP · v0.1" 居中 10px 雾紫
+- ✓ 页脚 "福小运 · 1 人 5 周 MVP · v0.1" 居中 10px 雾紫
 
 ## 已知小调整建议（可选）
 

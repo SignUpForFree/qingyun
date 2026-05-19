@@ -65,7 +65,7 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const to = process.env.FEEDBACK_EMAIL_TO ?? "feedback@qingyun-ai.example";
-  const subject = `[轻运 AI 反馈] ${parsed.data.category}`;
+  const subject = `[福小运 反馈] ${parsed.data.category}`;
   const body = [
     `分类：${parsed.data.category}`,
     `用户：${userId}`,

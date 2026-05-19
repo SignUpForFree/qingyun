@@ -1,4 +1,4 @@
-// 自动生成自 docs 文档章节 3.1.3 (轻运AI需求文档.docx)，请勿手改
+// 自动生成自 docs 文档章节 3.1.3 (福小运需求文档.docx)，请勿手改
 // 重新生成: pnpm tsx scripts/extract-slips.ts && (用 node 转 ts)
 
 export type SlipLevel = "上上" | "上吉" | "吉" | "平" | "渐顺" | "慎行";

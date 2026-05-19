@@ -1,4 +1,4 @@
-# 轻运 AI
+# 福小运
 
 > AI 占卜与每日运势 · 1 人 5 周 Web MVP
 > Next.js 16 + SQLite + Drizzle + DeepSeek + lunar-javascript

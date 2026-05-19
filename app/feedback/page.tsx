@@ -12,7 +12,7 @@ import { FeedbackForm } from "./_FeedbackForm";
  *   - 反馈类型说明 + 体验承诺
  */
 export const metadata = {
-  title: "吐槽反馈 · 轻运 AI",
+  title: "吐槽反馈 · 福小运",
 };
 
 const MAIL = "feedback@qingyun-ai.example";
@@ -27,7 +27,7 @@ export default function FeedbackPage() {
             欢迎讲讲哪不对劲 <Sparkle size={11} variant="diamond" />
           </h2>
           <p className="text-xs leading-relaxed text-[var(--color-ink-fade)]">
-            轻运 AI 是小团队做出来的 MVP，肯定有不少粗糙地方。
+            福小运 是小团队做出来的 MVP，肯定有不少粗糙地方。
             <br />
             写一行也算，吐槽不会丢。
           </p>
@@ -38,7 +38,7 @@ export default function FeedbackPage() {
         <GlassCard className="space-y-3 p-5 text-center">
           <Divider />
           <a
-            href={`mailto:${MAIL}?subject=轻运 AI 反馈`}
+            href={`mailto:${MAIL}?subject=福小运 反馈`}
             className="inline-block rounded-[8px] bg-white/60 px-5 py-2 text-xs tracking-ritual text-[var(--color-ink-plum)] hover:bg-white"
           >
             或直接写邮件 →

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# 轻运 AI · 一键部署到腾讯云 / 任意 Linux VPS
+# 福小运 · 一键部署到腾讯云 / 任意 Linux VPS
 #
 # 用法（在服务器上）：
 #   git clone <repo> && cd occult
@@ -89,7 +89,7 @@ done
 IP="$(hostname -I 2>/dev/null | awk '{print $1}' || echo localhost)"
 echo ""
 log "═══════════════════════════════════════"
-log "  轻运 AI 部署成功！"
+log "  福小运 部署成功！"
 log "═══════════════════════════════════════"
 echo ""
 echo "  本地:   http://localhost:3000"

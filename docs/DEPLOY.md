@@ -188,7 +188,7 @@ ls -la data/                             # 看 SQLite 文件
 
 ## 五、和 coin 项目的差异
 
-| 点 | coin | 轻运 AI |
+| 点 | coin | 福小运 |
 |---|---|---|
 | 端口 | 8000 | 3000 |
 | 镜像 | python:3.11-slim | node:20-alpine |

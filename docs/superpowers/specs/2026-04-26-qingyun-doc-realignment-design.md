@@ -1,6 +1,6 @@
-# 轻运 AI · 文档对齐重构设计（V1.0）
+# 福小运 · 文档对齐重构设计（V1.0）
 
-> **背景**：现有实现与 `轻运AI需求文档(1).docx` 在业务流程和 UI 上有 9 处关键偏差。本文是 W1–W2 阶段的"对齐文档"重构设计，落地后业务流程 100% 符合需求文档章节 1–6（W3+ 处理重要 / 延后项）。
+> **背景**：现有实现与 `福小运需求文档(1).docx` 在业务流程和 UI 上有 9 处关键偏差。本文是 W1–W2 阶段的"对齐文档"重构设计，落地后业务流程 100% 符合需求文档章节 1–6（W3+ 处理重要 / 延后项）。
 >
 > **决策日期**：2026-04-26
 > **范围**：W1–W2 核心 6 项（首页 4 入口 / chat 对话流 / 解梦快慢分支 / 测算对话化 / 八字简化表单 / 维度归一化）
@@ -128,7 +128,7 @@ ALTER TABLE profiles
 文档章节 3.1.3 已经把 100 支签全部列好（签号 / 等级 / 签题 / 签诗 / 6 维度解读）。
 
 操作：
-1. 从 `轻运AI需求文档(1).docx` 提取 100 条数据 → `db/seed/slips-v2.ts`
+1. 从 `福小运需求文档(1).docx` 提取 100 条数据 → `db/seed/slips-v2.ts`
 2. 删除旧 `db/seed/slips.ts`（30 支版）
 3. `pnpm db:reset` 触发 migrate + seed 重建
 
@@ -304,7 +304,7 @@ PATCH /api/conversations/:id   body: { title: string }
 顶: 👤 昵称 ⇌                          →
     （⇌ 切换档案 W5+ 阶段实装，先占位）
 
-    轻运分数  80分
+    福小运分数  80分
     [综合运势] [事业学业] [财运] [感情姻缘] [人际贵人] [平安健康]
        80         80       80       80         80         80
 
@@ -543,7 +543,7 @@ RUN apk add --no-cache cairo cairo-dev pango pango-dev jpeg-dev giflib-dev pixma
 客户端 `<SlipImageCard>` 提供"保存"按钮：
 
 ```tsx
-<a href={`/api/divination/slip-image/${slipNumber}`} download={`轻运灵签-${slipNumber}.png`}>
+<a href={`/api/divination/slip-image/${slipNumber}`} download={`福小运灵签-${slipNumber}.png`}>
   保存
 </a>
 ```
@@ -746,6 +746,6 @@ async function buildPromptMessages(convId: string, userText: string): Promise<Ch
 **Spec 版本**：v1.0
 **作者**：edy + Claude
 **关联文档**：
-- 需求文档：`/Users/edy/Downloads/轻运AI需求文档(1).docx`
+- 需求文档：`/Users/edy/Downloads/福小运需求文档(1).docx`
 - 现有 spec：`docs/superpowers/specs/2026-04-24-qingyun-ai-design.md`
 - 现有 P1 / P2 实施计划（已部分落地）

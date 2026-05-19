@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "用户协议 · 轻运 AI",
-  description: "轻运 AI 用户协议",
+  title: "用户协议 · 福小运",
+  description: "福小运 用户协议",
 };
 
 export const dynamic = "force-static";
@@ -23,7 +23,7 @@ export default function TermsPage() {
 
       <h2 className="mt-6 text-lg font-medium">1. 服务说明</h2>
       <p>
-        轻运 AI（以下简称「本服务」）是一款基于传统命理文化与 AI 技术的国学陪伴应用，提供运势查询、抽签、解梦、八字解读、梅花易数等功能。本服务面向有兴趣了解传统命理文化的用户。
+        福小运（以下简称「本服务」）是一款基于传统命理文化与 AI 技术的国学陪伴应用，提供运势查询、抽签、解梦、八字解读、梅花易数等功能。本服务面向有兴趣了解传统命理文化的用户。
       </p>
 
       <h2 className="mt-6 text-lg font-medium">2. 用户资格</h2>

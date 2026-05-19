@@ -10,7 +10,7 @@ interface DimensionBars7VerticalProps {
 }
 
 /**
- * 7 维垂直柱图（参考"轻运阁"风格），与 FortuneSummaryCard 共用。
+ * 7 维垂直柱图（参考"福小运"风格），与 FortuneSummaryCard 共用。
  * 列内：柱 → label → 数字
  */
 export function DimensionBars7Vertical({

@@ -1,4 +1,4 @@
-# 轻运 AI · 全局设计提示词包
+# 福小运 · 全局设计提示词包
 
 > **设计语言**：素笺仙气（Su Jian Xian Qi · Fairy-Misty Paper）
 > **日期**：2026-04-24
@@ -93,7 +93,7 @@ CONSTRAINTS:
 ```
 PROMPT — Home Page
 
-Mobile-first 390x844 screenshot. App named 轻运 AI (Qingyun AI, Chinese divination 
+Mobile-first 390x844 screenshot. App named 福小运 (Qingyun AI, Chinese divination 
 app for young women). Follows design language: 素笺仙气 — 3-radial fairy mist 
 background (cherry pink top-left, lavender top-right, misty blue bottom), warm 
 white base.
@@ -249,7 +249,7 @@ LAYOUT:
   rounded 18px (small left corner 4px for chat-tail feel), padding 14×12,
   shadow 0 4px 20px rgba(200,170,220,0.15)
   Text in Noto Serif SC 14px plum #4A3D5C, 2 lines:
-  "清晨好，我是轻运 · ✧"
+  "清晨好，我是福小运 · ✧"
   "今天想让我为你做什么？"
 
 [QUICK ACTIONS · 2x3 grid, 6 cards]
@@ -572,7 +572,7 @@ Rows:
 · 编 辑 档 案     · 出生信息 / 头像 / 昵称
 · 历 史 记 录     · 过往占卜与对话
 · 吐 槽 反 馈     · 告诉我们想法
-· 关 于 轻 运     · 版本 / 免责声明
+· 关 于 福 小 运     · 版本 / 免责声明
 
 [FOOTER · tiny]
 - Version number + "诚心者得吉兆" tagline in tiny sans 10px muted

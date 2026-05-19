@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# restore-db.sh — 轻运 AI · 从 backup 恢复 SQLite
+# restore-db.sh — 福小运 · 从 backup 恢复 SQLite
 #
 # 用法：
 #   bash scripts/restore-db.sh /home/ubuntu/qingyun-backup/qingyun-20260507-001500.db.gz

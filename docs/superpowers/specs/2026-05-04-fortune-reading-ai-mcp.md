@@ -11,7 +11,7 @@
 
 ## 1. 业务算法实现盘点（vs 原始设计文档）
 
-> 设计来源：`产品设计以及需求管理/八字解读规则逻辑.pdf`、`梅花易数算法.pdf`、`轻运AI需求文档.pdf`；
+> 设计来源：`产品设计以及需求管理/八字解读规则逻辑.pdf`、`梅花易数算法.pdf`、`福小运需求文档.pdf`；
 > 与 `docs/superpowers/specs/2026-04-24-qingyun-ai-design.md` §5 算法约定对齐。
 
 ### 1.1 八字（lib/bazi/）
@@ -81,11 +81,11 @@ MCP 是 Anthropic 推出的开放标准，让 LLM 能调用外部工具 / 数据
 - Claude Desktop / Cursor / Cline / Continue 等客户端原生支持
 - 服务端用 `@modelcontextprotocol/sdk` 实现 server，暴露 tools / resources / prompts
 
-### 2.2 在轻运 AI 上「能用 MCP」的两种姿势
+### 2.2 在福小运 上「能用 MCP」的两种姿势
 
 #### 姿势 A：把 lib/bazi、lib/divination 暴露为 MCP server，让外部 LLM 能调
 
-**场景**：用户在 Claude Desktop / Cursor 直接 "@轻运 帮我看下 1990-01-01 12:00 出生的命盘"。
+**场景**：用户在 Claude Desktop / Cursor 直接 "@福小运 帮我看下 1990-01-01 12:00 出生的命盘"。
 
 **实现**：
 - 新建 `mcp-server/` 目录用 `@modelcontextprotocol/sdk`
@@ -118,7 +118,7 @@ MCP 是 Anthropic 推出的开放标准，让 LLM 能调用外部工具 / 数据
 |---|---|---|
 | **Beta 1k DAU 内** | ❌ 不上 MCP | 复杂度高、延迟高、DeepSeek 生态非原生支持。当前 API route 直调 lib 已经稳 |
 | **DAU 1k+ 后** | 🤔 视场景考虑 OpenAI tools | 若做 chat 自由对话场景，让 DeepSeek 自主调用八字 / 梅花工具。**仍走 OpenAI function calling，不上 MCP**（生态成熟、工具 schema 简单） |
-| **DAU 5k+ + 开放平台** | ✅ 可上 MCP | 若做开放 API / 让其他 LLM 客户端集成"轻运算命能力"，把 lib 暴露成 MCP server 是合理路径 |
+| **DAU 5k+ + 开放平台** | ✅ 可上 MCP | 若做开放 API / 让其他 LLM 客户端集成"福小运算命能力"，把 lib 暴露成 MCP server 是合理路径 |
 
 ### 2.5 现在能立刻做的小步骤（不上 MCP）
 

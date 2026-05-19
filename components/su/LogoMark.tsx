@@ -6,14 +6,14 @@ interface LogoMarkProps {
 }
 
 /**
- * 轻运 AI logo（design prompts §1 home header 第 104 行）
+ * 福小运 logo（design prompts §1 home header 第 104 行）
  *
  * 圆环描边 + 中心 ✦，淡紫 #C9A1D9，零外部资源（纯 SVG）。
  */
 export function LogoMark({ size = 28, className }: LogoMarkProps) {
   return (
     <svg
-      aria-label="轻运"
+      aria-label="福小运"
       role="img"
       width={size}
       height={size}

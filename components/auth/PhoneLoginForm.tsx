@@ -3,10 +3,11 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { GlassCard, Sparkle } from "@/components/su";
-import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 const PHONE_RE = /^1[3-9]\d{9}$/;
+
+type PhoneLoginFormLayout = "compact" | "fullscreen";
 
 interface PhoneLoginFormProps {
   /** 登录后跳转目标（onSuccess 未传时用，默认 "/"） */
@@ -16,20 +17,28 @@ interface PhoneLoginFormProps {
    * 调用方负责关 Sheet + router.refresh()
    */
   onSuccess?: (info: { isNew: boolean }) => void;
+  /** fullscreen：全屏页；compact：底部 Sheet */
+  layout?: PhoneLoginFormLayout;
+  className?: string;
 }
 
 /**
  * PhoneLoginForm — 手机号 + 6 位 OTP 登录表单
- *
- * 用作 LoginGate / LoginSheet 内容；登录前组件，不需要 cookie。
  */
-export function PhoneLoginForm({ redirectTo, onSuccess }: PhoneLoginFormProps) {
+export function PhoneLoginForm({
+  redirectTo,
+  onSuccess,
+  layout = "compact",
+  className,
+}: PhoneLoginFormProps) {
   const router = useRouter();
   const [phone, setPhone] = React.useState("");
   const [code, setCode] = React.useState("");
   const [sending, setSending] = React.useState(false);
   const [verifying, setVerifying] = React.useState(false);
   const [cooldown, setCooldown] = React.useState(0);
+
+  const isFullscreen = layout === "fullscreen";
 
   React.useEffect(() => {
     if (cooldown <= 0) return;
@@ -118,84 +127,145 @@ export function PhoneLoginForm({ redirectTo, onSuccess }: PhoneLoginFormProps) {
     }
   }
 
-  return (
-    <GlassCard className="w-full max-w-md space-y-4 p-5" shadow="none">
-      <header className="flex items-center justify-center gap-2">
-        <Sparkle size={9} variant="asterisk" />
-        <h2 className="font-[family-name:var(--font-serif)] text-[14px] tracking-ritual2 text-[var(--color-ink-plum)]">
-          手 机 号 登 录
-        </h2>
-        <Sparkle size={9} variant="asterisk" />
-      </header>
+  const inputClass = cn(
+    "w-full min-w-0 bg-transparent outline-none focus-visible:ring-0",
+    isFullscreen
+      ? "h-11 font-[family-name:var(--font-serif)] text-[17px] tracking-wide text-[var(--color-ink-plum)] placeholder:text-[14px] placeholder:font-normal placeholder:text-[var(--color-ink-ghost)]"
+      : "h-9 rounded-lg border border-input px-3 text-base placeholder:text-muted-foreground md:text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+  );
 
+  const labelClass = cn(
+    "font-[family-name:var(--font-serif)] text-[var(--color-ink-plum)]",
+    isFullscreen ? "text-[16px] font-semibold tracking-ritual" : "text-xs text-[var(--color-ink-fade)]",
+  );
+
+  const otpBtnClass = cn(
+    "shrink-0 whitespace-nowrap transition-opacity disabled:opacity-40",
+    isFullscreen
+      ? "text-[15px] font-semibold text-[var(--color-accent-plum)]"
+      : "h-9 rounded-lg border border-[var(--color-accent-lavender)]/40 bg-white px-3 text-[11px] text-[var(--color-ink-plum)]",
+  );
+
+  const fieldBorder = isFullscreen
+    ? "border-b border-[var(--color-accent-lavender)]/35 pb-1"
+    : "";
+
+  return (
+    <div className={className}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
           void login();
         }}
         data-testid="phone-login-form"
+        className={cn(isFullscreen ? "space-y-6" : "space-y-4")}
       >
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="phone-input" className="text-xs text-[var(--color-ink-fade)]">
-              手机号（中国大陆 +86）
-            </Label>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-[var(--color-ink-mist)]">+86</span>
+        <div className={cn(isFullscreen ? "space-y-6" : "space-y-4")}>
+          <div className="space-y-2.5">
+            <label htmlFor="phone-input" className={labelClass}>
+              {isFullscreen ? "手机号" : "手机号（中国大陆 +86）"}
+            </label>
+            <div className={cn("flex items-center gap-2", fieldBorder)}>
+              <span
+                className={cn(
+                  "shrink-0 text-[var(--color-ink-mist)]",
+                  isFullscreen ? "font-[family-name:var(--font-serif)] text-[17px]" : "text-xs",
+                )}
+              >
+                +86
+              </span>
               <input
                 id="phone-input"
                 inputMode="numeric"
                 maxLength={11}
-                placeholder="请输入手机号"
+                placeholder={isFullscreen ? "请输入11位手机号" : "请输入手机号"}
                 value={phone}
                 onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
                 data-testid="login-phone-input"
-                className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm"
+                autoComplete="tel-national"
+                className={inputClass}
               />
+              {isFullscreen ? (
+                <button
+                  type="button"
+                  disabled={!phoneValid || sending || cooldown > 0}
+                  onClick={sendOtp}
+                  data-testid="login-send-otp"
+                  className={otpBtnClass}
+                >
+                  {cooldown > 0 ? `${cooldown}s` : sending ? "发送中…" : "获取验证码"}
+                </button>
+              ) : null}
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="phone-code" className="text-xs text-[var(--color-ink-fade)]">
-              验证码（6 位）
-            </Label>
-            <div className="flex items-center gap-2">
+          <div className="space-y-2.5">
+            {!isFullscreen ? (
+              <div className="flex items-end justify-between gap-3">
+                <label htmlFor="phone-code" className={labelClass}>
+                  验证码（6 位）
+                </label>
+                <button
+                  type="button"
+                  disabled={!phoneValid || sending || cooldown > 0}
+                  onClick={sendOtp}
+                  data-testid="login-send-otp"
+                  className={otpBtnClass}
+                >
+                  {cooldown > 0 ? `${cooldown}s 后重发` : sending ? "发送中…" : "获取验证码"}
+                </button>
+              </div>
+            ) : (
+              <label htmlFor="phone-code" className={labelClass}>
+                验证码
+              </label>
+            )}
+            <div className={fieldBorder}>
               <input
                 id="phone-code"
                 inputMode="numeric"
                 maxLength={6}
-                placeholder="6 位数字"
+                placeholder={isFullscreen ? "请输入6位验证码" : "6 位数字"}
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
                 data-testid="login-code-input"
-                className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm"
+                autoComplete="one-time-code"
+                className={inputClass}
               />
-              <button
-                type="button"
-                disabled={!phoneValid || sending || cooldown > 0}
-                onClick={sendOtp}
-                className="h-10 shrink-0 rounded-lg border border-[var(--color-accent-lavender)]/40 bg-white px-3 text-[11px] text-[var(--color-ink-plum)] disabled:opacity-50"
-                data-testid="login-send-otp"
-              >
-                {cooldown > 0 ? `${cooldown}s` : sending ? "发送中…" : "发送验证码"}
-              </button>
             </div>
           </div>
+        </div>
 
+        <div
+          className={cn(
+            "space-y-4",
+            isFullscreen && "pt-6",
+          )}
+        >
           <button
             type="submit"
             disabled={!phoneValid || !codeValid || verifying}
-            className="h-12 w-full rounded-[14px] bg-gradient-to-r from-[#F0B8C8] to-[#C9A1D9] font-[family-name:var(--font-serif)] text-[15px] font-bold tracking-ritual text-white shadow-pill hover:opacity-90 disabled:opacity-50"
+            className={cn(
+              "w-full font-[family-name:var(--font-serif)] font-bold tracking-ritual text-white transition-all",
+              "bg-gradient-to-r from-[#F0B8C8] to-[#C9A1D9] shadow-pill hover:opacity-90 active:scale-[0.99]",
+              "disabled:cursor-not-allowed disabled:opacity-45",
+              isFullscreen ? "h-14 rounded-full text-[16px]" : "h-12 rounded-[14px] text-[15px]",
+            )}
             data-testid="login-submit"
           >
-            {verifying ? "登录中…" : "登 录"}
+            {verifying ? "登录中…" : "登录"}
           </button>
 
-          <p className="text-center text-[10px] leading-relaxed text-[var(--color-ink-fade)]">
-            手机号仅用于账号识别 · 不会用于营销 · 不会展示给其他用户
+          <p
+            className={cn(
+              "text-center leading-relaxed text-[var(--color-ink-fade)]",
+              isFullscreen ? "text-[11px]" : "text-[10px]",
+            )}
+          >
+            手机号仅用于账号识别，不用于营销，不展示给其他用户
           </p>
         </div>
       </form>
-    </GlassCard>
+    </div>
   );
 }

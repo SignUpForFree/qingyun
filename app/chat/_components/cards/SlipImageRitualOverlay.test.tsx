@@ -158,7 +158,7 @@ describe("SlipImageRitualOverlay (M4.22)", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("红朱方框印章渲染 — 落款 轻运", () => {
+  it("红朱方框印章渲染 — 落款 福小运", () => {
     render(
       <SlipImageRitualOverlay
         open
@@ -171,7 +171,8 @@ describe("SlipImageRitualOverlay (M4.22)", () => {
       />,
     );
     const seal = screen.getByTestId("ritual-seal");
-    expect(seal).toHaveTextContent("轻");
+    expect(seal).toHaveTextContent("福");
+    expect(seal).toHaveTextContent("小");
     expect(seal).toHaveTextContent("运");
   });
 });

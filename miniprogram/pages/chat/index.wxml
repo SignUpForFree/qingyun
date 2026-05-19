@@ -9,7 +9,7 @@
     <input
       style="flex: 1; height: 80rpx; padding: 0 16rpx; background: #fff; border-radius: 12rpx;"
       value="{{input}}"
-      placeholder="跟轻运 AI 聊聊..."
+      placeholder="跟福小运 聊聊..."
       bindinput="onInput"
     />
     <button class="btn" bindtap="send" disabled="{{sending}}">发送</button>

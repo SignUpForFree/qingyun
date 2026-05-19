@@ -1,4 +1,4 @@
-# 轻运 AI · 架构与演进路线（Beta → 稳定 Agent → 高并发 → 多业务复用）
+# 福小运 · 架构与演进路线（Beta → 稳定 Agent → 高并发 → 多业务复用）
 
 > 起草时间：2026-05-04
 > 目标读者：未来的我 / 共同维护者 / 接手做小程序前端 & 业务扩展的开发
@@ -531,7 +531,7 @@ DeepSeek v4 Pro 原生支持 OpenAI Function Calling，`@ai-sdk/openai-compatibl
    ┌────────────────────────┼────────────────────────┐
    ▼                        ▼                        ▼
 ┌──────────┐         ┌──────────┐            ┌──────────┐
-│ 轻运 AI   │         │ 法律咨询  │            │ 医疗问诊 │
+│ 福小运   │         │ 法律咨询  │            │ 医疗问诊 │
 │ (玄学)    │         │           │            │          │
 │ - 八字    │         │ - 法条 RAG│            │ - 病症 RAG│
 │ - 梅花    │         │ - 案例库   │            │ - 药品库  │
@@ -565,7 +565,7 @@ export interface IntentPlugin {
   postprocess?: (text: string, meta: unknown) => Promise<{ cleaned: string }>;
 }
 
-// 业务侧（轻运 AI）注册
+// 业务侧（福小运）注册
 registerIntent({
   name: "bazi",
   keywords: ["八字","排盘","命盘","日主"],

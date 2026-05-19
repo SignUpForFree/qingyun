@@ -44,12 +44,12 @@ describe("AppHeader (M4.8)", () => {
   });
 
   it("no slot → 标题独占；不抛错", () => {
-    render(<AppHeader title="轻运 AI" />);
-    expect(screen.getByText("轻运 AI")).toBeInTheDocument();
+    render(<AppHeader title="福小运" />);
+    expect(screen.getByText("福小运")).toBeInTheDocument();
   });
 
   it("title 接受 ReactNode（含 Sparkle 等）", () => {
-    render(<AppHeader title={<span data-testid="rich">轻运 ✨</span>} />);
+    render(<AppHeader title={<span data-testid="rich">福小运 ✨</span>} />);
     expect(screen.getByTestId("rich")).toBeInTheDocument();
   });
 });

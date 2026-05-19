@@ -57,17 +57,17 @@ interface EmptyLauncherProps {
 export function EmptyLauncher({ onPick, busy }: EmptyLauncherProps) {
   return (
     <div
-      className="mx-auto w-full max-w-md space-y-4 px-4 pt-6"
+      className="mx-auto w-full max-w-md space-y-4 px-4 pt-14"
       data-testid="chat-empty-launcher"
     >
       <div className="flex justify-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/images/ai-avatar.png" alt="轻运 AI" className="h-24 w-24" />
+        <img src="/images/ai-avatar.png" alt="福小运" className="h-24 w-24" />
       </div>
 
       <div className="text-center">
         <p className="font-[family-name:var(--font-serif)] text-[16px] font-medium tracking-ritual text-[var(--color-ink-plum)]">
-          嗨！我是轻运AI，可以基于国学知识理论为您提供日常决策、运势、财富、情感、命理分析、解梦等服务，请问有什么可以帮您？ <Sparkle size={10} />
+          嗨！我是福小运，可以基于国学知识理论为您提供日常决策、运势、财富、情感、命理分析、解梦等服务，请问有什么可以帮您？ <Sparkle size={10} />
         </p>
       </div>
 

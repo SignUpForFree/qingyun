@@ -82,7 +82,7 @@ export function HistoryDrawer({ currentId, open: controlledOpen, onOpenChange, h
       {!hideTrigger && (
         <SheetTrigger
           aria-label="历史会话"
-          className="text-[var(--color-ink-mist)] hover:text-[var(--color-ink-plum)]"
+          className="flex h-10 w-10 items-center justify-center rounded-full text-[var(--color-ink-plum)] transition-colors hover:bg-white/50 active:bg-white/70"
         >
           <Menu className="h-5 w-5" />
         </SheetTrigger>

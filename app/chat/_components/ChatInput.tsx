@@ -51,7 +51,11 @@ export function ChatInput({
   // 语音录制状态
   const [isRecording, setIsRecording] = React.useState(false);
   const [interimText, setInterimText] = React.useState("");
-  const hasSpeechSupport = isSpeechRecognitionSupported();
+  // 仅在客户端 mount 后检测，避免 SSR 无 window → false、浏览器 → true 导致 hydration mismatch
+  const [hasSpeechSupport, setHasSpeechSupport] = React.useState(false);
+  React.useEffect(() => {
+    setHasSpeechSupport(isSpeechRecognitionSupported());
+  }, []);
 
   // 简易自适应高度
   React.useEffect(() => {

@@ -10,15 +10,15 @@ import type { SlipLevel } from "@/lib/divination/slip-level";
  *   3. user prompt：签号 + 签名 + 4 句签诗 + category + 静态解签词参考
  *
  * V1.0 emoji 标签格式：
- *   📊 综合运势 / 💼 事业学业 / 💰 财运 / ❤ 感情姻缘 / 🤝 人际贵人 / 🍵 平安健康 / ✨ 轻运寄语
+ *   📊 综合运势 / 💼 事业学业 / 💰 财运 / ❤ 感情姻缘 / 🤝 人际贵人 / 🍵 平安健康 / ✨ 福小运寄语
  *
  * isFullInterpret：
  *   true  → 生成全部 7 块
- *   false → 只生成 category 对应的 1 块 + ✨ 轻运寄语
+ *   false → 只生成 category 对应的 1 块 + ✨ 福小运寄语
  */
 
 const SYSTEM_BASE = [
-  "你是轻运 AI 的资深解签师，坚持温和具体、不空泛、不武断的风格。",
+  "你是福小运的资深解签师，坚持温和具体、不空泛、不武断的风格。",
   "禁用 Markdown 标题（# / ## / ###）和加粗符号（** / __）；段落直接换行，不要带任何标签前缀。",
   "禁词：大凶 / 倒霉 / 厄运 / 命中注定 / 注定 / 必然 / 慎行 / 凶险。",
   "负面信号一律转柔和说法（先慢一步、沉住气、宜稳、留白多一些、不必急）。",
@@ -40,7 +40,7 @@ const DIM_SECTIONS = [
   { emoji: "🍵", label: "平安健康", key: "health" },
 ] as const;
 
-const CLOSING_SECTION = { emoji: "✨", label: "轻运寄语", key: "closing" } as const;
+const CLOSING_SECTION = { emoji: "✨", label: "福小运寄语", key: "closing" } as const;
 
 /** category 到 section key 的映射 */
 const CATEGORY_TO_KEY: Record<string, string> = {
@@ -71,7 +71,7 @@ export interface BuildSlipPromptArgs {
   reading: string;
   /** 用户具体问题（可选） */
   userQuestion?: string;
-  /** true = 生成全部 7 块；false = 只生成 category 对应的 1 块 + ✨ 轻运寄语 */
+  /** true = 生成全部 7 块；false = 只生成 category 对应的 1 块 + ✨ 福小运寄语 */
   isFullInterpret?: boolean;
 }
 
@@ -94,7 +94,7 @@ export function buildSlipPrompt(args: BuildSlipPromptArgs): BuildSlipPromptResul
     systemPrompt += `\n\n请生成全部 7 块解读：${sectionList}。`;
     systemPrompt += `\n字数：700-1000 字。`;
   } else {
-    // 部分解读：只生成 category 对应的 1 块 + ✨ 轻运寄语
+    // 部分解读：只生成 category 对应的 1 块 + ✨ 福小运寄语
     const catKey = CATEGORY_TO_KEY[args.category] ?? "overall";
     const targetDim = DIM_SECTIONS.find((d) => d.key === catKey) ?? DIM_SECTIONS[0];
     systemPrompt += `\n\n只生成 2 块解读：${targetDim.emoji} ${targetDim.label} / ${CLOSING_SECTION.emoji} ${CLOSING_SECTION.label}。`;
@@ -116,7 +116,7 @@ export function buildSlipPrompt(args: BuildSlipPromptArgs): BuildSlipPromptResul
   if (isFull) {
     lines.push("", "请按 7 块 emoji 标签结构生成完整解读。");
   } else {
-    lines.push("", `请只生成「${args.category}」对应的解读 + ✨ 轻运寄语。`);
+    lines.push("", `请只生成「${args.category}」对应的解读 + ✨ 福小运寄语。`);
   }
 
   return {

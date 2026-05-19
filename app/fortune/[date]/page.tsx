@@ -22,9 +22,9 @@ import {
 import { parseFortuneScope } from "@/lib/fortune/fortune-scope";
 
 /**
- * /fortune/[date] — 参考"轻运阁"运势详情：
+ * /fortune/[date] — 参考"福小运"运势详情：
  *   ← 运势详情 / 头像+昵称+日周月切换 / 7 天 strip / 大字分数 / 7 维垂直柱 /
- *   narrative / 8 lucky / 顶级深入追问 / 轻运解读 + 7 块（每块独立追问）
+ *   narrative / 8 lucky / 顶级深入追问 / 福小运解读 + 7 块（每块独立追问）
  */
 export const dynamic = "force-dynamic";
 
@@ -97,7 +97,7 @@ export default async function FortuneDetailPage({
           )}
           <div className="text-center">
             <p className="font-[family-name:var(--font-serif)] text-[14px] tracking-ritual2 text-[var(--color-ink-fade)]">
-              {fortune.scope === "day" ? "轻 运 分 数" : fortune.scope === "week" ? "本 周 均 分" : "本 月 均 分"}{" "}
+              {fortune.scope === "day" ? "福 小 运 分 数" : fortune.scope === "week" ? "本 周 均 分" : "本 月 均 分"}{" "}
               <span className="num-mono ml-1 text-[22px] font-semibold text-[var(--color-ink-plum)]">
                 {fortune.overall}
               </span>

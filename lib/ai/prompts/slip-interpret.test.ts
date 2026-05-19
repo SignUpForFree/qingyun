@@ -55,7 +55,7 @@ describe("buildSlipPrompt", () => {
     expect(shenXing.systemPrompt).toContain("善意提醒");
   });
 
-  it("isFullInterpret=false → 只生成 category 对应的 1 块 + ✨ 轻运寄语", () => {
+  it("isFullInterpret=false → 只生成 category 对应的 1 块 + ✨ 福小运寄语", () => {
     const r = buildSlipPrompt({
       slipNumber: 1,
       level: "上上",
@@ -67,7 +67,7 @@ describe("buildSlipPrompt", () => {
     });
     expect(r.systemPrompt).toContain("只生成 2 块");
     expect(r.systemPrompt).toContain("💰 财运");
-    expect(r.systemPrompt).toContain("✨ 轻运寄语");
+    expect(r.systemPrompt).toContain("✨ 福小运寄语");
     expect(r.systemPrompt).toContain("200-350");
   });
 
@@ -88,7 +88,7 @@ describe("buildSlipPrompt", () => {
     expect(r.systemPrompt).toContain("❤ 感情姻缘");
     expect(r.systemPrompt).toContain("🤝 人际贵人");
     expect(r.systemPrompt).toContain("🍵 平安健康");
-    expect(r.systemPrompt).toContain("✨ 轻运寄语");
+    expect(r.systemPrompt).toContain("✨ 福小运寄语");
     expect(r.systemPrompt).toContain("700-1000");
   });
 
@@ -170,7 +170,7 @@ describe("extractSlipSections", () => {
       "",
       "适合做一些放松的事，好好滋养自己，让身心都得到休息。",
       "",
-      "✨ 轻运寄语",
+      "✨ 福小运寄语",
       "心定福自来，从容行万里。",
     ].join("\n");
 
@@ -180,7 +180,7 @@ describe("extractSlipSections", () => {
     expect(sections[0].shortReading).toContain("整体运势极佳");
     expect(sections[0].longReading).toContain("温柔的底气");
     expect(sections[1].label).toBe("事业学业");
-    expect(sections[6].label).toBe("轻运寄语");
+    expect(sections[6].label).toBe("福小运寄语");
     expect(sections[6].shortReading).toContain("心定福自来");
   });
 
@@ -191,14 +191,14 @@ describe("extractSlipSections", () => {
       "",
       "一分耕耘一分收获，踏实做好本职工作，财富自然会来。",
       "",
-      "✨ 轻运寄语",
+      "✨ 福小运寄语",
       "守得住财运，福气更长久。",
     ].join("\n");
 
     const sections = extractSlipSections(text);
     expect(sections.length).toBe(2);
     expect(sections[0].label).toBe("财运");
-    expect(sections[1].label).toBe("轻运寄语");
+    expect(sections[1].label).toBe("福小运寄语");
   });
 
   it("无 emoji 标签 → fallback 整段作为综合运势", () => {

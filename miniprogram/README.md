@@ -1,4 +1,4 @@
-# `miniprogram/` — 轻运 AI 微信小程序前端骨架
+# `miniprogram/` — 福小运 微信小程序前端骨架
 
 > 这是**最小骨架**，让小程序能登录到本仓库 `app/api/auth/wechat-mini` 并打通到 H5 后端 API。完整 chat 流式 / 八字 / 梅花 UI 等正在迁移中。
 

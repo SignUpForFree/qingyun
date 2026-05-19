@@ -17,7 +17,7 @@ import {
 import { getLunarToday } from "@/lib/util/lunar-date";
 
 /**
- * 首页 — 参考"轻运阁"三卡式：FortuneSummaryCard / LuckyAttrsCard / LauncherStack
+ * 首页 — 参考"福小运"三卡式：FortuneSummaryCard / LuckyAttrsCard / LauncherStack
  *
  * 4 种页面状态：
  *   1. 未认证 → middleware 已经把它跳到 /api/auth/wechat；这里 try/catch 兜底
@@ -33,7 +33,7 @@ export default async function HomePage() {
     userId = await requireUserId();
   } catch (e: unknown) {
     if (e instanceof UnauthenticatedError) {
-      return <LoginGate showButton />;
+      return <LoginGate />;
     }
     throw e;
   }
