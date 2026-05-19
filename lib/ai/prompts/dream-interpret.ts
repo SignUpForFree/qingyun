@@ -68,6 +68,8 @@ export interface BuildDreamPromptArgs {
   emotion?: string;
   reality?: string;
   special?: string;
+  /** 用户八字信息（需求要求"结合生辰八字"） */
+  baziHint?: string;
 }
 
 export interface BuildDreamPromptResult {
@@ -76,10 +78,12 @@ export interface BuildDreamPromptResult {
 }
 
 export function buildDreamPrompt(args: BuildDreamPromptArgs): BuildDreamPromptResult {
+  const baziSection = args.baziHint ? `\n\n用户生辰八字信息：${args.baziHint}\n请结合八字五行做更贴合个人的解读。` : "";
+
   if (args.mode === "fast") {
     return {
       systemPrompt: SYSTEM_PROMPT_FAST,
-      userPrompt: `用户的梦：${args.dream}\n\n请给一段简短温柔的解读。`,
+      userPrompt: `用户的梦：${args.dream}${baziSection}\n\n请给一段简短温柔的解读。`,
     };
   }
 
@@ -90,6 +94,7 @@ export function buildDreamPrompt(args: BuildDreamPromptArgs): BuildDreamPromptRe
   ];
   if (args.reality) lines.push(`现实关联：${args.reality}`);
   if (args.special) lines.push(`特殊符号：${args.special}`);
+  if (args.baziHint) lines.push(``, `用户生辰八字信息：${args.baziHint}`, `请结合八字五行做更贴合个人的解读。`);
   lines.push("", "请按 [🌙 → 🔮 → 📜 → 💡 → 💌 → 🌷] 6 段结构生成完整解读。");
 
   return {

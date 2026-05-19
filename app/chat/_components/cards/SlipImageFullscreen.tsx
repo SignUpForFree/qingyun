@@ -86,10 +86,11 @@ export function SlipImageFullscreen({
       ) : (
         <div
           className={cn(
-            "rounded-[12px] px-4 py-5 text-center",
+            "rounded-[12px] px-4 py-5 text-center space-y-3",
             "bg-gradient-to-br from-[#F0B8C8]/40 to-[#C9A1D9]/40",
           )}
         >
+          <p className="text-[12px] text-[var(--color-ink-fade)]">签文加载失败，请重试</p>
           {poemLines.map((line, i) => (
             <p
               key={i}
@@ -98,6 +99,13 @@ export function SlipImageFullscreen({
               {line}
             </p>
           ))}
+          <button
+            type="button"
+            onClick={() => setImgError(false)}
+            className="text-[11px] text-[var(--color-accent-plum)] underline"
+          >
+            重新加载
+          </button>
         </div>
       )}
 

@@ -52,13 +52,13 @@ describe("MessageBubble (M2.14 — 22 ui dispatch)", () => {
     expect(screen.getByText("AI 卡了一下")).toBeInTheDocument();
   });
 
-  it("slip_drawing → status '摇签中…'", () => {
+  it("slip_drawing → ShakeSlipAnim 动画卡", () => {
     render(
       <MessageBubble
         message={assistantMsg({ ui: "slip_drawing", durationMs: 99999 })}
       />,
     );
-    expect(screen.getByText("摇签中…")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeInTheDocument();
   });
 
   // ============ pickers ============
@@ -121,19 +121,19 @@ describe("MessageBubble (M2.14 — 22 ui dispatch)", () => {
 
   // ============ forms ============
 
-  it("dream_precise_form → FormCard with default title", () => {
+  it("dream_precise_form → DreamPreciseFormCard with trigger button", () => {
     render(<MessageBubble message={assistantMsg({ ui: "dream_precise_form" })} />);
-    expect(screen.getByText("补充梦境信息")).toBeInTheDocument();
+    expect(screen.getByText("填写梦境详情（精准解读）")).toBeInTheDocument();
   });
 
-  it("dream_precise_form → FormCard shows assistant intro from content", () => {
+  it("dream_precise_form → DreamPreciseFormCard shows intro text from content", () => {
     render(
       <MessageBubble
         message={assistantMsg({ ui: "dream_precise_form" }, "第一段说明\n第二行")}
       />,
     );
-    const title = screen.getByText(/^第一段说明/);
-    expect(title.textContent).toContain("第二行");
+    const intro = screen.getByText(/第一段说明/);
+    expect(intro.textContent).toContain("第二行");
   });
 
   it("bazi_quick_form → FormCard with 八字 title", () => {

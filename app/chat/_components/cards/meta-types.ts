@@ -115,6 +115,7 @@ export interface MeihuaResultMeta {
   tiYong: { ti: string; yong: string; relation: string };
   yingQi: { speed: "fast" | "medium" | "slow"; timeHint: string; branchHour: string | null };
   verdict: string;
+  aiText?: string;
 }
 
 export function parseMeta(raw: string | null | undefined): MetaUi | null {

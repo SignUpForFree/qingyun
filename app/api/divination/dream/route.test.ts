@@ -265,7 +265,7 @@ describe("POST /api/divination/dream — error paths", () => {
       new Request("http://test", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ conversationId: "c1", mode: "fast", dream: "x" }),
+        body: JSON.stringify({ conversationId: "c1", mode: "fast", dream: "做梦了" }),
       }),
     );
     expect(r.status).toBe(200);

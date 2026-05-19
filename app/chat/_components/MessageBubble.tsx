@@ -6,6 +6,7 @@ import { SlipImageFullscreen } from "./cards/SlipImageFullscreen";
 import { SlipReportCard } from "./cards/SlipReportCard";
 import { BaziResultCard } from "./cards/BaziResultCard";
 import { DreamResultCard } from "./cards/DreamResultCard";
+import { DreamPreciseFormCard } from "./cards/DreamPreciseFormCard";
 import { ProfilePickerCard } from "./cards/ProfilePickerCard";
 import { ProgressLongTaskCard } from "./cards/ProgressLongTaskCard";
 import { ErrorCard } from "./cards/ErrorCard";
@@ -221,10 +222,8 @@ export function MessageBubble({
     case "dream_precise_form":
       return (
         <CardWrap className={className}>
-          <FormCard
-            title={message.content || "补充梦境信息"}
-            fields={DREAM_PRECISE_FIELDS}
-            submitLabel="精准解梦"
+          <DreamPreciseFormCard
+            introText={message.content || undefined}
             busy={busy}
             onSubmit={(v) => onCardSubmit?.(message.id, ui, v)}
           />
@@ -417,6 +416,7 @@ export function MessageBubble({
             speed={m.yingQi.speed}
             timeHint={m.yingQi.timeHint}
             branchHour={m.yingQi.branchHour}
+            aiText={m.aiText ?? message.content}
           />
         </CardWrap>
       );

@@ -131,14 +131,18 @@ export function ChatInput({
         </p>
       )}
       {showQuickChips && <IntentChips onPick={handleChipPick} busy={busy} />}
-      <div className="flex items-end gap-2 px-3 pb-3 pt-1">
+      <div className="relative flex items-end gap-2 px-3 pb-3 pt-1">
+        <div className="flex-1">
         <Textarea
           ref={taRef}
           rows={1}
           value={isRecording && interimText ? interimText : text}
           disabled={disabled || busy || isRecording}
           placeholder={finalPlaceholder}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+              const v = e.target.value;
+              setText(v.length > 1000 ? v.slice(0, 1000) : v);
+            }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
@@ -153,6 +157,15 @@ export function ChatInput({
             isRecording && "ring-2 ring-red-400/50",
           )}
         />
+        {text.length > 900 && (
+          <p className={cn(
+            "mt-0.5 text-[10px] text-right pr-1",
+            text.length >= 1000 ? "text-red-400" : "text-[var(--color-ink-fade)]",
+          )}>
+            {text.length}/1000
+          </p>
+        )}
+        </div>
         {/* 🎤 麦克风按钮 */}
         {hasSpeechSupport && (
           <button

@@ -56,24 +56,16 @@ export function useCardHandlers({
         return;
       }
       if (ui === "dream_choice") {
-        // 文案对齐 测试bug.xlsx R4 的 4 条说明（fast / precise 同一份引导，避免再用差异话术）
-        const dreamGuide = [
-          "请描述你的梦境内容（包含以下信息，描述越详细越精准）",
-          "1、描述梦境中的画面和人 / 物 / 地点以及发生的故事",
-          "2、在梦境里你是什么情绪感受，醒来后情绪有没有变化？",
-          "3、最近的现实生活中，有没有类似的场景、情绪，或者让你在意的事情？",
-          "4、该梦境是否有比较特别的，让你觉得奇怪或是印象深刻的？",
-        ].join("\n");
         if (key === "fast") {
           markDreamFastWaiting();
           setMessages((m) => [
             ...m,
-            makeLocalCard(`local-dream-fast-${Date.now()}`, dreamGuide, { ui: "text" }),
+            makeLocalCard(`local-dream-fast-${Date.now()}`, "请描述你的梦境，描述越详细解读越精准哦。", { ui: "text" }),
           ]);
         } else if (key === "precise") {
           setMessages((m) => [
             ...m,
-            makeLocalCard(`local-dream-precise-${Date.now()}`, dreamGuide, {
+            makeLocalCard(`local-dream-precise-${Date.now()}`, "请填写以下信息，帮助我更精准地解读你的梦境。", {
               ui: "dream_precise_form",
             }),
           ]);
@@ -155,6 +147,14 @@ export function useCardHandlers({
       if (ui === "slip_question_input") {
         const dim = slipDimRef.current;
         if (!dim) return;
+        // 先插入摇签动画卡，再调 API
+        setMessages((m) => [
+          ...m,
+          makeLocalCard(`local-slip-draw-${Date.now()}`, "", {
+            ui: "slip_drawing",
+            durationMs: 3500,
+          }),
+        ]);
         await postSubAction("/api/divination/qianwen", "抽签", {
           conversationId: convId,
           category: dim,
@@ -192,10 +192,10 @@ export function useCardHandlers({
         const numbers = (values.numbers ?? "")
           .split(/[,，\s]+/)
           .map((s) => Number(s))
-          .filter((n) => Number.isInteger(n) && n >= 1 && n <= 999)
+          .filter((n) => Number.isInteger(n) && n >= 1 && n <= 9)
           .slice(0, 3);
         if (numbers.length === 0) {
-          toast.error("数字不合法，请填 1-3 个 1-999 的整数");
+          toast.error("数字不合法，请填 1-3 个 1-9 的整数");
           return;
         }
         const numMsg = messages.find((m) => m.id === msgId);
@@ -263,8 +263,11 @@ export function useCardHandlers({
             `轻运签-${meta.slipNumber ?? "slip"}.png`,
           );
           toast.success("已保存到相册");
-        } catch {
-          toast.error("保存失败，请稍候再试");
+        } catch (e) {
+          const msg = e instanceof Error && e.message.includes("相册权限")
+            ? e.message
+            : "保存失败，请稍候再试";
+          toast.error(msg);
         }
         return;
       }

@@ -169,11 +169,13 @@ export function Step3Confirm({
         <Row label="出生时辰" value={hourLabel} />
         <Divider />
         <Row label="出生地" value={`${form.region.province} ${form.region.city}${districtLabel}`} />
-        <Row
-          label="坐标"
-          value={`${form.region.longitude.toFixed(4)}°E · ${form.region.latitude.toFixed(4)}°N`}
-          subtle
-        />
+        {form.region.longitude !== 0 && form.region.latitude !== 0 && (
+          <Row
+            label="坐标"
+            value={`${form.region.longitude.toFixed(4)}°E · ${form.region.latitude.toFixed(4)}°N`}
+            subtle
+          />
+        )}
       </GlassCard>
 
       <p className="text-center text-xs text-[var(--color-ink-fade)]">

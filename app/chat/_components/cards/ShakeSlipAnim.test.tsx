@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import { ShakeSlipAnim } from "./ShakeSlipAnim";
 
-describe("ShakeSlipAnim (M2.7)", () => {
+describe("ShakeSlipAnim — 摇签动画", () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -11,20 +11,20 @@ describe("ShakeSlipAnim (M2.7)", () => {
     vi.useRealTimers();
   });
 
-  it("durationMs 后触发 onComplete", async () => {
+  it("durationMs 后触发 onComplete", () => {
     const onComplete = vi.fn();
-    render(<ShakeSlipAnim durationMs={2000} onComplete={onComplete} />);
+    render(<ShakeSlipAnim durationMs={3500} onComplete={onComplete} />);
     expect(onComplete).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(1999);
+    vi.advanceTimersByTime(3499);
     expect(onComplete).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
     expect(onComplete).toHaveBeenCalledOnce();
   });
 
-  it("默认 durationMs=2000", () => {
+  it("默认 durationMs=3500", () => {
     const onComplete = vi.fn();
     render(<ShakeSlipAnim onComplete={onComplete} />);
-    vi.advanceTimersByTime(1999);
+    vi.advanceTimersByTime(3499);
     expect(onComplete).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
     expect(onComplete).toHaveBeenCalledOnce();
@@ -46,18 +46,22 @@ describe("ShakeSlipAnim (M2.7)", () => {
     expect(onComplete).not.toHaveBeenCalled();
   });
 
-  it("默认渲染 '摇签中…' 文案", () => {
+  it("初始渲染 '摇签中…' 文案", () => {
     vi.useRealTimers();
     render(<ShakeSlipAnim durationMs={10000} />);
     expect(screen.getByText("摇签中…")).toBeInTheDocument();
     vi.useFakeTimers();
   });
 
-  it("可自定义 label", () => {
+  it("动画后期显示 label 文案", async () => {
     vi.useRealTimers();
-    render(<ShakeSlipAnim durationMs={10000} label="天意已动" />);
-    expect(screen.getByText("天意已动")).toBeInTheDocument();
-    vi.useFakeTimers();
+    render(<ShakeSlipAnim durationMs={500} label="天意已动" />);
+    // 初始阶段：摇签中…
+    expect(screen.getByText("摇签中…")).toBeInTheDocument();
+    // 等待进入 falling 阶段 (60% of 500ms = 300ms)
+    await waitFor(() => {
+      expect(screen.getByText("天意已动")).toBeInTheDocument();
+    }, { timeout: 1000 });
   });
 
   it("status 区有 aria-live=polite", async () => {

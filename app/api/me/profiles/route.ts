@@ -61,6 +61,7 @@ export async function POST(req: Request): Promise<Response> {
     if (e instanceof UnauthenticatedError) {
       return new NextResponse("unauthorized", { status: 401 });
     }
+    console.error("[POST /api/me/profiles] unhandled:", e);
     throw e;
   }
 }

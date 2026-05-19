@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { messages } from "@/lib/db/schema";
+import { messages, profiles } from "@/lib/db/schema";
 import { ensureUserId } from "@/lib/auth/session";
 import { guardTexts } from "@/lib/safety/guard";
 import { chat } from "@/lib/ai/client";
@@ -75,7 +76,7 @@ export async function POST(req: Request) {
       ? data.dream
       : [data.core, data.emotion, data.reality, data.special].join("\n");
   const safetyFail = guardTexts({ text: safetyText });
-  if (safetyFail) return safetyFail;
+  if (safetyFail) return jsonError("检测到您提交的内容包含敏感或违规信息，请修改后重试", 400);
 
   const userId = await ensureUserId();
   const limited = await enforceRateLimit(userId, "dream", "解梦 AI");
@@ -85,6 +86,14 @@ export async function POST(req: Request) {
   const ownedFail = await requireConversationOwned(db, conversationId, userId);
   if (ownedFail) return ownedFail;
 
+  // 需求：梦境内容有效性校验 — 快速模式至少 2 字
+  if (data.mode === "fast") {
+    const dream = data.dream.trim();
+    if (dream.length < 2) {
+      return jsonError("您描述的梦境内容无效或不够详细，请详细描述真实梦境，以便我能为您详细精准解读梦境", 400);
+    }
+  }
+
   const { systemPrompt: sysPrompt, userPrompt } = buildDreamPrompt({
     mode: data.mode,
     dream: data.mode === "fast" ? data.dream : undefined,
@@ -92,6 +101,7 @@ export async function POST(req: Request) {
     emotion: data.mode === "precise" ? data.emotion : undefined,
     reality: data.mode === "precise" ? data.reality : undefined,
     special: data.mode === "precise" ? data.special : undefined,
+    baziHint: await getBaziHint(userId),
   });
   const userText =
     data.mode === "fast"
@@ -171,6 +181,16 @@ export async function POST(req: Request) {
             ? { ui: "dream_result_fast" as const, summary: finalText }
             : (() => {
                 const sections = extractDreamSections(finalText);
+                if (process.env.NODE_ENV !== "production") {
+                  console.log("[dream precise] sections:", JSON.stringify({
+                    empathy: sections.empathy?.slice(0, 40),
+                    zhouGong: sections.threeViews.zhouGong?.slice(0, 40),
+                    coreMeaning: sections.coreMeaning?.slice(0, 40),
+                    suggestions: sections.suggestions?.length,
+                    subconsciousMsg: sections.subconsciousMsg?.slice(0, 40),
+                    conclusion: sections.conclusion?.slice(0, 40),
+                  }));
+                }
                 return {
                   ui: "dream_result_precise" as const,
                   empathy: sections.empathy,
@@ -234,5 +254,46 @@ export async function POST(req: Request) {
   });
 
   return new Response(sse, { headers: SSE_HEADERS });
+}
+
+/**
+ * 读取用户默认档案的八字信息，返回简短提示词片段。
+ * 需求要求"结合生辰八字进行解梦"。
+ */
+async function getBaziHint(userId: string): Promise<string | undefined> {
+  try {
+    const db = getDb();
+    const [profile] = await db
+      .select({
+        gender: profiles.gender,
+        birth_date: profiles.birth_date,
+        birth_time: profiles.birth_time,
+        bazi_pillars: profiles.bazi_pillars,
+      })
+      .from(profiles)
+      .where(eq(profiles.user_id, userId))
+      .limit(1);
+    if (!profile) return undefined;
+
+    const parts: string[] = [];
+    if (profile.birth_date) parts.push(`出生日期：${profile.birth_date}`);
+    if (profile.birth_time) parts.push(`出生时辰：${profile.birth_time}`);
+    if (profile.gender) parts.push(`性别：${profile.gender === "male" ? "男" : profile.gender === "female" ? "女" : ""}`);
+
+    // 如果有缓存的八字柱信息，直接用
+    if (profile.bazi_pillars) {
+      try {
+        const cached = JSON.parse(profile.bazi_pillars) as { pillars?: { year?: { gan?: string; zhi?: string }; month?: { gan?: string; zhi?: string }; day?: { gan?: string; zhi?: string }; hour?: { gan?: string; zhi?: string } } };
+        if (cached.pillars) {
+          const p = cached.pillars;
+          parts.push(`八字：${p.year?.gan ?? ""}${p.year?.zhi ?? ""} ${p.month?.gan ?? ""}${p.month?.zhi ?? ""} ${p.day?.gan ?? ""}${p.day?.zhi ?? ""} ${p.hour?.gan ?? ""}${p.hour?.zhi ?? ""}`);
+        }
+      } catch { /* 坏 JSON 跳过 */ }
+    }
+
+    return parts.length > 0 ? parts.join("，") : undefined;
+  } catch {
+    return undefined;
+  }
 }
 

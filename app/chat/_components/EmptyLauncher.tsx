@@ -67,10 +67,7 @@ export function EmptyLauncher({ onPick, busy }: EmptyLauncherProps) {
 
       <div className="text-center">
         <p className="font-[family-name:var(--font-serif)] text-[16px] font-medium tracking-ritual text-[var(--color-ink-plum)]">
-          想问就问，我陪你慢慢理 <Sparkle size={10} />
-        </p>
-        <p className="mt-1 text-[12px] text-[var(--color-ink-mist)]">
-          四式直入 · 也可直接打字告诉我
+          嗨！我是轻运AI，可以基于国学知识理论为您提供日常决策、运势、财富、情感、命理分析、解梦等服务，请问有什么可以帮您？ <Sparkle size={10} />
         </p>
       </div>
 

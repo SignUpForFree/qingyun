@@ -26,13 +26,17 @@ export async function saveImageToAlbum(imageUrl: string, filename: string): Prom
         fail: reject,
       });
     });
-    await new Promise<void>((resolve, reject) => {
-      wx.saveImageToPhotosAlbum({
-        filePath: res.tempFilePath,
-        success: () => resolve(),
-        fail: reject,
+    try {
+      await new Promise<void>((resolve, reject) => {
+        wx.saveImageToPhotosAlbum({
+          filePath: res.tempFilePath,
+          success: () => resolve(),
+          fail: reject,
+        });
       });
-    });
+    } catch {
+      throw new Error("请开启相册权限，以便保存签文");
+    }
     return;
   }
 

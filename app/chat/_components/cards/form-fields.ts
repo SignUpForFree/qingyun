@@ -62,12 +62,12 @@ export const BAZI_QUICK_FIELDS: readonly FormField[] = [
       { value: "female", label: "女" },
     ],
   },
-  { key: "birth_time", label: "出生时间（含时辰）", type: "text", required: true, max: 30 },
-  { key: "birth_place", label: "出生地（省 市 区）", type: "text", required: true, max: 30 },
+  { key: "birth_time", label: "出生时间（含时辰）", type: "text", required: true, max: 30, placeholder: "例如：1990-06-15 午时" },
+  { key: "birth_place", label: "出生地（省 市 区）", type: "text", required: true, max: 30, placeholder: "例如：广东省 深圳市 南山区" },
 ];
 
 export const MEIHUA_NUMBER_FIELDS: readonly FormField[] = [
-  { key: "numbers", label: "1-3 个数字（1-9，逗号分隔）", type: "text", required: true, max: 20 },
+  { key: "numbers", label: "", type: "text", required: true, max: 20, placeholder: "例如：3, 7, 5" },
   { key: "userQuestion", label: "想测什么事？", type: "textarea", required: true, max: 200 },
 ];
 
@@ -78,6 +78,6 @@ export const SLIP_QUESTION_FIELDS: readonly FormField[] = [
     type: "textarea",
     required: true,
     max: 200,
-    placeholder: "请描述你遇到的事情和想问的问题",
+    placeholder: "在这里描述…",
   },
 ];

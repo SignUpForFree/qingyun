@@ -10,6 +10,7 @@ import { serializeJson } from "@/lib/db/json";
 import { meihuaProvider } from "@/lib/divination-providers";
 import { buildMeihuaPrompt } from "@/lib/ai/prompts/meihua-interpret";
 import { sanitizeAiOutput } from "@/lib/ai/output-sanitizer";
+import { getLunarToday } from "@/lib/util/lunar-date";
 import {
   bumpConversationActivity,
   enforceRateLimit,
@@ -276,6 +277,8 @@ export async function POST(req: Request) {
         const { systemPrompt, userPrompt } = buildMeihuaPrompt({
           result: v2,
           userQuestion,
+          numbers,
+          lunarDateText: getLunarToday().headerText,
         });
 
         safeEnqueue(controller, frame("progress", { stage: "streaming", percent: 40 }));
@@ -326,8 +329,9 @@ export async function POST(req: Request) {
             lines: v2.guaZhongGua.lines,
           },
           dongYao: v2.dongYao,
-          // 体用 / 应期 / 时辰能量 / 五行损益（V2 新增）
+          // 体用 / 变用卦 / 应期 / 时辰能量 / 五行损益（V2 新增）
           tiYong: v2.tiYong,
+          bianTiYong: v2.bianTiYong,
           yingQi: v2.yingQi,
           timeEnergy: v2.timeEnergy,
           sunYi: v2.sunYi,

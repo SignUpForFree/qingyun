@@ -232,13 +232,16 @@ export function HistoryDrawerBody({
   return (
     <>
       <div className="mt-3 flex items-center gap-2">
-        <Link
-          href="/chat"
-          onClick={onPickConversation}
+        <button
+          type="button"
+          onClick={() => {
+            onPickConversation();
+            router.replace("/chat?t=" + Date.now());
+          }}
           className="inline-flex items-center justify-center gap-1 rounded-full border border-[var(--color-accent-lavender)]/40 bg-white/40 px-3 py-1.5 text-xs tracking-ritual2 text-[var(--color-ink-plum)] hover:bg-[var(--color-accent-lavender)]/20"
         >
           + 新对话
-        </Link>
+        </button>
       </div>
 
       <div className="mt-3 relative">

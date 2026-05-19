@@ -108,8 +108,17 @@ export function FormCard({
             />
           )}
           {f.max && (
-            <p className="text-right text-[10px] text-[var(--color-ink-fade)]">
-              {(values[f.key] ?? "").length} / {f.max}
+            <p
+              className={cn(
+                "text-right text-[10px]",
+                (values[f.key] ?? "").length >= f.max
+                  ? "text-red-400"
+                  : "text-[var(--color-ink-fade)]",
+              )}
+            >
+              {(values[f.key] ?? "").length >= f.max
+                ? "超出字数限制，请精简内容"
+                : `${(values[f.key] ?? "").length} / ${f.max}`}
             </p>
           )}
         </div>

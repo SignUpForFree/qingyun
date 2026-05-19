@@ -68,6 +68,7 @@ export async function PUT(
     if (e instanceof ProfileNotFoundError) {
       return new NextResponse("not found", { status: 404 });
     }
+    console.error("[PUT /api/me/profiles/[id]] unhandled:", e);
     throw e;
   }
 }

@@ -85,26 +85,7 @@ export default async function ChatPage({ searchParams }: PageProps) {
     <>
       <AppHeader
         solid
-        left={
-          <span
-            className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/90 shadow ring-1 ring-[var(--color-accent-lavender)]/35"
-            aria-hidden
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/images/ai-avatar.png" alt="" className="h-7 w-7" />
-          </span>
-        }
-        title={
-          <span className="flex flex-col items-center gap-0.5 leading-tight">
-            <span className="font-[family-name:var(--font-serif)] text-[15px] tracking-ritual2 text-[var(--color-ink-plum)]">
-              轻运 AI
-            </span>
-            <span className="text-[10px] font-normal tracking-ritual2 text-[var(--color-ink-fade)]">
-              国学小助手，陪你聊运势与心事
-            </span>
-          </span>
-        }
-        right={<HistoryDrawer currentId={resolvedConvId ?? undefined} />}
+        left={<HistoryDrawer currentId={resolvedConvId ?? undefined} />}
       />
       <ChatWindow
         key={resolvedConvId ?? "new"}

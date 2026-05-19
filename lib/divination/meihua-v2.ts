@@ -5,7 +5,8 @@ import { interpretMeihua, type MeihuaResult } from "@/lib/meihua/interpret";
 import { findGuaByTrigrams, type Trigram as Gua64Trigram } from "@/db/seed/gua64";
 import { computeTimeEnergy, type TimeEnergyResult } from "./time-energy";
 import { computeSunYi, type SunYiResult } from "./sunyi";
-import { TRIGRAM_WUXING } from "@/lib/meihua/trigrams";
+import { TRIGRAM_WUXING, type Trigram } from "@/lib/meihua/trigrams";
+import { judgeTiYong, type TiYongRelation } from "@/lib/meihua/tiyong";
 
 /**
  * 梅花易数 V2 入口 (M3.17)
@@ -42,6 +43,12 @@ export interface MeihuaV2Result extends MeihuaResult {
   timeEnergy: TimeEnergyResult | null;
   /** M3.20 五行损益（profile.yongShen 缺则 unrelated + 全 0） */
   sunYi: SunYiResult;
+  /** 变卦体用：变卦中动爻所在卦=变用卦，另一卦=变体卦 */
+  bianTiYong: {
+    bianTi: Trigram;
+    bianYong: Trigram;
+    relation: TiYongRelation;
+  };
 }
 
 export interface GuaDictView {
@@ -70,6 +77,13 @@ export function meihuaV2(args: MeihuaV2Args): MeihuaV2Result {
   // M3.20 五行损益
   const sunYi = computeSunYi({ guaWuxing, yongShen });
 
+  // 变卦体用：动爻在变卦中的位置决定变用卦
+  const bianTiYong = judgeTiYong({
+    upper: base.bian.upper,
+    lower: base.bian.lower,
+    dongYao: cast.dongYao,
+  });
+
   return {
     ...base,
     benDict: buildDictView(base.ben.upper, base.ben.lower, cast.dongYao),
@@ -77,6 +91,11 @@ export function meihuaV2(args: MeihuaV2Args): MeihuaV2Result {
     bianDict: buildDictView(base.bian.upper, base.bian.lower, undefined),
     timeEnergy,
     sunYi,
+    bianTiYong: {
+      bianTi: bianTiYong.ti,
+      bianYong: bianTiYong.yong,
+      relation: bianTiYong.relation,
+    },
   };
 }
 

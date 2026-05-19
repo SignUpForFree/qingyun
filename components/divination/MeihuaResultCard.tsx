@@ -64,6 +64,7 @@ interface MeihuaResultCardProps {
   speed: "fast" | "medium" | "slow";
   timeHint: string;
   branchHour: string | null;
+  aiText?: string;
   className?: string;
 }
 
@@ -84,6 +85,7 @@ export function MeihuaResultCard({
   verdict,
   timeHint,
   branchHour,
+  aiText,
   className,
 }: MeihuaResultCardProps) {
   const tiWx = TRIGRAM_WUXING[ti] ?? "?";
@@ -172,6 +174,14 @@ export function MeihuaResultCard({
         应 期 · {timeHint}
         {branchHour ? ` · ${branchHour}` : ""}
       </p>
+
+      {/* AI 解读 */}
+      {aiText && (
+        <p className="whitespace-pre-wrap text-[13px] leading-[1.85] text-[var(--color-ink-plum)]">
+          <Sparkle size={10} variant="diamond" className="mr-1" />
+          {aiText}
+        </p>
+      )}
     </GlassCard>
   );
 }

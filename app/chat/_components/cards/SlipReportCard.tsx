@@ -2,7 +2,6 @@
 import * as React from "react";
 import { Divider } from "@/components/su";
 import { cn } from "@/lib/utils";
-import { MembershipGate } from "@/components/auth/MembershipGate";
 import type { SlipImageLevel } from "./SlipImageFullscreen";
 
 export interface SlipSection {
@@ -160,10 +159,9 @@ export function SlipReportCard({
         </section>
       )}
 
-      {/* 部分解读时显示"我要完整解读"按钮（会员锁定） */}
+      {/* 部分解读时显示"我要完整解读"按钮 */}
       {!isFullInterpret && onFullExplain && (
         <div className="flex justify-center pt-1">
-          <MembershipGate feature="完整解读">
             <button
               type="button"
               onClick={onFullExplain}
@@ -172,7 +170,6 @@ export function SlipReportCard({
             >
               我要完整解读
             </button>
-          </MembershipGate>
         </div>
       )}
 
