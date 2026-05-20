@@ -13,28 +13,43 @@ import {
   type Stem,
   type Branch,
   type Wuxing,
+  type TenGod,
+  type WangXiangStatus,
+  HIDDEN_STEMS_DETAILED,
+  YUELING_WUXING,
+  nayinOf,
 } from "./stems-branches";
 import { toSolarTrueTime } from "./solar-time";
 import { detectAllShensha, type ShenshaRule } from "./shensha-rules";
-import { computeLiunian, type LiunianStep } from "./dayun";
-import { determineYongShen, type YongShenResult } from "./yong-shen";
+import { computeLiunian, computeDayun, type LiunianStep, type DayunStep } from "./dayun";
+import {
+  computeWuxingCount,
+  computeWuxingStats,
+  applyXchhCorrection,
+  applyWangXiangScaling,
+  applyDayMasterAdjust,
+  computeTenGods,
+  computeStrength,
+  computeYongShenFull,
+  type WuxingCountMap,
+  type WuxingStats,
+  type XchhResult,
+  type TenGodsResult,
+  type StrengthResult,
+  type StrengthType,
+  type YongShenFull,
+  computeTemporaryFortune,
+} from "./engine";
+import { type YongShenResult, type GejuType } from "./yong-shen";
+import {
+  generateAllLabels,
+  judgeFortuneLevel,
+  type DimensionLabels,
+  type FortuneLevel,
+} from "./labels";
 
 const { Solar, Lunar } = lunar;
 
-/**
- * 八字主入口：根据出生时间 + 经度 + 性别 + 历法类型计算完整八字
- *
- * 流程：
- *   1. 农历输入先转公历（Lunar.fromYmdHms → getSolar）
- *   2. 公历时间套真太阳时偏移（按经度）
- *   3. 用 lunar-javascript 根据真太阳时算四柱
- *   4. 五行计数 / 十神判定 / 大运 8 步
- */
-/**
- * 八字采用 UTC+8 (北京标准时) 作为基准时区，**不考虑历史夏令时**。
- * 1986-1991 年中国大陆实施过夏令时，但传统八字排盘使用真太阳时校正后的 UTC+8 时间，
- * 不应受 DST 影响。这里直接用 UTC 偏移提取字段，绕过 JS Date 本地时区的 DST 表。
- */
 const UTC8_OFFSET_MS = 8 * 60 * 60 * 1000;
 
 interface UTC8Fields {
@@ -98,25 +113,17 @@ export function buildChart(input: BuildChartInput): BaziComputed {
 function toBaseSolarTime(input: BuildChartInput): Date {
   if (input.calendarType === "solar") return input.birthTime;
 
-  // 农历输入：按 UTC+8 提取 birthTime 字段作为农历年月日时分（避免 DST/时区漂移），
-  // 转公历后重组为 UTC+8 Date（即 ISO 字符串带 +08:00）。
-  // 闰月：lunar-javascript 约定月份取负数表示闰月（例如 2025 闰六月 = -6）。
   const lf = getUTC8Fields(input.birthTime);
   const lunarMonth = input.isLeapMonth ? -lf.month : lf.month;
   const lunarDate = Lunar.fromYmdHms(lf.year, lunarMonth, lf.day, lf.hour, lf.minute, lf.second);
   const s = lunarDate.getSolar();
-  // 用 UTC ms 重建：UTC+8 的 yyyy-mm-dd hh:mm:ss → 对应 UTC ms
   const utcMs = Date.UTC(s.getYear(), s.getMonth() - 1, s.getDay(), s.getHour(), s.getMinute(), 0);
   return new Date(utcMs - UTC8_OFFSET_MS);
 }
 
 function parsePillar(gan: string, zhi: string) {
-  if (!isStem(gan)) {
-    throw new Error(`lunar-javascript 返回非法天干: ${gan}`);
-  }
-  if (!isBranch(zhi)) {
-    throw new Error(`lunar-javascript 返回非法地支: ${zhi}`);
-  }
+  if (!isStem(gan)) throw new Error(`lunar-javascript 返回非法天干: ${gan}`);
+  if (!isBranch(zhi)) throw new Error(`lunar-javascript 返回非法地支: ${zhi}`);
   return { gan: gan as Stem, zhi: zhi as Branch };
 }
 
@@ -129,40 +136,252 @@ function countFiveElements(p: BaziPillars): Record<Wuxing, number> {
   return init;
 }
 
-/**
- * V2 升级：在 BaziComputed 之上叠加 神煞 + 流年 + 用神 (M3.11)
- */
+// ── V2: Full calculation pipeline ─────────────────────────────────
+
+export interface PillarDetail {
+  gan: Stem;
+  zhi: Branch;
+  gan_wuxing: Wuxing;
+  zhi_wuxing: Wuxing;
+  yinyang: "yang" | "yin";
+  nayin: string;
+  nayinWuxing: Wuxing;
+}
+
+export interface DayunWithFortune extends DayunStep {
+  fortune: FortuneLevel;
+  dayunWuxing: Wuxing;
+}
+
+export interface LiunianWithFortune extends LiunianStep {
+  fortune: FortuneLevel;
+}
+
+export interface TimeCorrection {
+  true_solar_time: string;       // 校正后真太阳时 ISO
+  real_hour_zhi: Branch;         // 校正后时辰地支
+  solar_term: string;            // 所属节气名（如"立春"）
+  is_jieqi_boundary: boolean;    // 是否在节气交界（前后1小时内）
+  is_zishi_boundary: boolean;    // 是否在子时交界（23:00-01:00）
+  leap_month: boolean;           // 是否闰月出生
+}
+
 export interface BaziChartV2 extends BaziComputed {
+  // 时空校正元信息
+  timeCorrection: TimeCorrection;
+  // 四柱详细
+  pillarDetails: {
+    year: PillarDetail;
+    month: PillarDetail;
+    day: PillarDetail;
+    hour: PillarDetail;
+    full_pillar: string;
+    day_gan: Stem;
+    day_zhi: Branch;
+  };
+  // 五行能量
+  wuxingCount: WuxingCountMap;
+  wuxingStats: WuxingStats;
+  xchhResult: XchhResult;
+  wangXiangStatus: WangXiangStatus;
+  finalScores: WuxingCountMap;
+  // 十神
+  tenGodsFull: TenGodsResult;
+  // 旺衰
+  strength: StrengthResult;
+  // 喜用神
+  yongShenFull: YongShenFull;
+  // 向后兼容旧 yongShen 字段
+  yongShen: YongShenResult;
+  // 神煞
   shensha: ReadonlyArray<{
     name: string;
     interpretation: string;
     polarity: "吉" | "凶" | "中";
     categories: readonly string[];
   }>;
-  yongShen: YongShenResult;
-  liunian: ReadonlyArray<LiunianStep>;
+  // 大运含运势
+  dayunWithFortune: DayunWithFortune[];
+  // 流年
+  liunian: ReadonlyArray<LiunianWithFortune>;
+  // 六维标签
+  labels: DimensionLabels[];
 }
 
 export function buildChartV2(input: BuildChartInput, opts?: { centerYear?: number }): BaziChartV2 {
   const base = buildChart(input);
+  const pillars = base.pillars;
   const centerYear = opts?.centerYear ?? new Date().getUTCFullYear();
-  const shenshaRules = detectAllShensha(base.pillars);
-  const yongShen = determineYongShen({
-    pillars: base.pillars,
-    fiveElements: base.fiveElements,
+  const monthZhi = pillars.month.zhi;
+
+  // 四柱详细
+  const pillarDetails = {
+    year: buildPillarDetail(pillars.year.gan, pillars.year.zhi),
+    month: buildPillarDetail(pillars.month.gan, pillars.month.zhi),
+    day: buildPillarDetail(pillars.day.gan, pillars.day.zhi),
+    hour: buildPillarDetail(pillars.hour.gan, pillars.hour.zhi),
+    full_pillar: `${pillars.year.gan}${pillars.year.zhi}年 ${pillars.month.gan}${pillars.month.zhi}月 ${pillars.day.gan}${pillars.day.zhi}日 ${pillars.hour.gan}${pillars.hour.zhi}时`,
+    day_gan: pillars.day.gan,
+    day_zhi: pillars.day.zhi,
+  };
+
+  // 1. 五行加权计数
+  const wuxingCount = computeWuxingCount(pillars);
+  const wuxingStats = computeWuxingStats(wuxingCount, monthZhi);
+
+  // 2. 刑冲合害修正
+  const xchhResult = applyXchhCorrection(pillars, wuxingCount);
+
+  // 3. 旺相休囚死缩放
+  const { scaled, dayMasterStatus } = applyWangXiangScaling(xchhResult.working_count, monthZhi);
+
+  // 4. 日主微调
+  const { final: finalScores } = applyDayMasterAdjust(scaled, pillars.day.gan, monthZhi);
+
+  // 5. 十神汇总
+  const tenGodsFull = computeTenGods(pillars, finalScores);
+
+  // 6. 旺衰评分
+  const strength = computeStrength(tenGodsFull, finalScores, pillars.day.gan);
+
+  // 7. 喜用神
+  const yongShenFull = computeYongShenFull(
+    strength, pillars.day.gan, monthZhi, finalScores, xchhResult.matches,
+  );
+
+  // 8. 神煞
+  const shenshaRules = detectAllShensha(pillars);
+
+  // 9. 大运含运势等级
+  const dayunSteps = computeDayun({
+    pillars,
+    gender: input.gender,
+    solarBirthDate: base.solarTrueTime ? new Date(base.solarTrueTime) : new Date(),
   });
-  const liunian = computeLiunian({ centerYear, span: 5 });
+
+  const dayunWithFortune: DayunWithFortune[] = dayunSteps.map((d) => {
+    const dayunWX = wuxingOf(d.stem);
+    const tempFortune = computeTemporaryFortune({
+      pillars,
+      dayunStem: d.stem,
+      dayunBranch: d.branch,
+      monthZhi: pillars.month.zhi,
+      dayGan: pillars.day.gan,
+      strengthType: strength.strength_type,
+    });
+    const fortune = judgeFortuneLevel(d.stem, tempFortune, strength.strength_type, yongShenFull.xiyongshen, yongShenFull.jishen);
+    return { ...d, fortune, dayunWuxing: dayunWX };
+  });
+
+  // 10. 流年（含运势）
+  const birthYear = new Date(base.solarTrueTime).getUTCFullYear();
+  const liunianRaw = computeLiunian({ centerYear, span: 5 });
+  const liunian = liunianRaw.map((ln) => {
+    const age = ln.year - birthYear;
+    const currentDayun = dayunSteps.find((d) => age >= d.startAge && age <= d.endAge);
+    const tempFortune = computeTemporaryFortune({
+      pillars,
+      dayunStem: currentDayun?.stem ?? pillars.day.gan,
+      dayunBranch: currentDayun?.branch ?? pillars.month.zhi,
+      liunianStem: ln.stem,
+      liunianBranch: ln.branch,
+      monthZhi: pillars.month.zhi,
+      dayGan: pillars.day.gan,
+      strengthType: strength.strength_type,
+    });
+    const fortune = judgeFortuneLevel(ln.stem, tempFortune, strength.strength_type, yongShenFull.xiyongshen, yongShenFull.jishen);
+    return { ...ln, fortune };
+  });
+
+  // 11. 六维标签
+  const shenshaNames = shenshaRules.map((r) => r.name);
+  const labels = generateAllLabels(
+    pillars,
+    strength.strength_type,
+    tenGodsFull.ten_gods_count,
+    wuxingStats.strength_level,
+    shenshaNames,
+    input.gender,
+  );
+
+  // 12. 时空校正元信息
+  const trueTimeDate = base.solarTrueTime ? new Date(base.solarTrueTime) : new Date();
+  const tf = getUTC8Fields(trueTimeDate);
+  const solarForJQ = Solar.fromYmdHms(tf.year, tf.month, tf.day, tf.hour, tf.minute, tf.second);
+  const lunarForJQ = solarForJQ.getLunar();
+
+  const jieQiTable = lunarForJQ.getJieQiTable();
+  let solar_term = "";
+  let is_jieqi_boundary = false;
+  let minDiffHours = Infinity;
+  const trueTimeMs = trueTimeDate.getTime();
+
+  for (const [name, jqSolar] of Object.entries(jieQiTable)) {
+    const jqMs = Date.UTC(jqSolar.getYear(), jqSolar.getMonth() - 1, jqSolar.getDay(), jqSolar.getHour(), jqSolar.getMinute(), 0);
+    const diffHours = Math.abs(trueTimeMs - jqMs) / (1000 * 60 * 60);
+    if (diffHours < minDiffHours) {
+      minDiffHours = diffHours;
+      solar_term = name;
+      is_jieqi_boundary = diffHours <= 1;
+    }
+  }
+
+  const hour = tf.hour;
+  const is_zishi_boundary = hour >= 23 || hour < 1;
+  const isLeapMonth = !!input.isLeapMonth;
+
+  const timeCorrection: TimeCorrection = {
+    true_solar_time: base.solarTrueTime ?? "",
+    real_hour_zhi: pillars.hour.zhi,
+    solar_term,
+    is_jieqi_boundary,
+    is_zishi_boundary,
+    leap_month: isLeapMonth,
+  };
 
   return {
     ...base,
+    timeCorrection,
+    pillarDetails,
+    wuxingCount,
+    wuxingStats,
+    xchhResult,
+    wangXiangStatus: dayMasterStatus,
+    finalScores,
+    tenGodsFull,
+    strength,
+    yongShenFull,
+    yongShen: {
+      gejuType: (strength.strength_type === "专旺格" ? "从强"
+        : strength.strength_type === "从弱格" ? "从弱"
+        : strength.strength_type) as GejuType,
+      yongShen: yongShenFull.xiyongshen[0] ?? wuxingOf(pillars.day.gan),
+      jiShen: yongShenFull.jishen[0] ?? null,
+      strength: Math.max(0, Math.min(100, Math.round(50 + strength.final_score))),
+      reason: yongShenFull.desc,
+    },
     shensha: shenshaRules.map((r: ShenshaRule) => ({
       name: r.name,
       interpretation: r.interpretation,
       polarity: r.polarity,
       categories: r.categories,
     })),
-    yongShen,
+    dayunWithFortune,
     liunian,
+    labels,
+  };
+}
+
+function buildPillarDetail(gan: Stem, zhi: Branch): PillarDetail {
+  const ny = nayinOf(gan, zhi);
+  return {
+    gan,
+    zhi,
+    gan_wuxing: wuxingOf(gan),
+    zhi_wuxing: wuxingOf(zhi),
+    yinyang: "yang", // simplified
+    nayin: ny?.nayin ?? "",
+    nayinWuxing: ny?.nayinWuxing ?? "金",
   };
 }
 
@@ -173,18 +392,12 @@ function buildLuckPillars(
   const yun = eightChar.getYun(gender === "male" ? 1 : 0);
   const dayun = yun.getDaYun();
 
-  // lunar-javascript 的 getDaYun() 返回 10 项，第 0 项是"幼运"(空 GanZhi)，
-  // 真正的大运从第 1 项开始（slice(1, 9) 取 8 步）。
   return dayun.slice(1, 9).map((d) => {
     const gz = d.getGanZhi();
-    if (gz.length !== 2) {
-      throw new Error(`大运 GanZhi 格式异常: "${gz}"`);
-    }
+    if (gz.length !== 2) throw new Error(`大运 GanZhi 格式异常: "${gz}"`);
     const gan = gz[0];
     const zhi = gz[1];
-    if (!isStem(gan) || !isBranch(zhi)) {
-      throw new Error(`大运干支非法: "${gz}"`);
-    }
+    if (!isStem(gan) || !isBranch(zhi)) throw new Error(`大运干支非法: "${gz}"`);
     return {
       age: d.getStartAge(),
       gan: gan as Stem,

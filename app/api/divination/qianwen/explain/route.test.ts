@@ -131,6 +131,7 @@ describe("POST /api/divination/qianwen/explain — idempotent", () => {
         dimension: "事业学业",
         reading: "x",
         aiInterpretation: "之前生成的解读",
+        isFullInterpret: false,
       }),
     };
 
