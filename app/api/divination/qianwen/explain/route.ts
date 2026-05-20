@@ -81,7 +81,7 @@ export async function POST(req: Request) {
 
   const conversationId = sourceMsg.conversation_id;
 
-  // 幂等：找 conversation 内是否已存在引用此 sourceMessageId 的 slip_report 消息
+  // 幂等：找 conversation 内是否已存在引用此 sourceMessageId 且同 fullInterpret 级别的 slip_report
   const existingRows = await db
     .select({
       id: messages.id,
@@ -99,9 +99,9 @@ export async function POST(req: Request) {
   for (const m of existingRows) {
     if (!m.metadata) continue;
     try {
-      const mm = JSON.parse(m.metadata) as { ui?: string; sourceMessageId?: string };
-      if (mm.ui === "slip_report" && mm.sourceMessageId === messageId) {
-        // 已存在 — 返回普通 200 JSON 表示无 stream
+      const mm = JSON.parse(m.metadata) as { ui?: string; sourceMessageId?: string; isFullInterpret?: boolean };
+      if (mm.ui === "slip_report" && mm.sourceMessageId === messageId && mm.isFullInterpret === fullInterpret) {
+        // 同级别已存在 — 返回 200 JSON 表示无 stream
         return Response.json({
           idempotent: true,
           card: {
