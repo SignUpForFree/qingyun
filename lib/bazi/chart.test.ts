@@ -54,11 +54,12 @@ describe("buildChart - 案例 1: 1990-06-15 14:30 杭州 男 (self-consistency b
     }
   });
 
-  it("solarTrueTime 是 ISO 字符串且偏移约 +0.62 分钟", () => {
+  it("solarTrueTime 是 ISO 字符串且偏差含经度修正+EoT", () => {
     const trueTime = new Date(chart.solarTrueTime);
     const original = new Date("1990-06-15T14:30:00+08:00");
     const diffMin = (trueTime.getTime() - original.getTime()) / 60_000;
-    expect(diffMin).toBeCloseTo(0.62, 1);
+    // 经度修正 0.62 + EoT(-0.19) ≈ 0.43
+    expect(diffMin).toBeCloseTo(0.43, 1);
   });
 });
 

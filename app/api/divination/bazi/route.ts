@@ -8,6 +8,7 @@ import { chat } from "@/lib/ai/client";
 import { frame, heartbeat, safeEnqueue, SSE_HEADERS } from "@/lib/chat/sse";
 import { serializeJson } from "@/lib/db/json";
 import { baziProvider } from "@/lib/divination-providers";
+import { findCity } from "@/lib/regions/data";
 import { buildBaziPrompt, type V2DivinationDim } from "@/lib/ai/prompts/bazi-interpret";
 import { sanitizeAiOutput } from "@/lib/ai/output-sanitizer";
 import { parsePillarsCache, serializePillars } from "@/lib/profile/bazi-pillars";
@@ -47,6 +48,28 @@ const VALID_CATEGORIES = [
   "人际贵人",
   "平安健康",
 ] as const;
+
+/** 从 birth_place 文本（如"广东省 深圳市 南山区"）解析经纬度 */
+function resolveBirthPlaceCoords(birthPlace: string): { longitude: number; latitude: number } {
+  if (!birthPlace || birthPlace === "未填") {
+    return { longitude: 121.47, latitude: 31.23 }; // 上海兜底
+  }
+  const parts = birthPlace.replace(/\s+/g, " ").trim().split(" ");
+  const provinceRaw = parts[0] ?? "";
+  const cityRaw = parts[1] ?? provinceRaw;
+  // 去"省/市/自治区"等后缀
+  const province = provinceRaw.replace(/壮族自治区|回族自治区|维吾尔自治区|特别行政区|自治区|省|市$/u, "").trim();
+  const city = cityRaw.replace(/市$/u, "").trim();
+  const row = findCity(province, city || province);
+  if (row) {
+    const { lng, lat } = row;
+    // §1.1.1: 经纬度取值范围校验，超出则忽略
+    if (lng >= -180 && lng <= 180 && lat >= -90 && lat <= 90) {
+      return { longitude: lng, latitude: lat };
+    }
+  }
+  return { longitude: 121.47, latitude: 31.23 }; // 兜底
+}
 
 const quickFormSchema = z.object({
   gender: z.enum(["male", "female"]),
@@ -335,8 +358,7 @@ export async function POST(req: Request) {
         const chartV2 = await baziProvider.buildChart(
           {
             birthTime: parseBirthDateTime(profile.birth_date, profile.birth_time),
-            longitude: 121.47, // 上海兜底（M3 后续接 IP geo / 出生地查表）
-            latitude: 31.23,
+            ...resolveBirthPlaceCoords(profile.birth_place),
             gender: (profile.gender ?? "male") as "male" | "female",
             calendarType: profile.birth_calendar,
           },
@@ -502,7 +524,10 @@ function splitDateTime(raw: string): { dateOnly: string; timeOnly: string } {
   const normalized = raw.replace(/\//g, "-").trim();
   const parts = normalized.split(/\s+/);
   const dateOnly = parts[0] ?? "1990-01-01";
-  const timeOnly = (parts[1] ?? "12:00").slice(0, 5); // HH:MM
+  // 保留秒级精度：HH:MM:SS 或 HH:MM
+  let timeOnly = parts[1] ?? "12:00";
+  if (/^\d{1,2}:\d{2}$/.test(timeOnly)) timeOnly += ":00";
+  else if (!/^\d{1,2}:\d{2}:\d{2}$/.test(timeOnly)) timeOnly = "12:00:00";
   return { dateOnly, timeOnly };
 }
 
@@ -511,10 +536,16 @@ function splitDateTime(raw: string): { dateOnly: string; timeOnly: string } {
  * 之所以显式带 UTC+8：buildChartV2 内部用真太阳时校正，依赖准确的 UTC 表示。
  */
 function parseBirthDateTime(date: string, time: string): Date {
-  const t = time.length >= 5 ? time.slice(0, 5) : "12:00";
-  const iso = `${date}T${t}:00+08:00`;
+  const t = time.length >= 8 ? time.slice(0, 8) : (time.length >= 5 ? time.slice(0, 5) + ":00" : "12:00:00");
+  const iso = `${date}T${t}+08:00`;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) {
+    return new Date("1990-01-01T12:00:00+08:00");
+  }
+  // §1.1.1: 出生时间需在 1900-01-01 至当前时间范围内
+  const minDate = new Date("1900-01-01T00:00:00+08:00");
+  const now = new Date();
+  if (d < minDate || d > now) {
     return new Date("1990-01-01T12:00:00+08:00");
   }
   return d;

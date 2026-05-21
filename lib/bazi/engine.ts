@@ -114,14 +114,18 @@ export function computeWuxingStats(
     proportion[wx] = `${((count[wx] / total!) * 100).toFixed(1)}%`;
   }
 
-  // 五行特征描述
-  const strong = allWuxing.filter((wx) => strength_level[wx] === "极旺" || strength_level[wx] === "旺");
-  const weak = allWuxing.filter((wx) => strength_level[wx] === "极弱");
-  const mid = allWuxing.filter((wx) => strength_level[wx] === "中和");
+  // 五行特征描述（§4.4 格式：如"木旺金缺，水火平衡，土偏弱"）
   const parts: string[] = [];
-  if (strong.length > 0) parts.push(`${strong.join("")}${strong.length > 1 ? "两旺" : "旺"}`);
-  if (weak.length > 0) parts.push(`${weak.join("")}极弱`);
-  if (mid.length > 0) parts.push(`${mid.join("")}中和`);
+  for (const wx of allWuxing) {
+    const level = strength_level[wx];
+    if (level === "极旺") parts.push(`${wx}极旺`);
+    else if (level === "旺") parts.push(`${wx}旺`);
+    else if (level === "弱") parts.push(`${wx}偏弱`);
+    else if (level === "极弱") parts.push(`${wx}缺`);
+  }
+  // 中和五行合并为"X平衡"
+  const mid = allWuxing.filter((wx) => strength_level[wx] === "中和");
+  if (mid.length > 0) parts.push(`${mid.join("")}平衡`);
   const wuxing_feature = parts.join("，") || "五行均衡";
 
   return { total_count: { ...count }, energy_score, strength_level, proportion, wuxing_feature };
@@ -222,31 +226,7 @@ function applyXchhCorrectionOnZhi(
     }
   }
 
-  // ---- 优先级 3: 六冲 ----
-  const checked = new Set<string>();
-  for (let i = 0; i < allZhi.length; i++) {
-    for (let j = i + 1; j < allZhi.length; j++) {
-      const a = allZhi[i]!, b = allZhi[j]!;
-      if (locked.has(a) || locked.has(b)) continue;
-      const key = [a, b].sort().join("-");
-      if (checked.has(key)) continue;
-      if (BRANCH_CHONG[a] !== b) continue;
-      checked.add(key);
-
-      const isTonglei = isTongleiChong(a, b);
-      const factor = isTonglei ? 0.5 : 0.7;
-      scaleZhi(a, factor);
-      scaleZhi(b, factor);
-      locked.add(a);
-      locked.add(b);
-      matches.push({
-        type: "六冲", branches: [a, b],
-        detail: `${a}${b}冲${isTonglei ? "(同类冲力更强)" : ""}`,
-      });
-    }
-  }
-
-  // ---- 优先级 4: 三刑 ----
+  // ---- 优先级 3: 三刑 ----
   for (const rule of SAN_XING_RULES) {
     if (rule.members.every((m) => allZhi.includes(m) && !locked.has(m))) {
       for (const m of rule.members) scaleZhi(m, 0.8);
@@ -258,7 +238,7 @@ function applyXchhCorrectionOnZhi(
     }
   }
 
-  // ---- 优先级 5: 六合 ----
+  // ---- 优先级 4: 六合 ----
   for (const rule of LIU_HE_RULES) {
     const [a, b] = rule.pair;
     if (allZhi.includes(a) && allZhi.includes(b) && !locked.has(a) && !locked.has(b)) {
@@ -284,6 +264,30 @@ function applyXchhCorrectionOnZhi(
         type: "六合", branches: [a, b],
         detail: `${a}${b}六合${success ? `化${rule.transform}` : "合而不化"}`,
         success,
+      });
+    }
+  }
+
+  // ---- 优先级 5: 六冲 ----
+  const checked = new Set<string>();
+  for (let i = 0; i < allZhi.length; i++) {
+    for (let j = i + 1; j < allZhi.length; j++) {
+      const a = allZhi[i]!, b = allZhi[j]!;
+      if (locked.has(a) || locked.has(b)) continue;
+      const key = [a, b].sort().join("-");
+      if (checked.has(key)) continue;
+      if (BRANCH_CHONG[a] !== b) continue;
+      checked.add(key);
+
+      const isTonglei = isTongleiChong(a, b);
+      const factor = isTonglei ? 0.5 : 0.7;
+      scaleZhi(a, factor);
+      scaleZhi(b, factor);
+      locked.add(a);
+      locked.add(b);
+      matches.push({
+        type: "六冲", branches: [a, b],
+        detail: `${a}${b}冲${isTonglei ? "(同类冲力更强)" : ""}`,
       });
     }
   }
@@ -469,6 +473,7 @@ export function computeStrength(
   tenGodsResult: TenGodsResult,
   finalScores: WuxingCountMap,
   dayGan: Stem,
+  yuelingBonus: number = 0,
 ): StrengthResult {
   const { bangfu_total, kexiehao_total } = tenGodsResult;
   const final_score = Math.round((bangfu_total - kexiehao_total) * 10) / 10;
@@ -522,7 +527,7 @@ export function computeStrength(
   return {
     bangfu_total: Math.round(bangfu_total * 10) / 10,
     kexiehao_total: Math.round(kexiehao_total * 10) / 10,
-    yueling_bonus: 0,
+    yueling_bonus: yuelingBonus,
     final_score,
     strength_type,
     strength_desc,

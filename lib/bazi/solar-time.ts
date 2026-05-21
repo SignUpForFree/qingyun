@@ -1,13 +1,30 @@
 /**
+ * 均时差（Equation of Time）
+ *
+ * EoT(分钟) = 9.87×sin(2B) − 7.53×cos(B) − 1.5×sin(B)
+ * B = 360°×(N−81)/365，N 为积日（1月1日 N=1）
+ *
+ * 来源：需求 §2.3 真太阳时校正公式
+ */
+function equationOfTime(date: Date): number {
+  const start = new Date(date.getFullYear(), 0, 0);
+  const diff = date.getTime() - start.getTime();
+  const N = Math.floor(diff / (24 * 60 * 60 * 1000));
+  const B = (360 * (N - 81)) / 365;
+  const B_rad = (B * Math.PI) / 180;
+  return 9.87 * Math.sin(2 * B_rad) - 7.53 * Math.cos(B_rad) - 1.5 * Math.sin(B_rad);
+}
+
+/**
  * 真太阳时换算
  *
- * 偏差分钟 = (真实经度 - 标准经度 120°) × 4 分钟/度
- *
- * 注：均时差（地球公转椭圆轨道导致的天文校正）忽略不计，
- * 全年最大约 ±16 分钟，对八字时辰判定影响有限（时辰跨度 2 小时）。
- * 若未来需要更精确的真太阳时，应额外引入均时差表。
+ * 真太阳时 = 北京时间 + 经度修正 + 均时差(EoT)
+ * 经度修正(分钟) = (当地经度 - 120°) × 4
+ * 均时差(EoT) = 9.87×sin(2B) − 7.53×cosB − 1.5×sinB
  */
 export function toSolarTrueTime(beijingTime: Date, longitude: number): Date {
-  const offsetMinutes = (longitude - 120) * 4;
-  return new Date(beijingTime.getTime() + offsetMinutes * 60_000);
+  const longitudeOffset = (longitude - 120) * 4;
+  const eot = equationOfTime(beijingTime);
+  const totalOffsetMinutes = longitudeOffset + eot;
+  return new Date(beijingTime.getTime() + totalOffsetMinutes * 60_000);
 }

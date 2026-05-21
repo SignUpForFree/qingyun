@@ -18,6 +18,8 @@ import {
   HIDDEN_STEMS_DETAILED,
   YUELING_WUXING,
   nayinOf,
+  yinyangOfStem,
+  BRANCH_YIN_YANG,
 } from "./stems-branches";
 import { toSolarTrueTime } from "./solar-time";
 import { detectAllShensha, type ShenshaRule } from "./shensha-rules";
@@ -143,7 +145,8 @@ export interface PillarDetail {
   zhi: Branch;
   gan_wuxing: Wuxing;
   zhi_wuxing: Wuxing;
-  yinyang: "yang" | "yin";
+  gan_yinyang: "yang" | "yin";
+  zhi_yinyang: "yang" | "yin";
   nayin: string;
   nayinWuxing: Wuxing;
 }
@@ -236,13 +239,13 @@ export function buildChartV2(input: BuildChartInput, opts?: { centerYear?: numbe
   const { scaled, dayMasterStatus } = applyWangXiangScaling(xchhResult.working_count, monthZhi);
 
   // 4. 日主微调
-  const { final: finalScores } = applyDayMasterAdjust(scaled, pillars.day.gan, monthZhi);
+  const { final: finalScores, adjustScore: yuelingBonus } = applyDayMasterAdjust(scaled, pillars.day.gan, monthZhi);
 
   // 5. 十神汇总
   const tenGodsFull = computeTenGods(pillars, finalScores);
 
   // 6. 旺衰评分
-  const strength = computeStrength(tenGodsFull, finalScores, pillars.day.gan);
+  const strength = computeStrength(tenGodsFull, finalScores, pillars.day.gan, yuelingBonus);
 
   // 7. 喜用神
   const yongShenFull = computeYongShenFull(
@@ -379,7 +382,8 @@ function buildPillarDetail(gan: Stem, zhi: Branch): PillarDetail {
     zhi,
     gan_wuxing: wuxingOf(gan),
     zhi_wuxing: wuxingOf(zhi),
-    yinyang: "yang", // simplified
+    gan_yinyang: yinyangOfStem(gan),
+    zhi_yinyang: BRANCH_YIN_YANG[zhi],
     nayin: ny?.nayin ?? "",
     nayinWuxing: ny?.nayinWuxing ?? "金",
   };

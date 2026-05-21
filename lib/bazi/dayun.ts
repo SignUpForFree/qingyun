@@ -1,6 +1,7 @@
 import type { BaziPillars } from "@/types/domain";
 import type { Stem, Branch } from "./stems-branches";
 import { TEN_STEMS, TWELVE_BRANCHES } from "./stems-branches";
+import lunar, { Solar } from "lunar-javascript";
 
 /**
  * 大运 + 流年 (M3.8 / M3.9)
@@ -85,14 +86,62 @@ export function rotateMonthPillar(
 }
 
 /**
- * 起运估算：粗略版，根据出生日距离月初/月末的天数除以 3。
- * 精确版需 lunar-javascript 拿节气日，这是 V2.1 的 follow-up。
+ * 起运岁数精确计算（§3.6）
+ *
+ * 顺排：出生日 → 下一节气的天数 / 3 = 起运虚岁
+ * 逆排：上一节气 → 出生日 的天数 / 3 = 起运虚岁
+ * 使用 lunar-javascript 节气数据库精确到日。
  */
 function estimateStartAge(birthDate: Date, forward: boolean): number {
+  try {
+    const birthSolar = Solar.fromYmdHms(
+      birthDate.getFullYear(),
+      birthDate.getMonth() + 1,
+      birthDate.getDate(),
+      birthDate.getHours(),
+      birthDate.getMinutes(),
+      birthDate.getSeconds(),
+    );
+    const birthLunar = birthSolar.getLunar();
+    const jieQiTable = birthLunar.getJieQiTable();
+
+    // 节气名→Solar日期，找出出生前后所有节气
+    const jieQiList: Array<{ name: string; date: Date }> = [];
+    for (const [name, jqSolar] of Object.entries(jieQiTable)) {
+      jieQiList.push({
+        name,
+        date: new Date(jqSolar.getYear(), jqSolar.getMonth() - 1, jqSolar.getDay(), jqSolar.getHour(), jqSolar.getMinute()),
+      });
+    }
+
+    const birthMs = birthDate.getTime();
+
+    if (forward) {
+      // 顺排：找下一个节气
+      const futureJQ = jieQiList
+        .filter((j) => j.date.getTime() > birthMs)
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
+      if (futureJQ.length > 0) {
+        const daysDiff = (futureJQ[0]!.date.getTime() - birthMs) / (1000 * 60 * 60 * 24);
+        return Math.max(1, Math.round(daysDiff / 3));
+      }
+    } else {
+      // 逆排：找上一个节气
+      const pastJQ = jieQiList
+        .filter((j) => j.date.getTime() <= birthMs)
+        .sort((a, b) => b.date.getTime() - a.date.getTime());
+      if (pastJQ.length > 0) {
+        const daysDiff = (birthMs - pastJQ[0]!.date.getTime()) / (1000 * 60 * 60 * 24);
+        return Math.max(1, Math.round(daysDiff / 3));
+      }
+    }
+  } catch {
+    // lunar-javascript fallback 到简化版
+  }
+
+  // fallback 简化版
   const day = birthDate.getDate();
-  // 简化：月内 1-30 日，按月中日 15 的距离决定
   const distance = forward ? Math.max(0, 30 - day) : day;
-  // 距下/上一节气大约 distance 天 → 3 天 = 1 岁
   return Math.max(1, Math.round(distance / 3));
 }
 

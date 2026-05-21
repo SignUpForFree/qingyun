@@ -28,24 +28,49 @@ export function judgeFortuneLevel(
   xiyongshen: Wuxing[],
   jishen: Wuxing[],
 ): FortuneLevel {
-  if (strengthType === "身强" || strengthType === "身弱") {
-    const isStrong = strengthType === "身强";
-    const G = isStrong ? tempFortune.kexiehao_total : tempFortune.bangfu_total;
-    const J = isStrong ? tempFortune.bangfu_total : tempFortune.kexiehao_total;
-    const R = (G + J) > 0 ? G / (G + J) : 0.5;
+  // 所有类型统一用 R = G/(G+J) 计算
+  // G = 有利力量，J = 不利力量
+  let G: number;
+  let J: number;
 
-    if (R >= 0.8) return "大吉";
-    if (R >= 0.6) return "吉";
-    if (R >= 0.4) return "平";
-    if (R >= 0.2) return "凶";
-    return "大凶";
+  if (strengthType === "身强") {
+    // 身强喜克泄耗
+    G = tempFortune.kexiehao_total;
+    J = tempFortune.bangfu_total;
+  } else if (strengthType === "身弱") {
+    // 身弱喜帮扶
+    G = tempFortune.bangfu_total;
+    J = tempFortune.kexiehao_total;
+  } else if (strengthType === "专旺格") {
+    // 专旺喜顺势（帮扶为有利）
+    G = tempFortune.bangfu_total;
+    J = tempFortune.kexiehao_total;
+  } else if (strengthType === "从弱格") {
+    // 从弱喜顺从（克泄耗为有利）
+    G = tempFortune.kexiehao_total;
+    J = tempFortune.bangfu_total;
+  } else {
+    // 中和：按喜用/忌神五行匹配大运天干决定 G/J
+    const dayunWuxing = wuxingOf(dayunStem);
+    if (xiyongshen.includes(dayunWuxing)) {
+      G = tempFortune.bangfu_total + tempFortune.kexiehao_total;
+      J = 0;
+    } else if (jishen.includes(dayunWuxing)) {
+      G = 0;
+      J = tempFortune.bangfu_total + tempFortune.kexiehao_total;
+    } else {
+      G = tempFortune.bangfu_total;
+      J = tempFortune.kexiehao_total;
+    }
   }
 
-  // 专旺格/从弱格/中和：按喜用/忌神五行匹配
-  const dayunWuxing = wuxingOf(dayunStem);
-  if (xiyongshen.includes(dayunWuxing)) return "吉";
-  if (jishen.includes(dayunWuxing)) return "凶";
-  return "平";
+  const R = (G + J) > 0 ? G / (G + J) : 0.5;
+
+  if (R >= 0.8) return "大吉";
+  if (R >= 0.6) return "吉";
+  if (R >= 0.4) return "平";
+  if (R >= 0.2) return "凶";
+  return "大凶";
 }
 
 // ── 标签规则 ─────────────────────────────────────────────────────
