@@ -1,8 +1,9 @@
 "use client";
 import * as React from "react";
-import { GlassCard, Sparkle } from "@/components/su";
+import { GlassCard } from "@/components/su";
 import { cn } from "@/lib/utils";
 import { SlipImageRitualOverlay } from "./SlipImageRitualOverlay";
+import { SLIP_LAYOUT_VERSION } from "@/lib/divination/slip-image-url";
 
 export type SlipImageLevel = "上上" | "上吉" | "吉" | "平" | "渐顺" | "慎行";
 
@@ -13,31 +14,53 @@ export interface SlipImageFullscreenProps {
   poemLines: readonly string[];
   imageUrl: string;
   category?: string;
+  reading?: string;
   onExplain?: () => void;
   onShare?: () => void;
   busy?: boolean;
   className?: string;
 }
 
-const LEVEL_TONE: Record<SlipImageLevel, { chip: string; label: string }> = {
-  上上: { chip: "bg-[var(--color-wuxing-fire)]/35", label: "上 上 签" },
-  上吉: { chip: "bg-[var(--color-wuxing-fire)]/25", label: "上 吉 签" },
-  吉: { chip: "bg-[var(--color-wuxing-wood)]/25", label: "吉 签" },
-  平: { chip: "bg-[var(--color-wuxing-water)]/25", label: "平 签" },
-  渐顺: { chip: "bg-[var(--color-wuxing-wood)]/20", label: "渐 顺 签" },
-  慎行: { chip: "bg-[var(--color-wuxing-earth)]/30", label: "慎 行 签" },
+const LEVEL_TONE: Record<
+  SlipImageLevel,
+  { chip: string; chipText: string; glow: string }
+> = {
+  上上: {
+    chip: "from-[#F0B8C8]/50 to-[#C9A1D9]/45",
+    chipText: "上 上 签",
+    glow: "shadow-[0_12px_40px_rgba(240,184,200,0.35)]",
+  },
+  上吉: {
+    chip: "from-[#F0B8C8]/40 to-[#C9A1D9]/35",
+    chipText: "上 吉 签",
+    glow: "shadow-[0_12px_40px_rgba(201,161,217,0.3)]",
+  },
+  吉: {
+    chip: "from-[#BFD9C2]/45 to-[#C9A1D9]/35",
+    chipText: "吉 签",
+    glow: "shadow-[0_12px_40px_rgba(191,217,194,0.28)]",
+  },
+  平: {
+    chip: "from-[#E8D4E8]/55 to-[#C9A1D9]/30",
+    chipText: "平 签",
+    glow: "shadow-[0_12px_40px_rgba(201,161,217,0.22)]",
+  },
+  渐顺: {
+    chip: "from-[#BFD9C2]/35 to-[#A4B8E8]/30",
+    chipText: "渐 顺 签",
+    glow: "shadow-[0_12px_40px_rgba(164,184,232,0.25)]",
+  },
+  慎行: {
+    chip: "from-[#E8C9A4]/40 to-[#C9A1D9]/25",
+    chipText: "慎 行 签",
+    glow: "shadow-[0_12px_40px_rgba(232,201,164,0.22)]",
+  },
 };
 
-const DEFAULT_TONE = { chip: "bg-[var(--color-wuxing-water)]/25", label: "签" };
+const DEFAULT_TONE = LEVEL_TONE.吉;
 
 /**
- * 抽签结果图卡（M2.11，spec §4.4 slip_image，image10）
- *
- * - 全宽展示后端 Canvas 合成的签号图（M3.16 提供 /api/divination/slip-image/[n]）
- * - 失败时回退展示纯文本签诗 4 句
- * - "立即解读" 按钮 → onExplain → POST /api/divination/qianwen/explain
- * - "保存到相册" 按钮（微信 JS-SDK previewImage 在 M5 接入，本卡只触发回调）
- * - M4.24 加木纹背景 + 红印章 + 落款书法字仪式特化
+ * 抽签结果图卡（新中式雾紫 · 分享向竖版签面）
  */
 export function SlipImageFullscreen({
   slipNumber,
@@ -46,6 +69,7 @@ export function SlipImageFullscreen({
   poemLines,
   imageUrl,
   category,
+  reading,
   onExplain,
   onShare,
   busy,
@@ -55,42 +79,69 @@ export function SlipImageFullscreen({
   const [overlayOpen, setOverlayOpen] = React.useState(false);
   const tone = LEVEL_TONE[level] ?? DEFAULT_TONE;
 
-  return (
-    <GlassCard className={cn("space-y-3 p-4", className)}>
-      <div className="flex items-center justify-between gap-3">
-        <span
-          className={cn(
-            "rounded-full px-3 py-1 text-[11px] tracking-ritual2 text-[var(--color-ink-plum)]",
-            "border border-[var(--color-accent-lavender)]/40",
-            tone.chip,
-          )}
-        >
-          {tone.label}
-        </span>
-        <span className="font-[family-name:var(--font-serif)] text-[15px] tracking-ritual text-[var(--color-ink-plum)]">
-          第 {slipNumber} 签 · {title}
-        </span>
-        <Sparkle size={10} variant="diamond" />
-      </div>
+  /** 历史消息 URL 无 layout 时补参，避免一直显示改版前的缓存 PNG */
+  const resolvedImageUrl = React.useMemo(() => {
+    if (imageUrl.includes("layout=")) return imageUrl;
+    const sep = imageUrl.includes("?") ? "&" : "?";
+    return `${imageUrl}${sep}layout=${SLIP_LAYOUT_VERSION}`;
+  }, [imageUrl]);
 
+  return (
+    <GlassCard className={cn("space-y-3 p-3", className)}>
       {!imgError ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={imageUrl}
-          alt={`第 ${slipNumber} 签 · ${title}`}
-          className="w-full cursor-zoom-in rounded-[12px] border border-[var(--color-accent-lavender)]/30 transition hover:opacity-90"
-          onError={() => setImgError(true)}
+        <button
+          type="button"
           onClick={() => setOverlayOpen(true)}
-          data-testid="slip-card-img"
-        />
+          className={cn(
+            "group relative block w-full overflow-hidden rounded-[20px]",
+            "ring-1 ring-[var(--color-accent-lavender)]/35",
+            tone.glow,
+            "transition duration-300 hover:ring-[var(--color-accent-plum)]/45",
+          )}
+          aria-label={`查看第 ${slipNumber} 签大图`}
+        >
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -top-8 -left-8 z-0 h-24 w-24 rounded-full bg-[var(--color-accent-lavender)]/25 blur-2xl"
+          />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -right-6 -bottom-6 z-0 h-20 w-20 rounded-full bg-[var(--color-wuxing-fire)]/20 blur-2xl"
+          />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={resolvedImageUrl}
+            alt={`第 ${slipNumber} 签 · ${title}`}
+            className="relative z-[1] w-full object-contain transition duration-300 group-hover:scale-[1.01]"
+            onError={() => setImgError(true)}
+            data-testid="slip-card-img"
+          />
+          <span
+            className={cn(
+              "pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-16",
+              "bg-gradient-to-t from-[var(--color-paper-base)]/80 to-transparent",
+            )}
+          />
+          <span
+            className={cn(
+              "absolute z-[3] rounded-full px-2.5 py-1",
+              "left-[8%] bottom-[5%]",
+              "bg-white/75 text-[10px] tracking-ritual2 text-[var(--color-ink-fade)] backdrop-blur-sm",
+              "shadow-sm ring-1 ring-[var(--color-accent-lavender)]/25",
+            )}
+          >
+            轻触放大
+          </span>
+        </button>
       ) : (
         <div
           className={cn(
-            "rounded-[12px] px-4 py-5 text-center space-y-3",
-            "bg-gradient-to-br from-[#F0B8C8]/40 to-[#C9A1D9]/40",
+            "space-y-3 rounded-[20px] px-4 py-6 text-center",
+            "bg-gradient-to-br from-[#F8F0FC] via-[#FFF9FC] to-[#EDE4F6]",
+            "ring-1 ring-[var(--color-accent-lavender)]/30",
           )}
         >
-          <p className="text-[12px] text-[var(--color-ink-fade)]">签文加载失败，请重试</p>
+          <p className="text-[12px] text-[var(--color-ink-fade)]">签图加载失败</p>
           {poemLines.map((line, i) => (
             <p
               key={i}
@@ -109,17 +160,10 @@ export function SlipImageFullscreen({
         </div>
       )}
 
-      {category && (
-        <p className="text-[11px] tracking-ritual2 text-[var(--color-ink-fade)]">
-          关 于 ·{" "}
-          <span className="text-[var(--color-accent-plum)]">{category}</span>
-        </p>
-      )}
-
       <SlipImageRitualOverlay
         open={overlayOpen}
         onClose={() => setOverlayOpen(false)}
-        imageUrl={imageUrl}
+        imageUrl={resolvedImageUrl}
         slipNumber={slipNumber}
         level={level}
         title={title}
@@ -134,8 +178,9 @@ export function SlipImageFullscreen({
             onClick={onExplain}
             disabled={busy}
             className={cn(
-              "flex-1 rounded-full px-3 py-2 text-[13px] font-[family-name:var(--font-serif)] tracking-ritual",
-              "bg-[var(--color-accent-plum)] text-white hover:opacity-90",
+              "flex-1 rounded-full px-3 py-2.5 text-[13px] font-[family-name:var(--font-serif)] tracking-ritual",
+              "bg-gradient-to-r from-[var(--color-accent-plum)] to-[#9b6b9b] text-white shadow-[var(--shadow-pill)]",
+              "hover:opacity-95 active:scale-[0.98]",
               "disabled:cursor-not-allowed disabled:opacity-50",
             )}
           >
@@ -148,7 +193,9 @@ export function SlipImageFullscreen({
             onClick={onShare}
             disabled={busy}
             className={cn(
-              "rounded-full border border-[var(--color-accent-lavender)]/40 bg-white/30 px-3 py-2 text-[12px] tracking-ritual2 text-[var(--color-ink-plum)] hover:bg-[var(--color-accent-lavender)]/20",
+              "rounded-full border border-[var(--color-accent-lavender)]/50 bg-white/40 px-4 py-2.5",
+              "text-[12px] tracking-ritual2 text-[var(--color-ink-plum)] backdrop-blur-sm",
+              "hover:border-[var(--color-accent-plum)]/40 hover:bg-[var(--color-accent-lavender)]/15",
               "disabled:cursor-not-allowed disabled:opacity-50",
             )}
           >

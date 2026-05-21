@@ -5,6 +5,10 @@
  * 与 BottomNav 同屏时不再使用 h-[100dvh]，避免总高度超出视口。
  */
 export default function ChatLayout({ children }: { children: React.ReactNode }) {
-  // 与 AppShell BottomNav 同屏时由 main flex-1 分配高度，避免 h-[100dvh] 把底栏挤出视口
-  return <div className="flex min-h-0 flex-1 flex-col">{children}</div>;
+  // 固定视口高度链，MessageList 才能在内部 overflow-y-auto 滚动
+  return (
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+      {children}
+    </div>
+  );
 }

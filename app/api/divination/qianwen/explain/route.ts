@@ -8,7 +8,13 @@ import { frame, heartbeat, safeEnqueue, SSE_HEADERS } from "@/lib/chat/sse";
 import { serializeJson } from "@/lib/db/json";
 import { buildSlipPrompt, extractSlipSections } from "@/lib/ai/prompts/slip-interpret";
 import { sanitizeAiOutput } from "@/lib/ai/output-sanitizer";
-import { enforceRateLimit, jsonError, parseJsonBody } from "@/lib/chat/route-helpers";
+import {
+  enforceRateLimit,
+  jsonError,
+  parseJsonBody,
+  requireAiGateway,
+} from "@/lib/chat/route-helpers";
+import { AiGatewayNotConfiguredError } from "@/lib/ai/gateway";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -48,6 +54,8 @@ export async function POST(req: Request) {
   const { messageId, fullInterpret } = body.data;
 
   const userId = await ensureUserId();
+  const aiGate = requireAiGateway();
+  if (aiGate) return aiGate;
   const limited = await enforceRateLimit(userId, "divination", "解签 AI 调用");
   if (limited) return limited;
 
@@ -148,6 +156,15 @@ export async function POST(req: Request) {
           intent: "divination",
           source: "explain",
           sourceMessageId: messageId,
+          slipReportShell: {
+            slipNumber: meta.slipNumber,
+            level: meta.level,
+            title: meta.title,
+            poem: meta.poemLines.join("，"),
+            dimension: meta.category,
+            reading: meta.reading,
+            isFullInterpret: fullInterpret,
+          },
         }),
       );
 
@@ -224,13 +241,19 @@ export async function POST(req: Request) {
         if (process.env.NODE_ENV !== "production") {
           console.error("/api/divination/qianwen/explain 失败", e);
         }
-        const isTimeout = e instanceof Error && /timeout|abort/i.test(e.message);
+        const isConfig = e instanceof AiGatewayNotConfiguredError;
+        const isTimeout =
+          !isConfig && e instanceof Error && /timeout|abort/i.test(e.message);
         safeEnqueue(
           controller,
           frame("error", {
-            message: isTimeout ? "AI 演算超时，请重试" : "AI 卡了一下，请稍后再试",
-            code: isTimeout ? "ai_timeout" : "unknown",
-            retryable: true,
+            message: isConfig
+              ? "AI 服务未配置，请联系管理员检查服务端密钥"
+              : isTimeout
+                ? "AI 演算超时，请重试"
+                : "AI 卡了一下，请稍后再试",
+            code: isConfig ? "unknown" : isTimeout ? "ai_timeout" : "unknown",
+            retryable: !isConfig,
           }),
         );
       } finally {

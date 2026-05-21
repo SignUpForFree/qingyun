@@ -9,6 +9,7 @@ import type { DisplayMessage } from "./MessageBubble";
 import { useChatStream } from "./use-chat-stream";
 import { useCardHandlers } from "./use-card-handlers";
 import { useMountActions } from "./use-mount-actions";
+import { useDevSessionBootstrap } from "./use-dev-session-bootstrap";
 
 interface ChatWindowProps {
   conversationId: string | null;
@@ -25,6 +26,8 @@ interface ChatWindowProps {
   userAvatarUrl?: string | null;
   /** 当前用户默认档案昵称（avatar fallback 取首字 + 无障碍 alt） */
   userNickname?: string;
+  /** dev 无 cookie 时先 /api/dev-login 再 auto-send */
+  needsDevBootstrap?: boolean;
 }
 
 /**
@@ -46,7 +49,10 @@ export function ChatWindow({
   prefillText,
   userAvatarUrl,
   userNickname,
+  needsDevBootstrap = false,
 }: ChatWindowProps) {
+  const sessionReady = useDevSessionBootstrap(needsDevBootstrap);
+
   const stream = useChatStream({
     initialConvId: conversationId,
     initialMessages,
@@ -62,15 +68,19 @@ export function ChatWindow({
 
   useMountActions({
     send: stream.send,
-    autoSendText,
-    initialIntent,
+    autoSendText: sessionReady ? autoSendText : undefined,
+    initialIntent: sessionReady ? initialIntent : null,
   });
 
   const drawer = useHistoryDrawer(Boolean(openHistoryOnMount));
-  const inputBusy = stream.streamingText !== null || stream.busy;
+  const inputBusy =
+    stream.streamingText !== null ||
+    stream.streamingSlipReport !== null ||
+    stream.busy ||
+    (needsDevBootstrap && !sessionReady);
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
+    <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       <div className="absolute left-4 top-[max(0.75rem,env(safe-area-inset-top))] z-40">
         <HistoryDrawer
           currentId={stream.convId ?? undefined}
@@ -81,6 +91,7 @@ export function ChatWindow({
       <MessageList
         messages={stream.messages}
         streamingText={stream.streamingText}
+        streamingSlipReport={stream.streamingSlipReport}
         onCardPick={handleCardPick}
         onCardSubmit={handleCardSubmit}
         onCardAction={handleCardAction}

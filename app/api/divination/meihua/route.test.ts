@@ -272,7 +272,7 @@ describe("POST /api/divination/meihua — schema validation", () => {
     expect(r.status).toBe(400);
   });
 
-  it("numbers 包含 1000（超出 1-999）→ 400", async () => {
+  it("numbers 可为大整数（如均分后的 294590→29,45,90）", async () => {
     const r = await POST(
       new Request("http://test", {
         method: "POST",
@@ -280,11 +280,11 @@ describe("POST /api/divination/meihua — schema validation", () => {
         body: JSON.stringify({
           conversationId: "conv-1",
           profileId: "p-1",
-          numbers: [1000],
+          numbers: [29, 45, 90],
         }),
       }),
     );
-    expect(r.status).toBe(400);
+    expect(r.status).not.toBe(400);
   });
 
   it("缺 conversationId → 400", async () => {

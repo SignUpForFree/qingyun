@@ -5,6 +5,8 @@ import {
   HOURLY_LIMIT,
   INTENT_LIMITS,
   limitForIntent,
+  rateConfigForIntent,
+  windowMsForIntent,
 } from "./rate-limit";
 
 describe("evaluateLimit", () => {
@@ -96,10 +98,25 @@ describe("limitForIntent (M3.30)", () => {
 
   it("各 intent 限额命中 INTENT_LIMITS", () => {
     expect(limitForIntent("chat")).toBe(30);
-    expect(limitForIntent("divination")).toBe(12);
     expect(limitForIntent("bazi")).toBe(8);
     expect(limitForIntent("meihua")).toBe(8);
     expect(limitForIntent("dream")).toBe(8);
+    if (process.env.NODE_ENV === "production") {
+      expect(limitForIntent("divination")).toBe(12);
+      expect(windowMsForIntent("divination")).toBe(60 * 60 * 1000);
+    } else {
+      expect(limitForIntent("divination")).toBe(999_999);
+      expect(windowMsForIntent("divination")).toBe(60 * 1000);
+    }
+  });
+
+  it("divination 统计窗口为 1 分钟（非生产）", async () => {
+    if (process.env.NODE_ENV === "production") return;
+    const fn = vi.fn().mockResolvedValue(0);
+    const now = new Date("2026-04-26T10:00:00.000Z");
+    await isWithinLimit("user-1", { countUserMessages: fn }, { now, intent: "divination" });
+    expect(fn).toHaveBeenCalledWith("user-1", "2026-04-26T09:59:00.000Z", "divination");
+    expect(rateConfigForIntent("divination").limit).toBe(999_999);
   });
 
   it("INTENT_LIMITS bazi/meihua/dream 比 chat 严", () => {

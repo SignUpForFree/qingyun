@@ -1,29 +1,21 @@
 /**
- * 用户级限流（每小时上限）
+ * 用户级限流（按 intent 配置时间窗 + 次数上限）
  *
- * 当前实现以 conversations.user_id + messages.role='user' 作为速率指标，
- * MVP 简化版：单用户对话数远小于全站量，全站维度按用户聚合后 30 条/小时是宽口径上限。
- *
- * P1 阶段：B5 之前没有 supabase admin client，本模块只暴露：
- *   - HOURLY_LIMIT 常量
- *   - 纯函数 evaluateLimit(used, limit) 用于核心逻辑测试
- *   - 抽象 isWithinLimit(userId, deps) 接受可注入的 count 函数
- *
- * B5 之后会有一个 createAdmin().count() 实际调用 supabase 的 wrapper。
+ * 统计 conversations.user_id + messages.role='user' + messages.intent 在窗口内的条数。
  */
 
 export const HOURLY_LIMIT = Number(process.env.RATE_LIMIT_PER_USER_HOURLY ?? 30);
+const HOUR_MS = 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
+/** 开发/联调用：不限次数 */
+const UNLIMITED_LIMIT = 999_999;
 
-/**
- * M3.30: intent-specific 限额（每小时）
- *
- * - chat：闲聊轻成本 → 30
- * - bazi / meihua：长 prompt 高成本 → 8
- * - divination（抽签 step1+step2）：中成本 → 12
- * - dream：含 vector 检索 → 8
- *
- * `default` 留给未知 intent / 全站老路径，沿用 HOURLY_LIMIT。
- */
+/** RATE_LIMIT_DISABLED=1|true|yes 时全 intent 放行 */
+export function isRateLimitDisabled(): boolean {
+  const v = process.env.RATE_LIMIT_DISABLED?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
 export type RateLimitIntent =
   | "chat"
   | "divination"
@@ -32,21 +24,72 @@ export type RateLimitIntent =
   | "dream"
   | "default";
 
+export interface IntentRateConfig {
+  limit: number;
+  windowMs: number;
+}
+
+function divinationRateConfig(): IntentRateConfig {
+  if (isRateLimitDisabled()) {
+    return { limit: UNLIMITED_LIMIT, windowMs: MINUTE_MS };
+  }
+  const perMinute = process.env.RATE_LIMIT_DIVINATION_PER_MINUTE?.trim();
+  if (perMinute) {
+    return { limit: Math.max(1, Number(perMinute) || 2), windowMs: MINUTE_MS };
+  }
+  /** 开发环境默认不限次数，便于动效/流程联调 */
+  if (process.env.NODE_ENV !== "production") {
+    return { limit: UNLIMITED_LIMIT, windowMs: MINUTE_MS };
+  }
+  return { limit: 12, windowMs: HOUR_MS };
+}
+
+const BASE_INTENT_CONFIG: Record<RateLimitIntent, IntentRateConfig> = {
+  chat: { limit: 30, windowMs: HOUR_MS },
+  divination: { limit: 12, windowMs: HOUR_MS },
+  bazi: { limit: 8, windowMs: HOUR_MS },
+  meihua: { limit: 8, windowMs: HOUR_MS },
+  dream: { limit: 8, windowMs: HOUR_MS },
+  default: { limit: HOURLY_LIMIT, windowMs: HOUR_MS },
+};
+
+export function rateConfigForIntent(
+  intent?: RateLimitIntent | string | null,
+): IntentRateConfig {
+  if (intent === "divination") return divinationRateConfig();
+  if (intent && intent in BASE_INTENT_CONFIG) {
+    return BASE_INTENT_CONFIG[intent as RateLimitIntent];
+  }
+  return BASE_INTENT_CONFIG.default;
+}
+
+/** @deprecated 用 rateConfigForIntent；保留兼容 */
 export const INTENT_LIMITS: Record<RateLimitIntent, number> = {
-  chat: 30,
-  divination: 12,
-  bazi: 8,
-  meihua: 8,
-  dream: 8,
+  chat: BASE_INTENT_CONFIG.chat.limit,
+  divination: divinationRateConfig().limit,
+  bazi: BASE_INTENT_CONFIG.bazi.limit,
+  meihua: BASE_INTENT_CONFIG.meihua.limit,
+  dream: BASE_INTENT_CONFIG.dream.limit,
   default: HOURLY_LIMIT,
 };
 
 export function limitForIntent(intent?: RateLimitIntent | string | null): number {
-  if (!intent) return HOURLY_LIMIT;
-  if (intent in INTENT_LIMITS) {
-    return INTENT_LIMITS[intent as RateLimitIntent];
-  }
-  return HOURLY_LIMIT;
+  return rateConfigForIntent(intent).limit;
+}
+
+export function windowMsForIntent(intent?: RateLimitIntent | string | null): number {
+  return rateConfigForIntent(intent).windowMs;
+}
+
+/** 429 友好文案（按窗口显示「每分钟」或「每小时」） */
+export function formatRateLimitDeniedMessage(
+  intent: RateLimitIntent,
+  result: RateLimitResult,
+  label: string,
+): string {
+  const windowMs = windowMsForIntent(intent);
+  const unit = windowMs <= MINUTE_MS ? "每分钟" : "每小时";
+  return `${unit}${label}上限 ${result.limit} 次，请稍后再试（已发 ${result.used}）`;
 }
 
 export interface RateLimitResult {
@@ -88,8 +131,9 @@ export async function isWithinLimit(
 ): Promise<RateLimitResult> {
   const now = options.now ?? new Date();
   const intent = options.intent;
-  const limit = options.limit ?? limitForIntent(intent);
-  const sinceIso = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
+  const cfg = rateConfigForIntent(intent);
+  const limit = options.limit ?? cfg.limit;
+  const sinceIso = new Date(now.getTime() - cfg.windowMs).toISOString();
 
   try {
     const used = await deps.countUserMessages(userId, sinceIso, intent);

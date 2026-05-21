@@ -37,10 +37,10 @@ describe("SlipReportCard", () => {
     expect(poemEl.textContent).toContain("明朝富贵亦悠然");
   });
 
-  it("无 sections → 解签词 + AI 解读纯文本展示", () => {
+  it("无 sections → 解签语 + AI 解读纯文本展示", () => {
     render(<SlipReportCard {...baseProps} />);
-    expect(screen.getByText("解 签 词")).toBeInTheDocument();
-    expect(screen.getByText("AI 解 读")).toBeInTheDocument();
+    expect(screen.getByText("解签语")).toBeInTheDocument();
+    expect(screen.getByText("AI 解读")).toBeInTheDocument();
     expect(screen.getByText(/此签遇合有时/)).toBeInTheDocument();
     expect(screen.getByText(/工作上有贵人助力/)).toBeInTheDocument();
   });
@@ -52,8 +52,7 @@ describe("SlipReportCard", () => {
     expect(screen.getByText("福小运寄语")).toBeInTheDocument();
     expect(screen.getByText("正财旺盛，收入稳定。")).toBeInTheDocument();
     expect(screen.getByText("一分耕耘一分收获。")).toBeInTheDocument();
-    // 不显示旧的 "AI 解 读" 标签
-    expect(screen.queryByText("AI 解 读")).toBeNull();
+    expect(screen.queryByText("AI 解读")).toBeNull();
   });
 
   it("isFullInterpret=false + onFullExplain → 显示'我要完整解读'按钮", () => {
@@ -109,7 +108,7 @@ describe("SlipReportCard", () => {
     expect(screen.getByText(label)).toBeInTheDocument();
   });
 
-  it("右下角红朱方框印章（落款 福小运）", () => {
+  it("右下角雾紫落款印章（福小运）", () => {
     render(<SlipReportCard {...baseProps} />);
     const seal = screen.getByTestId("report-seal");
     expect(seal).toHaveTextContent("福");

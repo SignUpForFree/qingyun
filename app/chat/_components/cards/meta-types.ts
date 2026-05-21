@@ -17,6 +17,15 @@ export interface MetaUi {
   [k: string]: unknown;
 }
 
+/** 抽签一体卡：动效 + 签面同一条消息 */
+export interface SlipDrawRevealMeta extends Partial<SlipImageMeta> {
+  ui: "slip_draw_reveal";
+  durationMs?: number;
+  phase?: "animating" | "revealed";
+  /** 服务端 slip_image 消息 id，用于「立即解读」 */
+  slipMessageId?: string;
+}
+
 export interface SlipImageMeta {
   slipNumber: number;
   level: SlipLevel;

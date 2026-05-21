@@ -52,13 +52,27 @@ describe("MessageBubble (M2.14 — 22 ui dispatch)", () => {
     expect(screen.getByText("AI 卡了一下")).toBeInTheDocument();
   });
 
-  it("slip_drawing → ShakeSlipAnim 动画卡", () => {
+  it("slip_drawing → HeavenlySlipDraw 仙女撒签动效", () => {
     render(
       <MessageBubble
         message={assistantMsg({ ui: "slip_drawing", durationMs: 99999 })}
       />,
     );
-    expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(screen.getByTestId("heavenly-slip-draw")).toBeInTheDocument();
+  });
+
+  it("slip_draw_reveal animating → 仙女撒签一体卡动效", () => {
+    render(
+      <MessageBubble
+        message={assistantMsg({
+          ui: "slip_draw_reveal",
+          phase: "animating",
+          durationMs: 3000,
+        })}
+      />,
+    );
+    expect(screen.getByTestId("heavenly-slip-draw")).toBeInTheDocument();
+    expect(screen.getByText("仙女抽签中…")).toBeInTheDocument();
   });
 
   // ============ pickers ============
@@ -143,7 +157,13 @@ describe("MessageBubble (M2.14 — 22 ui dispatch)", () => {
 
   it("meihua_number_input → FormCard", () => {
     render(<MessageBubble message={assistantMsg({ ui: "meihua_number_input" })} />);
-    expect(screen.getByText("请给我 1-3 个 1-9 的数字")).toBeInTheDocument();
+    expect(screen.getByText("请报3个1-99之间的任意随机数")).toBeInTheDocument();
+    expect(screen.queryByText("输入任意3个数字")).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText("例如：2，5，7")).toBeInTheDocument();
+    const questionLabel = screen.getByText(/描述你想测的事情/);
+    expect(questionLabel).toHaveClass("font-[family-name:var(--font-serif)]");
+    expect(questionLabel).toHaveClass("text-[var(--color-ink-plum)]");
+    expect(screen.getByPlaceholderText("请输入内容")).toBeInTheDocument();
   });
 
   it("slip_question_input → FormCard with guide copy", () => {
@@ -175,9 +195,8 @@ describe("MessageBubble (M2.14 — 22 ui dispatch)", () => {
         })}
       />,
     );
-    expect(screen.getByRole("img")).toHaveAttribute(
-      "src",
-      "/api/divination/slip-image/1",
+    expect(screen.getByRole("img").getAttribute("src")).toMatch(
+      /^\/api\/divination\/slip-image\/1\?layout=\d+$/,
     );
     expect(screen.getByRole("button", { name: "立即解读" })).toBeInTheDocument();
   });
@@ -192,13 +211,15 @@ describe("MessageBubble (M2.14 — 22 ui dispatch)", () => {
           title: "渔翁得利",
           poem: "诗",
           dimension: "事业学业",
-          reading: "解签词",
-          aiInterpretation: "AI 解读",
+          reading: "解签词正文",
+          aiInterpretation: "AI 解读正文",
         })}
       />,
     );
-    expect(screen.getByText("解 签 词")).toBeInTheDocument();
-    expect(screen.getByText("AI 解 读")).toBeInTheDocument();
+    expect(screen.getByText("解签语")).toBeInTheDocument();
+    expect(screen.getByText("AI 解读")).toBeInTheDocument();
+    expect(screen.getByText("解签词正文")).toBeInTheDocument();
+    expect(screen.getByText("AI 解读正文")).toBeInTheDocument();
   });
 
   it("dream_result_fast → DreamResultCard mode=fast", () => {

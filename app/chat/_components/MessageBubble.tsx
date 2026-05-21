@@ -10,7 +10,8 @@ import { DreamPreciseFormCard } from "./cards/DreamPreciseFormCard";
 import { ProfilePickerCard } from "./cards/ProfilePickerCard";
 import { ProgressLongTaskCard } from "./cards/ProgressLongTaskCard";
 import { ErrorCard } from "./cards/ErrorCard";
-import { ShakeSlipAnim } from "./cards/ShakeSlipAnim";
+import { HeavenlySlipDraw, SLIP_DRAW_ANIM_MS } from "./cards/HeavenlySlipDraw";
+import { SlipDrawRevealCard } from "./cards/SlipDrawRevealCard";
 import { SlipResultCard } from "@/components/divination/SlipResultCard";
 import { MeihuaResultCard } from "@/components/divination/MeihuaResultCard";
 import { CardWrap, TextBubble } from "./cards/TextBubble";
@@ -22,6 +23,7 @@ import {
   type MeihuaResultMeta,
   type ProfilePickerMeta,
   type ProgressLongTaskMeta,
+  type SlipDrawRevealMeta,
   type SlipImageMeta,
   type SlipReportMeta,
 } from "./cards/meta-types";
@@ -29,6 +31,7 @@ import {
   BAZI_QUICK_FIELDS,
   DREAM_PRECISE_FIELDS,
   MEIHUA_NUMBER_FIELDS,
+  MEIHUA_NUMBER_FORM_TITLE,
   SLIP_QUESTION_FIELDS,
 } from "./cards/form-fields";
 import type { Message } from "@/lib/db/schema";
@@ -171,9 +174,24 @@ export function MessageBubble({
       const m = (meta ?? {}) as { durationMs?: number };
       return (
         <CardWrap className={className}>
-          <ShakeSlipAnim
-            durationMs={m.durationMs}
+          <HeavenlySlipDraw
+            pullDurationMs={m.durationMs ?? SLIP_DRAW_ANIM_MS}
+            durationMs={m.durationMs ?? SLIP_DRAW_ANIM_MS}
             onComplete={() => onCardAction?.(message.id, ui, "complete")}
+          />
+        </CardWrap>
+      );
+    }
+
+    case "slip_draw_reveal": {
+      const m = meta as unknown as SlipDrawRevealMeta;
+      return (
+        <CardWrap className={className}>
+          <SlipDrawRevealCard
+            meta={m}
+            busy={busy}
+            onExplain={() => onCardAction?.(message.id, ui, "explain")}
+            onShare={() => onCardAction?.(message.id, ui, "share")}
           />
         </CardWrap>
       );
@@ -247,7 +265,7 @@ export function MessageBubble({
       return (
         <CardWrap className={className}>
           <FormCard
-            title="请给我 1-3 个 1-9 的数字"
+            title={MEIHUA_NUMBER_FORM_TITLE}
             fields={MEIHUA_NUMBER_FIELDS}
             submitLabel="起卦测算"
             busy={busy}
@@ -285,6 +303,7 @@ export function MessageBubble({
               poemLines={m.poemLines}
               imageUrl={m.imageUrl}
               category={m.category}
+              reading={m.reading}
               onExplain={() => onCardAction?.(message.id, ui, "explain")}
               onShare={() => onCardAction?.(message.id, ui, "share")}
               busy={busy}

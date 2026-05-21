@@ -150,7 +150,7 @@ export async function buildGuideCard(
       if (userProfiles.length === 1 || boundExists) {
         const profileId = boundExists ? boundProfileId! : userProfiles[0]!.id;
         return {
-          contentText: "请报 3 个 1-999 之间的随机数（也可只报 1-2 个）",
+          contentText: "",
           meta: {
             ui: "meihua_number_input",
             profileId,

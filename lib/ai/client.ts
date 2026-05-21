@@ -128,6 +128,8 @@ export async function chat(input: ChatInput): Promise<ChatNonStreamResult | Stre
       // 让调用方识别（路由层 catch 静默处理）
       throw err;
     }
+    // stream 路径需要真实 StreamTextRet；吞错会变成 undefined.textStream → 前端 "AI 卡了一下"
+    if (input.stream) throw err;
     console.error("AI Gateway 失败", err);
     return {
       text: FALLBACK_TEXT,

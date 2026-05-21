@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db/client";
 import { messages, slips } from "@/lib/db/schema";
 import { ensureUserId } from "@/lib/auth/session";
 import { guardTexts } from "@/lib/safety/guard";
+import { buildSlipImageUrl } from "@/lib/divination/slip-image-url";
 import { pickSlip } from "@/lib/divination/slips";
 import { serializeJson } from "@/lib/db/json";
 import {
@@ -157,7 +158,7 @@ export async function POST(req: Request) {
     level: slip.level,
     title: slip.title,
     poemLines,
-    imageUrl: `/api/divination/slip-image/${slip.number}`,
+    imageUrl: buildSlipImageUrl(slip.number, category),
     category,
     reading,
     readings,

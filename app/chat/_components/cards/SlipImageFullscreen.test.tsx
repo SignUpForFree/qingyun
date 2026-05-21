@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { SlipImageFullscreen } from "./SlipImageFullscreen";
+import { SLIP_LAYOUT_VERSION } from "@/lib/divination/slip-image-url";
 
 const baseProps = {
   slipNumber: 1,
@@ -10,19 +11,26 @@ const baseProps = {
   imageUrl: "/api/divination/slip-image/1",
 };
 
+const withLayout = (url: string) =>
+  url.includes("layout=")
+    ? url
+    : `${url}${url.includes("?") ? "&" : "?"}layout=${SLIP_LAYOUT_VERSION}`;
+
 describe("SlipImageFullscreen (M2.11)", () => {
   it("渲染签图 + 立即解读按钮（plan 示例）", () => {
     render(<SlipImageFullscreen {...baseProps} onExplain={() => {}} />);
     const img = screen.getByRole("img");
-    expect(img.getAttribute("src")).toBe("/api/divination/slip-image/1");
+    expect(img.getAttribute("src")).toBe(withLayout("/api/divination/slip-image/1"));
     expect(screen.getByRole("button", { name: "立即解读" })).toBeInTheDocument();
+    expect(screen.getByText("轻触放大")).toBeInTheDocument();
   });
 
-  it("渲染 level 徽章 + 签号 + 标题", () => {
-    render(<SlipImageFullscreen {...baseProps} onExplain={() => {}} />);
-    expect(screen.getByText("上 上 签")).toBeInTheDocument();
-    expect(screen.getByText(/第 1 签/)).toBeInTheDocument();
-    expect(screen.getByText(/天官赐福/)).toBeInTheDocument();
+  it("已有 layout 参数的 imageUrl 不再重复追加", () => {
+    const url = "/api/divination/slip-image/1?layout=3&category=事业";
+    render(
+      <SlipImageFullscreen {...baseProps} imageUrl={url} onExplain={() => {}} />,
+    );
+    expect(screen.getByRole("img").getAttribute("src")).toBe(url);
   });
 
   it("img 加载失败 → 回退渲染 4 行签诗", () => {
@@ -55,7 +63,7 @@ describe("SlipImageFullscreen (M2.11)", () => {
     expect(screen.queryByRole("button", { name: "保存到相册" })).toBeNull();
   });
 
-  it("category 提供时渲染 '关于 · {category}'", () => {
+  it("category 传入时供全屏 overlay 使用（卡面不重复展示维度）", () => {
     render(
       <SlipImageFullscreen
         {...baseProps}
@@ -63,7 +71,8 @@ describe("SlipImageFullscreen (M2.11)", () => {
         onExplain={() => {}}
       />,
     );
-    expect(screen.getByText("事业学业")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /查看第 1 签大图/ }));
+    expect(screen.getByText(/关 于 · 事业学业/)).toBeInTheDocument();
   });
 
   it("busy=true 时按钮 disabled 不触发回调", () => {
@@ -75,15 +84,4 @@ describe("SlipImageFullscreen (M2.11)", () => {
     expect(onExplain).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ["上上", "上 上 签"],
-    ["上吉", "上 吉 签"],
-    ["吉", "吉 签"],
-    ["平", "平 签"],
-    ["渐顺", "渐 顺 签"],
-    ["慎行", "慎 行 签"],
-  ] as const)("level=%s 渲染徽章 '%s'", (level, label) => {
-    render(<SlipImageFullscreen {...baseProps} level={level} />);
-    expect(screen.getByText(label)).toBeInTheDocument();
-  });
 });

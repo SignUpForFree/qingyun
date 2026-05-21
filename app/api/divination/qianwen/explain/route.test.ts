@@ -86,6 +86,11 @@ async function readSse(res: Response): Promise<string> {
   return await res.text();
 }
 
+/** requireAiGateway() 在路由入口校验；测试里给假 key 避免 503 */
+beforeEach(() => {
+  process.env.AI_GATEWAY_API_KEY = "test-key-for-vitest";
+});
+
 describe("POST /api/divination/qianwen/explain — happy path", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -159,6 +164,29 @@ describe("POST /api/divination/qianwen/explain — error paths", () => {
     vi.clearAllMocks();
     const { getDb } = await import("@/lib/db/client");
     (getDb as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue(makeFakeDb());
+  });
+
+  it("AI 网关未配置 → 503 JSON（非笼统 SSE error）", async () => {
+    const origGateway = process.env.AI_GATEWAY_API_KEY;
+    const origDeepseek = process.env.DEEPSEEK_API_KEY;
+    delete process.env.AI_GATEWAY_API_KEY;
+    delete process.env.DEEPSEEK_API_KEY;
+    try {
+      const req = new Request("http://test", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ messageId: "msg-source" }),
+      });
+      const res = await POST(req);
+      expect(res.status).toBe(503);
+      const j = (await res.json()) as { error: string };
+      expect(j.error).toContain("AI 服务未配置");
+    } finally {
+      if (origGateway !== undefined) process.env.AI_GATEWAY_API_KEY = origGateway;
+      else delete process.env.AI_GATEWAY_API_KEY;
+      if (origDeepseek !== undefined) process.env.DEEPSEEK_API_KEY = origDeepseek;
+      else delete process.env.DEEPSEEK_API_KEY;
+    }
   });
 
   it("缺 messageId → 400", async () => {

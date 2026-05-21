@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * 22 个对话 UI 卡片类型（M2.4，spec §4.4）
+ * 23 个对话 UI 卡片类型（M2.4，spec §4.4）
  *
  * 用 discriminated union（"ui" 字段）描述 messages.metadata 的结构。
  * 后端写消息时把 metadata stringify 后存 messages 表，前端读出来再 parseCardMeta。
@@ -9,7 +9,7 @@ import { z } from "zod";
  * 分组：
  *  - state/transient (3): intent_pending / progress_long_task / error_card
  *  - pickers (4): choice_card / profile_picker / slip_type_picker / bazi_focus_picker
- *  - forms (4): slip_question_input / bazi_quick_form / meihua_number_input / dream_precise_form
+ *  - forms (5): slip_question_input / bazi_quick_form / meihua_number_input / dream_fast_input / dream_precise_form
  *  - animation (1): slip_drawing
  *  - results (7): slip_image / slip_report / dream_result_fast / dream_result_precise /
  *                bazi_result / meihua_result / fortune_brief_card
@@ -103,9 +103,13 @@ const meihuaNumberInput = z.object({
   numberCount: z.number().int().min(1).max(6).default(3),
 });
 
+const dreamFastInput = z.object({
+  ui: z.literal("dream_fast_input"),
+});
+
 const dreamPreciseForm = z.object({
   ui: z.literal("dream_precise_form"),
-  fields: z.array(z.enum(["core", "emotion", "reality", "special"])),
+  fields: z.array(z.enum(["core", "emotion", "reality", "special"])).optional(),
 });
 
 // ============ animation ============
@@ -227,6 +231,7 @@ export const CardMetaSchema = z.discriminatedUnion("ui", [
   slipQuestionInput,
   baziQuickForm,
   meihuaNumberInput,
+  dreamFastInput,
   dreamPreciseForm,
   slipDrawing,
   slipImage,
@@ -245,7 +250,7 @@ export type CardMeta = z.infer<typeof CardMetaSchema>;
 
 export type CardUiType = CardMeta["ui"];
 
-/** 全部 22 ui 字面量列表（运行时枚举 / 测试） */
+/** 全部 23 ui 字面量列表（运行时枚举 / 测试） */
 export const ALL_CARD_UI_TYPES = [
   "intent_pending",
   "progress_long_task",
@@ -257,6 +262,7 @@ export const ALL_CARD_UI_TYPES = [
   "slip_question_input",
   "bazi_quick_form",
   "meihua_number_input",
+  "dream_fast_input",
   "dream_precise_form",
   "slip_drawing",
   "slip_image",

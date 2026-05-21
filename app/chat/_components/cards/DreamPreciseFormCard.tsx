@@ -44,14 +44,12 @@ export function DreamPreciseFormCard({
 
   return (
     <div className={cn("space-y-3", className)}>
-      {/* 引导文案 */}
       {introText && (
         <p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--color-ink-plum)]">
           {introText}
         </p>
       )}
 
-      {/* 触发行 */}
       <button
         type="button"
         disabled={busy}
@@ -66,7 +64,6 @@ export function DreamPreciseFormCard({
         <span className="flex-1 text-left">填写梦境详情（精准解读）</span>
       </button>
 
-      {/* Sheet 抽屉 */}
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent
           side="bottom"

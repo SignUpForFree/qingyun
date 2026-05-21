@@ -125,77 +125,7 @@ export function buildSlipPrompt(args: BuildSlipPromptArgs): BuildSlipPromptResul
   };
 }
 
-// ============ 解析 AI 输出为结构化 sections ============
-
-export interface SlipSection {
-  emoji: string;
-  label: string;
-  shortReading: string;
-  longReading: string;
-}
-
-const ALL_SECTIONS = [...DIM_SECTIONS, CLOSING_SECTION];
-
-/**
- * 从 AI 输出文本提取结构化 sections。
- * AI 输出格式：每块以 emoji 标签行开头。
- */
-export function extractSlipSections(text: string): SlipSection[] {
-  const sections: SlipSection[] = [];
-
-  // 找到所有 emoji 标签行的位置
-  const matches: { index: number; sectionDef: typeof ALL_SECTIONS[number]; contentStart: number }[] = [];
-
-  for (const sec of ALL_SECTIONS) {
-    // 匹配 emoji + label 行（可能在行首，也可能前面有换行）
-    const pattern = new RegExp(`^${escapeRegExp(sec.emoji)}\\s*${escapeRegExp(sec.label)}\\s*$`, "gmu");
-    let m: RegExpExecArray | null;
-    while ((m = pattern.exec(text)) !== null) {
-      matches.push({
-        index: m.index,
-        sectionDef: sec,
-        contentStart: m.index + m[0].length,
-      });
-    }
-  }
-
-  // 按 index 排序
-  matches.sort((a, b) => a.index - b.index);
-
-  if (matches.length === 0) {
-    // fallback：整段作为综合运势
-    sections.push({
-      emoji: "📊",
-      label: "综合运势",
-      shortReading: text.slice(0, 100).trim(),
-      longReading: text.trim(),
-    });
-    return sections;
-  }
-
-  for (let i = 0; i < matches.length; i++) {
-    const start = matches[i].contentStart;
-    const end = i + 1 < matches.length ? matches[i + 1].index : text.length;
-    const content = text.slice(start, end).trim();
-
-    // 尝试按空行切分 简短解读 / 详细展开
-    const parts = content.split(/\n\s*\n/);
-    const shortReading = (parts[0] ?? "").trim();
-    const longReading = parts.length > 1 ? parts.slice(1).join("\n\n").trim() : "";
-
-    sections.push({
-      emoji: matches[i].sectionDef.emoji,
-      label: matches[i].sectionDef.label,
-      shortReading,
-      longReading,
-    });
-  }
-
-  return sections;
-}
-
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
+export type { SlipSection } from "@/lib/ai/slip-sections";
+export { extractSlipSections } from "@/lib/ai/slip-sections";
 
 export { DIM_SECTIONS, CLOSING_SECTION, CATEGORY_TO_KEY };

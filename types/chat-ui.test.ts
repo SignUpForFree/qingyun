@@ -8,15 +8,15 @@ import {
   type CardMeta,
 } from "./chat-ui";
 
-describe("CardMeta union (M2.4 — 22 ui types)", () => {
-  it("ALL_CARD_UI_TYPES 含 22 条且全部唯一", () => {
-    expect(ALL_CARD_UI_TYPES).toHaveLength(22);
-    expect(new Set(ALL_CARD_UI_TYPES).size).toBe(22);
+describe("CardMeta union (M2.4 — 23 ui types)", () => {
+  it("ALL_CARD_UI_TYPES 含 23 条且全部唯一", () => {
+    expect(ALL_CARD_UI_TYPES).toHaveLength(23);
+    expect(new Set(ALL_CARD_UI_TYPES).size).toBe(23);
   });
 
-  it("CardMetaSchema discriminated union 包含 22 个分支", () => {
+  it("CardMetaSchema discriminated union 包含 23 个分支", () => {
     const def = CardMetaSchema._def;
-    expect(def.options).toHaveLength(22);
+    expect(def.options).toHaveLength(23);
   });
 });
 
@@ -88,6 +88,7 @@ describe("isCardMeta — 正样本（每个 ui type 至少一条最小样本）"
         numberCount: 3,
       },
     ],
+    ["dream_fast_input", { ui: "dream_fast_input" }],
     [
       "dream_precise_form",
       { ui: "dream_precise_form", fields: ["core", "emotion"] },
@@ -196,8 +197,8 @@ describe("isCardMeta — 正样本（每个 ui type 至少一条最小样本）"
     ],
   ];
 
-  it("覆盖 22 个 ui 全部正样本", () => {
-    expect(minimalSamples).toHaveLength(22);
+  it("覆盖 23 个 ui 全部正样本", () => {
+    expect(minimalSamples).toHaveLength(23);
     const uis = minimalSamples.map(([k]) => k).sort();
     expect(uis).toEqual([...ALL_CARD_UI_TYPES].sort());
   });

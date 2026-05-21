@@ -60,14 +60,25 @@ export function EmptyLauncher({ onPick, busy }: EmptyLauncherProps) {
       className="mx-auto w-full max-w-md space-y-4 px-4 pt-14"
       data-testid="chat-empty-launcher"
     >
-      <div className="flex justify-center">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/images/ai-avatar.png" alt="福小运" className="h-24 w-24" />
-      </div>
-
-      <div className="text-center">
-        <p className="font-[family-name:var(--font-serif)] text-[16px] font-medium tracking-ritual text-[var(--color-ink-plum)]">
-          嗨！我是福小运，可以基于国学知识理论为您提供日常决策、运势、财富、情感、命理分析、解梦等服务，请问有什么可以帮您？ <Sparkle size={10} />
+      <div className="flex flex-col items-center gap-3">
+        <div className="flex items-center justify-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/images/ai-avatar.png"
+            alt=""
+            className="h-[72px] w-[72px] shrink-0 drop-shadow-[0_4px_12px_rgba(201,161,217,0.35)]"
+          />
+          <h1
+            className={cn(
+              "font-sans text-[32px] font-semibold leading-none tracking-normal text-[var(--color-ink-plum)]",
+            )}
+          >
+            福小运
+          </h1>
+        </div>
+        <p className="max-w-[320px] text-center font-[family-name:var(--font-serif)] text-[15px] font-medium leading-relaxed tracking-ritual text-[var(--color-ink-plum)]">
+          嗨！我可以基于国学知识理论，为您提供日常决策、运势、财富、情感、命理分析、解梦等服务，请问有什么可以帮您？
+          <Sparkle size={10} className="ml-1 inline-block align-middle" />
         </p>
       </div>
 

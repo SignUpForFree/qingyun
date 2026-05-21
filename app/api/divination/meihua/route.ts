@@ -38,7 +38,7 @@ const HEARTBEAT_MS = 25_000;
  * V2.0 五行损益 / 时辰能量加权在 M3.16+ 升级 lib/divination/meihua-v2.ts。
  */
 
-const VALID_NUMBER = z.number().int().min(1).max(999);
+const VALID_NUMBER = z.number().int().min(1);
 
 // CLAUDE.md 第 1 条：ChatWindow 首次会话 convId 为 null，必须 .nullish()
 const bodySchema = z.object({
@@ -130,7 +130,7 @@ export async function POST(req: Request) {
         .values({
           conversation_id: conversationId,
           role: "assistant",
-          content: "请报 3 个 1-999 之间的随机数（也可只报 1-2 个）",
+          content: "",
           intent: "meihua",
           metadata: serializeJson(cardMeta),
         })
@@ -141,7 +141,7 @@ export async function POST(req: Request) {
         card: {
           id: card?.id,
           role: "assistant",
-          content: "请报 3 个 1-999 之间的随机数（也可只报 1-2 个）",
+          content: "",
           metadata: serializeJson(cardMeta),
         },
       });
@@ -201,7 +201,7 @@ export async function POST(req: Request) {
       .values({
         conversation_id: conversationId,
         role: "assistant",
-        content: "请报 3 个 1-999 之间的随机数（也可只报 1-2 个）",
+        content: "",
         intent: "meihua",
         metadata: serializeJson(cardMeta),
       })
@@ -211,7 +211,7 @@ export async function POST(req: Request) {
       card: {
         id: card?.id,
         role: "assistant",
-        content: "请报 3 个 1-999 之间的随机数（也可只报 1-2 个）",
+        content: "",
         metadata: serializeJson(cardMeta),
       },
     });

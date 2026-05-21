@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { renderSlipToBuffer, type SlipCategory } from "@/lib/canvas/slip-render";
+import {
+  renderSlipToBuffer,
+  SLIP_LAYOUT_VERSION,
+  type SlipCategory,
+} from "@/lib/canvas/slip-render";
 import { getSlip, DIVINATION_DIMS } from "@/lib/divination/slips";
 
 export const runtime = "nodejs";
@@ -51,7 +55,8 @@ export async function GET(
     status: 200,
     headers: {
       "Content-Type": "image/png",
-      "Cache-Control": "public, max-age=86400, immutable",
+      "Cache-Control": "public, max-age=86400",
+      "X-Slip-Layout": String(SLIP_LAYOUT_VERSION),
       "Content-Length": String(png.length),
     },
   });

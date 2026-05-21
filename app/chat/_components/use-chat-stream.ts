@@ -15,10 +15,18 @@ import {
   flushStreamThinkState,
   stripThinkChain,
 } from "@/lib/ai/strip-think-chain";
+import { extractSlipSections } from "@/lib/ai/slip-sections";
+import { mergeMessagesById } from "@/lib/chat/merge-messages";
+import { mergeSlipDrawReveal } from "@/lib/chat/merge-slip-draw-reveal";
 import type { DisplayMessage } from "./MessageBubble";
+import type {
+  SlipReportShell,
+  StreamingSlipReport,
+} from "./streaming-slip-report";
 
 interface SubActionJsonResponse {
-  step: string;
+  step?: string;
+  idempotent?: boolean;
   card?: {
     id?: string;
     role: "assistant";
@@ -34,11 +42,18 @@ interface UseChatStreamOptions {
   initialMessages: DisplayMessage[];
 }
 
+/** 抽签等：API 返回后合并进已有本地卡，而非追加第二条消息 */
+export interface PostSubActionOptions {
+  mergeMessageId?: string;
+}
+
 export interface UseChatStreamReturn {
   convId: string | null;
   messages: DisplayMessage[];
   setMessages: React.Dispatch<React.SetStateAction<DisplayMessage[]>>;
   streamingText: string | null;
+  /** 解签流式：直接渲染 SlipReportCard，不走纯文本气泡 */
+  streamingSlipReport: StreamingSlipReport | null;
   progressHint: string | null;
   busy: boolean;
   send: (text: string) => Promise<void>;
@@ -46,6 +61,7 @@ export interface UseChatStreamReturn {
     url: string,
     label: string,
     body: Record<string, unknown>,
+    options?: PostSubActionOptions,
   ) => Promise<void>;
   /** dream fast：标记下一条用户消息走 /api/divination/dream 而不是 /api/chat */
   markDreamFastWaiting: () => void;
@@ -71,6 +87,8 @@ export function useChatStream({
   const [convId, setConvId] = React.useState<string | null>(initialConvId);
   const [messages, setMessages] = React.useState<DisplayMessage[]>(initialMessages);
   const [streamingText, setStreamingText] = React.useState<string | null>(null);
+  const [streamingSlipReport, setStreamingSlipReport] =
+    React.useState<StreamingSlipReport | null>(null);
   const [progressHint, setProgressHint] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const abortRef = React.useRef<AbortController | null>(null);
@@ -94,11 +112,18 @@ export function useChatStream({
     async (
       body: ReadableStream<Uint8Array>,
       label: string,
-      extra: Pick<SseCallbacks, "onMeta">,
+      extra: Pick<SseCallbacks, "onMeta"> & {
+        slipReport?: {
+          onStart: (shell: SlipReportShell) => void;
+          onUpdate: (report: StreamingSlipReport) => void;
+        };
+      },
     ): Promise<{ assistantText: string; cards: DisplayMessage[] }> => {
       let assistantText = "";
       const cards: DisplayMessage[] = [];
       let rafId: number | null = null;
+      let slipShell: SlipReportShell | null = null;
+      let slipReportRafId: number | null = null;
       // 跨 chunk 拼半截 <think> 也能识别，UI 上完全不会闪现思考链
       const thinkState = createStreamThinkState();
       const flush = () => {
@@ -109,15 +134,47 @@ export function useChatStream({
         if (rafId !== null) return;
         rafId = requestAnimationFrame(flush);
       };
+      const buildStreamingReport = (shell: SlipReportShell): StreamingSlipReport => ({
+        slipNumber: shell.slipNumber,
+        level: shell.level,
+        title: shell.title,
+        poem: shell.poem,
+        dimension: shell.dimension,
+        reading: shell.reading,
+        isFullInterpret: shell.isFullInterpret,
+        aiInterpretation: assistantText,
+        sections: extractSlipSections(assistantText),
+      });
+
+      const schedSlipReport = () => {
+        const shell = slipShell;
+        if (!shell || !extra.slipReport) return;
+        if (slipReportRafId !== null) return;
+        slipReportRafId = requestAnimationFrame(() => {
+          slipReportRafId = null;
+          extra.slipReport!.onUpdate(buildStreamingReport(shell));
+        });
+      };
 
       try {
         await consumeSseStream(body, {
-          ...extra,
+          onMeta: (data) => {
+            const shell = (data as { slipReportShell?: SlipReportShell }).slipReportShell;
+            if (shell && extra.slipReport) {
+              slipShell = shell;
+              extra.slipReport.onStart(shell);
+            }
+            extra.onMeta?.(data);
+          },
           onToken: (chunk) => {
             const visible = consumeStreamChunk(thinkState, chunk);
             if (visible) {
               assistantText += visible;
-              sched();
+              if (slipShell && extra.slipReport) {
+                schedSlipReport();
+              } else {
+                sched();
+              }
             }
           },
           onCard: (card) => cards.push(toDisplayCard(card)),
@@ -142,7 +199,11 @@ export function useChatStream({
         if (tail) assistantText += tail;
         // 兜底再过一遍同步版（防漏行首"思考过程："这种）
         assistantText = stripThinkChain(assistantText);
+        if (slipShell !== null && extra.slipReport) {
+          extra.slipReport.onUpdate(buildStreamingReport(slipShell));
+        }
         if (rafId !== null) cancelAnimationFrame(rafId);
+        if (slipReportRafId !== null) cancelAnimationFrame(slipReportRafId);
         setProgressHint(null);
       }
 
@@ -152,9 +213,16 @@ export function useChatStream({
   );
 
   const postSubAction = React.useCallback(
-    async (url: string, label: string, body: Record<string, unknown>) => {
-      if (streamingText !== null || busy) return;
+    async (
+      url: string,
+      label: string,
+      body: Record<string, unknown>,
+      options?: PostSubActionOptions,
+    ) => {
+      if (streamingText !== null || streamingSlipReport !== null || busy) return;
       setBusy(true);
+      const mergeMessageId = options?.mergeMessageId;
+      const isSlipExplain = url.includes("/qianwen/explain");
       let res: Response;
       try {
         res = await apiFetch(url, {
@@ -165,6 +233,9 @@ export function useChatStream({
       } catch (e) {
         if (process.env.NODE_ENV !== "production") {
           console.error(`${label} fetch failed`, e);
+        }
+        if (mergeMessageId) {
+          setMessages((m) => m.filter((x) => x.id !== mergeMessageId));
         }
         toast.error("网络一时不通，稍候再试");
         setBusy(false);
@@ -181,6 +252,9 @@ export function useChatStream({
         if (process.env.NODE_ENV !== "production") {
           console.warn(`${label} ${res.status}`);
         }
+        if (mergeMessageId) {
+          setMessages((m) => m.filter((x) => x.id !== mergeMessageId));
+        }
         toast.error(friendly);
         setBusy(false);
         return;
@@ -189,8 +263,25 @@ export function useChatStream({
       // Branch D: SSE 流式
       const ct = res.headers.get("content-type") ?? "";
       if (ct.includes("text/event-stream") && res.body) {
-        setStreamingText("");
-        const { assistantText, cards } = await consumeStream(res.body, label, {});
+        if (!isSlipExplain) setStreamingText("");
+        const { assistantText, cards } = await consumeStream(
+          res.body,
+          label,
+          isSlipExplain
+            ? {
+                slipReport: {
+                  onStart: (shell) =>
+                    setStreamingSlipReport({
+                      ...shell,
+                      aiInterpretation: "",
+                      sections: [],
+                    }),
+                  onUpdate: (report) => setStreamingSlipReport(report),
+                },
+              }
+            : {},
+        );
+        setStreamingSlipReport(null);
         setMessages((m) => commitTurn(m, assistantText, cards));
         setStreamingText(null);
         setBusy(false);
@@ -206,18 +297,13 @@ export function useChatStream({
         setBusy(false);
         return;
       }
-      if (data.card) {
-        const card = data.card;
-        setMessages((m) => [
-          ...m,
-          {
-            id: card.id ?? `tmp-card-${Date.now()}`,
-            role: "assistant",
-            content: card.content,
-            created_at: new Date().toISOString(),
-            metadata: card.metadata ?? null,
-          },
-        ]);
+      const jsonCard = data.card;
+      if (jsonCard) {
+        if (mergeMessageId) {
+          setMessages((m) => mergeSlipDrawReveal(m, mergeMessageId, jsonCard));
+        } else {
+          setMessages((m) => mergeMessagesById(m, [jsonCardToDisplay(jsonCard)]));
+        }
       }
       if (!convId && data.conversationId) {
         setConvId(data.conversationId);
@@ -228,12 +314,12 @@ export function useChatStream({
       }
       setBusy(false);
     },
-    [convId, streamingText, busy, consumeStream],
+    [convId, streamingText, streamingSlipReport, busy, consumeStream],
   );
 
   const send = React.useCallback(
     async (text: string) => {
-      if (streamingText !== null || busy) return;
+      if (streamingText !== null || streamingSlipReport !== null || busy) return;
 
       // dream fast：下一条用户消息直接走 /api/divination/dream
       if (dreamFastWaitingRef.current && convId) {
@@ -284,13 +370,16 @@ export function useChatStream({
 
       if (!res.ok || !res.body) {
         let friendly = "福小运一时走神，请再说一次";
+        if (res.status === 401) {
+          friendly = "请先登录后再继续";
+        }
         try {
           const j = (await res.clone().json()) as {
             errorCard?: { message?: string };
             error?: string;
           };
           if (j.errorCard?.message) friendly = j.errorCard.message;
-          else if (j.error) friendly = j.error;
+          else if (j.error && res.status !== 401) friendly = j.error;
         } catch {
           /* 静默 */
         }
@@ -317,7 +406,7 @@ export function useChatStream({
       setMessages((m) => commitTurn(m, assistantText, cards));
       setStreamingText(null);
     },
-    [convId, streamingText, busy, consumeStream, postSubAction],
+    [convId, streamingText, streamingSlipReport, busy, consumeStream, postSubAction],
   );
 
   return {
@@ -325,6 +414,7 @@ export function useChatStream({
     messages,
     setMessages,
     streamingText,
+    streamingSlipReport,
     progressHint,
     busy,
     send,
@@ -333,9 +423,19 @@ export function useChatStream({
   };
 }
 
+function jsonCardToDisplay(card: NonNullable<SubActionJsonResponse["card"]>): DisplayMessage {
+  return {
+    id: card.id ?? `tmp-card-${Date.now()}`,
+    role: "assistant",
+    content: card.content,
+    created_at: new Date().toISOString(),
+    metadata: card.metadata ?? null,
+  };
+}
+
 function toDisplayCard(card: SseCardData): DisplayMessage {
   return {
-    id: card.id!,
+    id: card.id ?? `tmp-card-${Date.now()}`,
     role: "assistant",
     content: card.content,
     created_at: new Date().toISOString(),
@@ -348,17 +448,16 @@ function commitTurn(
   assistantText: string,
   cards: DisplayMessage[],
 ): DisplayMessage[] {
-  const next = [...prev];
+  const incoming: DisplayMessage[] = [...cards];
   // 若有卡片（bazi/meihua/explain 等 SSE 路径），则卡片 content 已含完整文字，
   // 不再额外插入纯文本气泡，避免用户看到两条内容相同的消息。
   if (assistantText && cards.length === 0) {
-    next.push({
+    incoming.unshift({
       id: `tmp-asst-${Date.now()}`,
       role: "assistant",
       content: assistantText,
       created_at: new Date().toISOString(),
     });
   }
-  for (const cm of cards) next.push(cm);
-  return next;
+  return mergeMessagesById(prev, incoming);
 }

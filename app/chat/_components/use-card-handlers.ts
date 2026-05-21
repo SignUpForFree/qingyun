@@ -1,17 +1,26 @@
 "use client";
 
 import * as React from "react";
+import { flushSync } from "react-dom";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/util/api-fetch";
 import { saveImageToAlbum } from "@/lib/util/save-image";
 import type { DisplayMessage } from "./MessageBubble";
 import type { CardActionCallback, CardPickCallback, CardSubmitCallback } from "./MessageBubble";
+import type { PostSubActionOptions } from "./use-chat-stream";
+import { SLIP_DRAW_ANIM_MS } from "./cards/HeavenlySlipDraw";
+import { parseMeihuaNumbers } from "@/lib/divination/parse-meihua-numbers";
 
 interface UseCardHandlersOptions {
   convId: string | null;
   messages: DisplayMessage[];
   setMessages: React.Dispatch<React.SetStateAction<DisplayMessage[]>>;
-  postSubAction: (url: string, label: string, body: Record<string, unknown>) => Promise<void>;
+  postSubAction: (
+    url: string,
+    label: string,
+    body: Record<string, unknown>,
+    options?: PostSubActionOptions,
+  ) => Promise<void>;
   /** dream fast 模式：标记下一条 send() 走 dream 路由 */
   markDreamFastWaiting: () => void;
 }
@@ -43,16 +52,7 @@ export function useCardHandlers({
     (msgId, ui, key) => {
       if (ui === "slip_type_picker") {
         slipDimRef.current = key;
-        setMessages((m) => [
-          ...m,
-          makeLocalCard(
-            `local-slip-q-${Date.now()}`,
-            "请描述你遇到的事情和想问的问题，描述越具体，解读越精准哦。",
-            {
-              ui: "slip_question_input",
-            },
-          ),
-        ]);
+        setMessages((m) => applySlipTypePick(m, msgId, key));
         return;
       }
       if (ui === "dream_choice") {
@@ -97,7 +97,7 @@ export function useCardHandlers({
           ...m,
           makeLocalCard(
             `local-meihua-num-${Date.now()}`,
-            "请给我 1-3 个 1-9 的数字",
+            "",
             { ui: "meihua_number_input" },
           ),
         ]);
@@ -147,19 +147,27 @@ export function useCardHandlers({
       if (ui === "slip_question_input") {
         const dim = slipDimRef.current;
         if (!dim) return;
-        // 先插入摇签动画卡，再调 API
-        setMessages((m) => [
-          ...m,
-          makeLocalCard(`local-slip-draw-${Date.now()}`, "", {
-            ui: "slip_drawing",
-            durationMs: 3500,
-          }),
-        ]);
-        await postSubAction("/api/divination/qianwen", "抽签", {
-          conversationId: convId,
-          category: dim,
-          userQuestion: values.userQuestion ?? "",
+        const drawId = `local-slip-draw-${Date.now()}`;
+        flushSync(() => {
+          setMessages((m) => [
+            ...m,
+            makeLocalCard(drawId, "", {
+              ui: "slip_draw_reveal",
+              phase: "animating",
+              durationMs: SLIP_DRAW_ANIM_MS,
+            }),
+          ]);
         });
+        await postSubAction(
+          "/api/divination/qianwen",
+          "抽签",
+          {
+            conversationId: convId,
+            category: dim,
+            userQuestion: values.userQuestion ?? "",
+          },
+          { mergeMessageId: drawId },
+        );
         return;
       }
       if (ui === "dream_precise_form") {
@@ -189,15 +197,12 @@ export function useCardHandlers({
         return;
       }
       if (ui === "meihua_number_input") {
-        const numbers = (values.numbers ?? "")
-          .split(/[,，\s]+/)
-          .map((s) => Number(s))
-          .filter((n) => Number.isInteger(n) && n >= 1 && n <= 9)
-          .slice(0, 3);
-        if (numbers.length === 0) {
-          toast.error("数字不合法，请填 1-3 个 1-9 的整数");
+        const parsed = parseMeihuaNumbers(values.numbers ?? "");
+        if (!parsed.ok) {
+          toast.error(parsed.message);
           return;
         }
+        const numbers = parsed.numbers;
         const numMsg = messages.find((m) => m.id === msgId);
         const profileId = readProfileId(numMsg);
         await postSubAction("/api/divination/meihua", "测算", {
@@ -213,13 +218,17 @@ export function useCardHandlers({
 
   const handleCardAction = React.useCallback<CardActionCallback>(
     async (msgId, ui, action) => {
-      if (ui === "slip_image" && action === "explain") {
+      if (
+        (ui === "slip_image" || ui === "slip_draw_reveal") &&
+        action === "explain"
+      ) {
         if (!convId) {
           toast.error("会话尚未建立，请先与福小运打个招呼");
           return;
         }
+        const sourceMessageId = resolveSlipExplainMessageId(msgId, messages);
         await postSubAction("/api/divination/qianwen/explain", "解读", {
-          messageId: msgId,
+          messageId: sourceMessageId,
         });
         return;
       }
@@ -243,7 +252,10 @@ export function useCardHandlers({
         });
         return;
       }
-      if (ui === "slip_image" && action === "share") {
+      if (
+        (ui === "slip_image" || ui === "slip_draw_reveal") &&
+        action === "share"
+      ) {
         const msg = messages.find((m) => m.id === msgId);
         if (!msg?.metadata) {
           toast.error("图片信息丢失");
@@ -276,6 +288,70 @@ export function useCardHandlers({
   );
 
   return { handleCardPick, handleCardSubmit, handleCardAction };
+}
+
+/** 一体签卡本地 id → 服务端 slip_image 消息 id（供 explain 查库） */
+function resolveSlipExplainMessageId(
+  msgId: string,
+  messages: DisplayMessage[],
+): string {
+  const msg = messages.find((m) => m.id === msgId);
+  if (!msg?.metadata) return msgId;
+  try {
+    const meta = JSON.parse(msg.metadata) as { slipMessageId?: string };
+    if (meta.slipMessageId) return meta.slipMessageId;
+  } catch {
+    /* 静默 */
+  }
+  return msgId;
+}
+
+/** 选完签类：收起 picker → 用户气泡记录选择 → 助手回复问题输入卡 */
+export function applySlipTypePick(
+  messages: DisplayMessage[],
+  pickerMsgId: string,
+  key: string,
+): DisplayMessage[] {
+  const label = resolvePickerOptionLabel(messages, pickerMsgId, key);
+  const ts = Date.now();
+  const collapsed = messages.map((msg) => {
+    if (msg.id !== pickerMsgId) return msg;
+    return {
+      ...msg,
+      metadata: JSON.stringify({ ui: "text" }),
+    };
+  });
+  return [
+    ...collapsed,
+    {
+      id: `local-slip-type-user-${ts}`,
+      role: "user" as const,
+      content: label,
+      created_at: new Date().toISOString(),
+    },
+    makeLocalCard(
+      `local-slip-q-${ts}`,
+      "请描述你遇到的事情和想问的问题，描述越具体，解读越精准哦。",
+      { ui: "slip_question_input", category: key },
+    ),
+  ];
+}
+
+function resolvePickerOptionLabel(
+  messages: DisplayMessage[],
+  pickerMsgId: string,
+  key: string,
+): string {
+  const msg = messages.find((m) => m.id === pickerMsgId);
+  if (!msg?.metadata) return key;
+  try {
+    const meta = JSON.parse(msg.metadata) as {
+      options?: Array<{ key: string; label: string }>;
+    };
+    return meta.options?.find((o) => o.key === key)?.label ?? key;
+  } catch {
+    return key;
+  }
 }
 
 function makeLocalCard(

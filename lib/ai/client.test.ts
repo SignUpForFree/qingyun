@@ -121,6 +121,17 @@ describe("chat() 非流式", () => {
 describe("chat() 流式", () => {
   beforeEach(() => streamTextMock.mockReset());
 
+  it("stream=true 且 streamText 初始化失败时抛错（不返回 fallback 对象）", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    streamTextMock.mockImplementationOnce(() => {
+      throw new Error("network down");
+    });
+    await expect(
+      chat({ messages: [{ role: "user", content: "x" }], stream: true }),
+    ).rejects.toThrow("network down");
+    errSpy.mockRestore();
+  });
+
   it("stream=true 时直接返回 result（不消费 textStream）", async () => {
     const result = {
       textStream: (async function* () {

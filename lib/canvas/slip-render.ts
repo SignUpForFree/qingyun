@@ -1,7 +1,8 @@
 import "server-only";
 import path from "node:path";
 import fs from "node:fs";
-import { createCanvas, GlobalFonts } from "@napi-rs/canvas";
+import { createCanvas, GlobalFonts, loadImage } from "@napi-rs/canvas";
+import QRCode from "qrcode";
 
 export type SlipCategory =
   | "综合运势"
@@ -16,18 +17,33 @@ export interface SlipRenderInput {
   level: string;
   title: string;
   poem: string;
-  /** M3.5: 6 类抽签维度，作为底部水印印章 + 顶部副标 */
   category?: SlipCategory | string;
-  /** M3.5: 静态解签词（categoryReadings[category]），渲染在签诗下方 */
   dimensionReading?: string;
 }
 
-// 注册马善政 CJK 毛笔字体（spec §6 V1.0：避免 Alpine 容器无中文字体回退到 .notdef）
-// 字体文件 ~5.8MB，OFL 1.1，随仓库 public/fonts/ 一起 ship 进 standalone bundle
+const PALETTE = {
+  paperTop: "#FFFBFE",
+  paperMid: "#F6EEF9",
+  paperBottom: "#EDE4F6",
+  inkPlum: "#4A3D5C",
+  inkMist: "#6B5A7A",
+  inkFade: "#9A8DAB",
+  lavender: "#C9A1D9",
+  plum: "#8B5D8B",
+  blush: "#F0B8C8",
+} as const;
+
 const FONT_FAMILY = "Ma Shan Zheng";
-const FONT_FALLBACK_STACK = `"${FONT_FAMILY}", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Zen Hei", "Noto Sans CJK SC", serif`;
+const FONT_FALLBACK_STACK = `"${FONT_FAMILY}", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", serif`;
+const SANS_STACK = `"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif`;
+
+import { SLIP_LAYOUT_VERSION } from "@/lib/divination/slip-image-url";
+
+export { SLIP_LAYOUT_VERSION };
+
 let fontRegistered = false;
 let fontAvailable = false;
+
 function ensureFont(): void {
   if (fontRegistered) return;
   const fontPath = path.join(process.cwd(), "public/fonts/MaShanZheng-Regular.ttf");
@@ -46,17 +62,13 @@ function ensureFont(): void {
   fontRegistered = true;
 }
 
+type CanvasContext = ReturnType<ReturnType<typeof createCanvas>["getContext"]>;
+
 /**
- * 服务端 Canvas 合成签文图片（spec §6 / M3.5）
+ * 服务端 Canvas 合成签文分享图
  *
- * - 750×1000 PNG
- * - 米色背景 + 紫墨字
- * - 第 N 签 · 等级 / 签题 / 签诗 wrap
- * - M3.5：可选 6 类维度水印（顶部副标 + 底部印章）+ category dimensionReading 副文
- * - 防御 M0.8：返回 PNG 必须 > 30KB（字形真的写进去了，不是只剩背景）
- *
- * 用 @napi-rs/canvas 而非 node canvas — 无 cairo / pango 系统依赖，
- * Docker Alpine 上直接 npm install 即可。
+ * 版式（自上而下）：签号 → 签名（最大）→ 等级 → 类别 → 签诗 → 解读语
+ * 右下：福小运 logo + 名称 + 扫码二维码
  */
 export async function renderSlipToBuffer(input: SlipRenderInput): Promise<Buffer> {
   ensureFont();
@@ -65,145 +77,374 @@ export async function renderSlipToBuffer(input: SlipRenderInput): Promise<Buffer
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext("2d");
 
-  // 米色背景
-  ctx.fillStyle = "#F5EFE6";
-  ctx.fillRect(0, 0, W, H);
+  drawPaperBackground(ctx, W, H);
+  drawAmbientDots(ctx, W, H);
+  drawOuterFrame(ctx, W, H);
+  drawCornerBlossoms(ctx, W, H);
 
-  // 内描边（仙气框）
-  ctx.strokeStyle = "rgba(160, 130, 195, 0.5)";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(40, 40, W - 80, H - 80);
+  const frameX = 48;
+  const frameY = 64;
+  const frameW = W - frameX * 2;
+  const frameH = H - frameY - 56;
+  const contentMaxW = frameW - 72;
+  const cx = W / 2;
 
-  ctx.fillStyle = "#3a2a4a";
+  drawInnerPanel(ctx, frameX, frameY, frameW, frameH);
+
+  const brandReserve = 108;
+  const contentBottom = frameY + frameH - brandReserve;
   ctx.textAlign = "center";
 
-  // 顶部 category 副标（可选）
+  let y = frameY + 44;
+
+  // 1. 签序号（独立一行，不与签名共用 baseline）
+  y += drawTextLine(
+    ctx,
+    cx,
+    y,
+    `第 ${input.slipNumber} 签`,
+    `28px ${SANS_STACK}`,
+    PALETTE.inkFade,
+  ).height;
+  y += 28;
+
+  // 2. 签名（最大字号，单独占一行）
+  y += drawTitle(ctx, cx, y, input.title, contentMaxW);
+  y += 8;
+
+  // 3. 签等级（紧贴签名下方，单行文本）
+  y += drawTextLine(
+    ctx,
+    cx,
+    y,
+    `${input.level}签`,
+    `32px ${FONT_FALLBACK_STACK}`,
+    PALETTE.plum,
+  ).height;
+  y += 22;
+
+  // 4. 求签类型：XXXXX（与等级留足间距）
   if (input.category) {
-    ctx.font = `26px ${FONT_FALLBACK_STACK}`;
-    ctx.fillStyle = "rgba(160, 130, 195, 0.85)";
-    ctx.fillText(`· ${input.category} ·`, W / 2, 90);
+    y += drawTextLine(
+      ctx,
+      cx,
+      y,
+      `求签类型：${input.category}`,
+      `24px ${SANS_STACK}`,
+      PALETTE.inkMist,
+    ).height;
+    y += 14;
   }
 
-  // 签号 + 等级
-  ctx.fillStyle = "#3a2a4a";
-  ctx.font = `40px ${FONT_FALLBACK_STACK}`;
-  ctx.fillText(`第 ${input.slipNumber} 签 · ${input.level}`, W / 2, 160);
+  drawOrnamentalDivider(ctx, cx, y + 4);
+  y += 32;
 
-  // 签题
-  ctx.font = `60px ${FONT_FALLBACK_STACK}`;
-  ctx.fillText(input.title, W / 2, 320);
+  // 5. 签诗 — 标题略大+装饰框；正文无白底框
+  y += drawSectionHeader(ctx, cx, y, "签诗");
+  y += drawBodyText(ctx, cx, y, input.poem, contentMaxW, {
+    fontSize: 34,
+    lineGap: 18,
+    maxBottom: contentBottom,
+  });
+  y += 20;
 
-  // 分割线
-  ctx.beginPath();
-  ctx.moveTo(W / 2 - 80, 380);
-  ctx.lineTo(W / 2 + 80, 380);
-  ctx.strokeStyle = "rgba(160, 130, 195, 0.4)";
-  ctx.lineWidth = 1;
-  ctx.stroke();
-
-  // 签诗
-  ctx.font = `32px ${FONT_FALLBACK_STACK}`;
-  ctx.fillStyle = "#3a2a4a";
-  wrapText(ctx, input.poem, W / 2, 480, 600, 50);
-
-  // dimensionReading 副文（M3.5：30 字内的当类静态解读）
-  if (input.dimensionReading) {
-    ctx.font = `22px ${FONT_FALLBACK_STACK}`;
-    ctx.fillStyle = "rgba(80, 60, 100, 0.85)";
-    wrapText(ctx, input.dimensionReading, W / 2, 740, 560, 34);
+  // 6. 解签语 — 同上
+  const reading = input.dimensionReading?.trim();
+  if (reading && y < contentBottom - 48) {
+    y += drawSectionHeader(ctx, cx, y, "解签语");
+    drawBodyText(ctx, cx, y, reading, contentMaxW, {
+      fontSize: 32,
+      lineGap: 18,
+      maxBottom: contentBottom,
+    });
   }
 
-  // M3.5 底部 category 印章（淡水印）
-  if (input.category) {
-    drawCategorySeal(ctx, W / 2, H - 130, input.category);
-  }
-
-  // 装饰：底部签号（保留 serif，No. 是 ASCII）
-  ctx.font = "20px serif";
-  ctx.fillStyle = "rgba(160, 130, 195, 0.6)";
-  ctx.fillText(`No. ${input.slipNumber}`, W / 2, H - 70);
+  await drawBrandCorner(ctx, frameX + frameW - 24, frameY + frameH - 24, resolveShareUrl());
 
   return Buffer.from(canvas.toBuffer("image/png"));
+}
+
+function resolveShareUrl(): string {
+  const raw =
+    process.env.NEXT_PUBLIC_PUBLIC_BASE_URL?.trim() ||
+    process.env.PUBLIC_BASE_URL?.trim() ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+    "http://localhost:3000";
+  return `${raw.replace(/\/$/, "")}/chat`;
+}
+
+function parseFontSize(font: string): number {
+  const m = /(\d+(?:\.\d+)?)px/.exec(font);
+  return m ? Number(m[1]) : 16;
+}
+
+interface LineMetrics {
+  width: number;
+  ascent: number;
+  descent: number;
+  height: number;
+}
+
+function measureLine(ctx: CanvasContext, text: string, font: string): LineMetrics {
+  ctx.font = font;
+  const m = ctx.measureText(text);
+  const size = parseFontSize(font);
+  const ascent = m.actualBoundingBoxAscent > 0 ? m.actualBoundingBoxAscent : size * 0.85;
+  const descent = m.actualBoundingBoxDescent > 0 ? m.actualBoundingBoxDescent : size * 0.2;
+  return { width: m.width, ascent, descent, height: ascent + descent };
+}
+
+/** 以 topY 为顶边绘制单行，返回真实占位高度（避免书法字体顶到上一行） */
+function drawTextLine(
+  ctx: CanvasContext,
+  cx: number,
+  topY: number,
+  text: string,
+  font: string,
+  color: string,
+): LineMetrics {
+  ctx.font = font;
+  ctx.fillStyle = color;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  const met = measureLine(ctx, text, font);
+  ctx.fillText(text, cx, topY + met.ascent);
+  return met;
+}
+
+function drawTitle(ctx: CanvasContext, cx: number, topY: number, title: string, maxW: number): number {
+  let fontSize = 80;
+  let font = `${fontSize}px ${FONT_FALLBACK_STACK}`;
+  while (fontSize >= 44) {
+    font = `${fontSize}px ${FONT_FALLBACK_STACK}`;
+    if (measureLine(ctx, title, font).width <= maxW) break;
+    fontSize -= 4;
+  }
+  return drawTextLine(ctx, cx, topY, title, font, PALETTE.inkPlum).height;
+}
+
+/** 区块标题（签诗 / 解签语）：胶囊形边框，仅框标题不框正文 */
+function drawSectionHeader(ctx: CanvasContext, cx: number, topY: number, label: string): number {
+  const fontSize = 30;
+  const font = `bold ${fontSize}px ${SANS_STACK}`;
+  const tw = measureLine(ctx, label, font).width;
+  const padX = 28;
+  const padY = 10;
+  const bw = tw + padX * 2;
+  const bh = fontSize + padY * 2;
+  const bx = cx - bw / 2;
+  const pillR = bh / 2;
+
+  roundRect(ctx, bx, topY, bw, bh, pillR);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.32)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(201, 161, 217, 0.65)";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  const lineMet = measureLine(ctx, label, font);
+  const textTop = topY + Math.max(4, (bh - lineMet.height) / 2);
+  drawTextLine(ctx, cx, textTop, label, font, PALETTE.plum);
+  return bh + 16;
+}
+
+/** 正文：直接落在纸面上，无白底框 */
+function drawBodyText(
+  ctx: CanvasContext,
+  cx: number,
+  topY: number,
+  body: string,
+  maxW: number,
+  opts: { fontSize: number; lineGap: number; maxBottom: number },
+): number {
+  const font = `${opts.fontSize}px ${FONT_FALLBACK_STACK}`;
+  const lines = measureWrappedLines(ctx, body, maxW - 32);
+  let yy = topY + 6;
+  let used = 0;
+  for (const line of lines) {
+    const met = drawTextLine(ctx, cx, yy, line, font, PALETTE.inkMist);
+    if (yy + met.height > opts.maxBottom) break;
+    yy += met.height + opts.lineGap;
+    used = yy - topY;
+  }
+  return Math.max(used, opts.fontSize + opts.lineGap);
+}
+
+async function drawBrandCorner(
+  ctx: CanvasContext,
+  anchorRight: number,
+  anchorBottom: number,
+  shareUrl: string,
+): Promise<void> {
+  const qrSize = 80;
+  const gap = 14;
+
+  const qrX = anchorRight - qrSize;
+  const qrY = anchorBottom - qrSize;
+
+  try {
+    const qrBuffer = await QRCode.toBuffer(shareUrl, {
+      margin: 1,
+      width: qrSize,
+      color: { dark: PALETTE.inkPlum, light: "#FFFFFF" },
+    });
+    const qrImg = await loadImage(qrBuffer);
+    roundRect(ctx, qrX - 2, qrY - 2, qrSize + 4, qrSize + 4, 8);
+    ctx.fillStyle = "#fff";
+    ctx.fill();
+    ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+  } catch (e) {
+    console.warn("[slip-render] QR 生成失败", e);
+  }
+
+  const textRight = qrX - gap;
+  ctx.textAlign = "right";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = PALETTE.plum;
+  ctx.font = `28px ${FONT_FALLBACK_STACK}`;
+  ctx.fillText("福小运", textRight, anchorBottom - 28);
+  ctx.fillStyle = PALETTE.inkFade;
+  ctx.font = `18px ${SANS_STACK}`;
+  ctx.fillText("灵签 · 扫码", textRight, anchorBottom - 6);
+  ctx.textAlign = "center";
+}
+
+function drawPaperBackground(ctx: CanvasContext, w: number, h: number): void {
+  const g = ctx.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, PALETTE.paperTop);
+  g.addColorStop(0.45, PALETTE.paperMid);
+  g.addColorStop(1, PALETTE.paperBottom);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+
+  const rg = ctx.createRadialGradient(w * 0.5, h * 0.2, 40, w * 0.5, h * 0.28, w * 0.85);
+  rg.addColorStop(0, "rgba(240, 184, 200, 0.2)");
+  rg.addColorStop(1, "rgba(255, 251, 254, 0)");
+  ctx.fillStyle = rg;
+  ctx.fillRect(0, 0, w, h);
+}
+
+function drawAmbientDots(ctx: CanvasContext, w: number, h: number): void {
+  const seeds = [12, 37, 58, 91, 124, 156, 203, 241, 288, 317, 402, 455, 501, 533];
+  ctx.fillStyle = "rgba(201, 161, 217, 0.3)";
+  for (const seed of seeds) {
+    const x = 40 + ((seed * 17) % (w - 80));
+    const y = 50 + ((seed * 23) % (h - 140));
+    ctx.beginPath();
+    ctx.arc(x, y, 1.2 + (seed % 3) * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawOuterFrame(ctx: CanvasContext, w: number, h: number): void {
+  roundRect(ctx, 24, 24, w - 48, h - 48, 28);
+  ctx.strokeStyle = "rgba(201, 161, 217, 0.5)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function drawInnerPanel(ctx: CanvasContext, x: number, y: number, w: number, h: number): void {
+  roundRect(ctx, x, y, w, h, 22);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(201, 161, 217, 0.32)";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+function drawCornerBlossoms(ctx: CanvasContext, w: number, h: number): void {
+  const corners: [number, number, number][] = [
+    [56, 56, -0.35],
+    [w - 56, 56, 0.35],
+    [56, h - 56, 0.3],
+    [w - 56, h - 56, -0.3],
+  ];
+  for (const [cx, cy, rot] of corners) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rot);
+    drawPlumPetalCluster(ctx);
+    ctx.restore();
+  }
+}
+
+function drawPlumPetalCluster(ctx: CanvasContext): void {
+  for (let i = 0; i < 5; i++) {
+    ctx.save();
+    ctx.rotate((i * Math.PI * 2) / 5);
+    ctx.fillStyle = i % 2 === 0 ? "rgba(240, 184, 200, 0.45)" : "rgba(201, 161, 217, 0.35)";
+    ctx.beginPath();
+    ctx.ellipse(0, -12, 6, 12, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawOrnamentalDivider(ctx: CanvasContext, cx: number, y: number): void {
+  const half = 88;
+  ctx.strokeStyle = "rgba(201, 161, 217, 0.4)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cx - half, y);
+  ctx.lineTo(cx - 14, y);
+  ctx.moveTo(cx + 14, y);
+  ctx.lineTo(cx + half, y);
+  ctx.stroke();
+  ctx.fillStyle = PALETTE.lavender;
+  ctx.beginPath();
+  ctx.arc(cx, y, 3, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function roundRect(
+  ctx: CanvasContext,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+): void {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.lineTo(x + w - rr, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+  ctx.lineTo(x + w, y + h - rr);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+  ctx.lineTo(x + rr, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+  ctx.lineTo(x, y + rr);
+  ctx.quadraticCurveTo(x, y, x + rr, y);
+  ctx.closePath();
 }
 
 interface CanvasCtx {
   measureText: (text: string) => { width: number };
   fillText: (text: string, x: number, y: number) => void;
+  font: string;
 }
 
-function wrapText(
-  ctx: CanvasCtx,
-  text: string,
-  cx: number,
-  y: number,
-  maxW: number,
-  lineH: number,
-): void {
-  const chars = [...text];
-  let line = "";
-  let yy = y;
-  for (const ch of chars) {
-    const test = line + ch;
-    if (ctx.measureText(test).width > maxW && line.length > 0) {
-      ctx.fillText(line, cx, yy);
-      line = ch;
-      yy += lineH;
-    } else {
-      line = test;
+function measureWrappedLines(ctx: CanvasCtx, text: string, maxW: number): string[] {
+  const normalized = text.replace(/\n+/g, "\n").trim();
+  const paragraphs = normalized.split("\n");
+  const lines: string[] = [];
+  for (const para of paragraphs) {
+    const chars = [...para];
+    let line = "";
+    for (const ch of chars) {
+      const test = line + ch;
+      if (ctx.measureText(test).width > maxW && line.length > 0) {
+        lines.push(line);
+        line = ch;
+      } else {
+        line = test;
+      }
     }
+    if (line) lines.push(line);
   }
-  if (line) ctx.fillText(line, cx, yy);
+  return lines.length > 0 ? lines : [""];
 }
 
-type CanvasContext = ReturnType<ReturnType<typeof createCanvas>["getContext"]>;
-
-/**
- * 画 category 印章水印 — 红朱方框 + 双字短文（"事业 / 财运 / 健康"）
- *
- * 不取 category 全名（避免 4-5 字挤），按维度映射：
- *   综合运势 → 综运
- *   事业学业 → 事业
- *   财运    → 财运
- *   感情姻缘 → 感情
- *   人际贵人 → 人际
- *   平安健康 → 健康
- */
-function drawCategorySeal(
-  ctx: CanvasContext,
-  cx: number,
-  cy: number,
-  category: string,
-): void {
-  const sealText = SEAL_TEXT[category] ?? category.slice(0, 2);
-  const half = 32;
-
-  ctx.save();
-  ctx.strokeStyle = "rgba(180, 60, 60, 0.55)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.rect(cx - half, cy - half, half * 2, half * 2);
-  ctx.stroke();
-
-  ctx.font = `28px ${FONT_FALLBACK_STACK}`;
-  ctx.fillStyle = "rgba(180, 60, 60, 0.7)";
-  // 印章里 2 字纵排
-  const ch0 = sealText[0] ?? "";
-  const ch1 = sealText[1] ?? "";
-  ctx.fillText(ch0, cx, cy - 4);
-  ctx.fillText(ch1, cx, cy + 26);
-  ctx.restore();
-}
-
-const SEAL_TEXT: Record<string, string> = {
-  综合运势: "综运",
-  事业学业: "事业",
-  财运: "财运",
-  感情姻缘: "感情",
-  人际贵人: "人际",
-  平安健康: "健康",
-};
-
-/** 给路由层做诊断用 — 检测当前进程是否已加载到 CJK 字体 */
 export function isFontAvailable(): boolean {
   ensureFont();
   return fontAvailable;

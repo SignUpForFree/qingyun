@@ -17,7 +17,11 @@ import type { ZodSchema } from "zod";
 import { getDb } from "@/lib/db/client";
 import { conversations } from "@/lib/db/schema";
 import { checkRateLimit } from "@/lib/ai/check-rate-limit";
-import type { RateLimitIntent } from "@/lib/ai/rate-limit";
+import { isAiGatewayConfigured } from "@/lib/ai/gateway";
+import {
+  formatRateLimitDeniedMessage,
+  type RateLimitIntent,
+} from "@/lib/ai/rate-limit";
 
 type DrizzleDb = ReturnType<typeof getDb>;
 
@@ -26,6 +30,15 @@ export function jsonError(message: string, status: number): Response {
     status,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+const AI_NOT_CONFIGURED_MSG =
+  "AI 服务未配置：请在项目根目录 .env.local 填写 AI_GATEWAY_BASE_URL 与 AI_GATEWAY_API_KEY（ofox 控制台获取），保存后重启 pnpm dev";
+
+/** 调用 AI 前检查网关 key；未配置时返回 503 JSON（避免 SSE 里笼统的「AI 卡了一下」） */
+export function requireAiGateway(): Response | null {
+  if (isAiGatewayConfigured()) return null;
+  return jsonError(AI_NOT_CONFIGURED_MSG, 503);
 }
 
 /**
@@ -61,10 +74,7 @@ export async function enforceRateLimit(
 ): Promise<Response | null> {
   const limit = await checkRateLimit(userId, intent);
   if (limit.allowed) return null;
-  return jsonError(
-    `每小时${label}上限 ${limit.limit} 次，请稍后再试（已发 ${limit.used}）`,
-    429,
-  );
+  return jsonError(formatRateLimitDeniedMessage(intent, limit, label), 429);
 }
 
 /**

@@ -5,6 +5,7 @@ import { conversations, messages } from "@/lib/db/schema";
 import { ensureUserId } from "@/lib/auth/session";
 import { classifyIntent } from "@/lib/ai/intent-classifier";
 import { checkRateLimit } from "@/lib/ai/check-rate-limit";
+import { formatRateLimitDeniedMessage } from "@/lib/ai/rate-limit";
 import { guardTexts } from "@/lib/safety/guard";
 import { shouldSummarize, summarize } from "@/lib/ai/summarizer";
 import { routeIntent } from "@/lib/chat/router";
@@ -85,7 +86,7 @@ export async function POST(req: Request) {
       dream: "解梦",
     };
     return jsonError(
-      `每小时${intentLabel[intent] ?? intent}上限 ${limit.limit} 次，请稍后再试（已发 ${limit.used}）`,
+      formatRateLimitDeniedMessage(intent, limit, intentLabel[intent] ?? intent),
       429,
     );
   }

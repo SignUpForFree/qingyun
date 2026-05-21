@@ -2,6 +2,7 @@ import { and, count, eq, gte } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { conversations, messages } from "@/lib/db/schema";
 import {
+  isRateLimitDisabled,
   isWithinLimit,
   type CountUserMessagesDeps,
   type RateLimitIntent,
@@ -20,6 +21,9 @@ export async function checkRateLimit(
   userId: string,
   intent?: RateLimitIntent,
 ): Promise<RateLimitResult> {
+  if (isRateLimitDisabled()) {
+    return { allowed: true, used: 0, remaining: 999_999, limit: 999_999, intent };
+  }
   const db = getDb();
   const deps: CountUserMessagesDeps = {
     countUserMessages: async (uid, sinceIso, scopedIntent) => {

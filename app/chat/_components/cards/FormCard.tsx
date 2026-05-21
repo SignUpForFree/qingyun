@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 export interface FormField {
   key: string;
   label: string;
+  /** title：与卡片顶部说明同系宋体主色；field：默认小字辅助色 */
+  labelVariant?: "title" | "field";
   type?: "text" | "textarea" | "select" | "number";
   required?: boolean;
   max?: number;
@@ -14,6 +16,11 @@ export interface FormField {
   min?: number;
   maxValue?: number;
 }
+
+const FORM_TITLE_LABEL_CLASS =
+  "text-sm font-[family-name:var(--font-serif)] leading-relaxed tracking-ritual text-[var(--color-ink-plum)]";
+const FORM_FIELD_LABEL_CLASS =
+  "text-xs tracking-ritual2 text-[var(--color-ink-fade)]";
 
 export interface FormCardProps {
   title: string;
@@ -55,16 +62,24 @@ export function FormCard({
 
   return (
     <GlassCard className={cn("space-y-3 p-4", className)}>
-      <div className="flex items-center justify-between gap-2">
-        <p className="whitespace-pre-wrap text-sm font-[family-name:var(--font-serif)] leading-relaxed tracking-ritual text-[var(--color-ink-plum)]">
-          {title}
-        </p>
-        <Sparkle size={10} variant="diamond" />
-      </div>
+      {title.trim().length > 0 ? (
+        <div className="flex items-center justify-between gap-2">
+          <p className={cn("whitespace-pre-wrap", FORM_TITLE_LABEL_CLASS)}>
+            {title}
+          </p>
+          <Sparkle size={10} variant="diamond" />
+        </div>
+      ) : null}
       {fields.map((f) => (
         <div key={f.key} className="space-y-1">
           {f.label.trim().length > 0 ? (
-            <label className="text-xs tracking-ritual2 text-[var(--color-ink-fade)]">
+            <label
+              className={
+                f.labelVariant === "title"
+                  ? FORM_TITLE_LABEL_CLASS
+                  : FORM_FIELD_LABEL_CLASS
+              }
+            >
               {f.label}
               {f.required && (
                 <span className="ml-0.5 text-[var(--color-wuxing-fire)]">*</span>

@@ -23,15 +23,42 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
  *   request body 注入 `thinking: { type: "disabled" | "enabled" }`，DeepSeek 识别。
  */
 
+/** 空字符串视为未配置（.env 里 `KEY=` 常见） */
+function envOrUndefined(v: string | undefined): string | undefined {
+  const t = v?.trim();
+  return t ? t : undefined;
+}
+
 export const AI_MODEL =
-  process.env.AI_GATEWAY_MODEL ??
-  process.env.DEEPSEEK_MODEL ??
+  envOrUndefined(process.env.AI_GATEWAY_MODEL) ??
+  envOrUndefined(process.env.DEEPSEEK_MODEL) ??
   "deepseek-chat";
 
 const AI_BASE_URL =
-  process.env.AI_GATEWAY_BASE_URL ??
-  process.env.DEEPSEEK_BASE_URL ??
+  envOrUndefined(process.env.AI_GATEWAY_BASE_URL) ??
+  envOrUndefined(process.env.DEEPSEEK_BASE_URL) ??
   "https://api.deepseek.com";
+
+/** 是否已配置可用的 AI 网关 key（本地 dev 常见漏填） */
+export function isAiGatewayConfigured(): boolean {
+  return Boolean(
+    envOrUndefined(process.env.AI_GATEWAY_API_KEY) ??
+      envOrUndefined(process.env.DEEPSEEK_API_KEY),
+  );
+}
+
+export class AiGatewayNotConfiguredError extends Error {
+  constructor() {
+    super(
+      "AI 网关 key 未配置 — 请在 .env.local / .env.prod 填 AI_GATEWAY_API_KEY 或 DEEPSEEK_API_KEY",
+    );
+    this.name = "AiGatewayNotConfiguredError";
+  }
+}
+
+export function assertAiGatewayConfigured(): void {
+  if (!isAiGatewayConfigured()) throw new AiGatewayNotConfiguredError();
+}
 
 /** 备用网关配置（主出错时尝试） */
 export const AI_BACKUP_MODEL = process.env.AI_GATEWAY_BACKUP_MODEL ?? AI_MODEL;
@@ -82,11 +109,11 @@ export function getGateway(thinking: ThinkingMode = "disabled", lane: Lane = "pr
     apiKey = AI_BACKUP_API_KEY;
   } else {
     baseURL = AI_BASE_URL;
-    const k = process.env.AI_GATEWAY_API_KEY ?? process.env.DEEPSEEK_API_KEY;
+    const k =
+      envOrUndefined(process.env.AI_GATEWAY_API_KEY) ??
+      envOrUndefined(process.env.DEEPSEEK_API_KEY);
     if (!k) {
-      throw new Error(
-        "AI 网关 key 未配置 — 请在 .env.local / .env.prod 填 AI_GATEWAY_API_KEY 或 DEEPSEEK_API_KEY",
-      );
+      throw new AiGatewayNotConfiguredError();
     }
     apiKey = k;
   }
