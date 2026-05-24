@@ -9,7 +9,7 @@ import type { DisplayMessage } from "./MessageBubble";
 import type { CardActionCallback, CardPickCallback, CardSubmitCallback } from "./MessageBubble";
 import type { PostSubActionOptions } from "./use-chat-stream";
 import { SLIP_DRAW_ANIM_MS } from "./cards/HeavenlySlipDraw";
-import { parseMeihuaNumbers } from "@/lib/divination/parse-meihua-numbers";
+import { parseMeihuaNumberFields } from "@/lib/divination/parse-meihua-numbers";
 
 interface UseCardHandlersOptions {
   convId: string | null;
@@ -197,7 +197,11 @@ export function useCardHandlers({
         return;
       }
       if (ui === "meihua_number_input") {
-        const parsed = parseMeihuaNumbers(values.numbers ?? "");
+        const parsed = parseMeihuaNumberFields(
+          values.number1 ?? "",
+          values.number2 ?? "",
+          values.number3 ?? "",
+        );
         if (!parsed.ok) {
           toast.error(parsed.message);
           return;

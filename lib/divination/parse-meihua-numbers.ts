@@ -38,6 +38,35 @@ export function splitDigitsIntoThree(digits: string): [number, number, number] {
   return parts.map((p) => Number.parseInt(p, 10)) as [number, number, number];
 }
 
+const ORDINAL_LABELS = ["一", "二", "三"] as const;
+
+/** 三个独立输入框报数（各 1-99） */
+export function parseMeihuaNumberFields(
+  raw1: string,
+  raw2: string,
+  raw3: string,
+): ParseMeihuaNumbersResult {
+  const segments = [raw1, raw2, raw3];
+  const numbers: number[] = [];
+
+  for (let i = 0; i < 3; i++) {
+    const trimmed = segments[i]?.trim() ?? "";
+    if (!trimmed) {
+      return { ok: false, message: `请输入第${ORDINAL_LABELS[i]}个数字` };
+    }
+    const n = parsePositiveInt(trimmed);
+    if (n === null || n > 99) {
+      return {
+        ok: false,
+        message: `第${ORDINAL_LABELS[i]}个数字须为 1-99 之间的整数`,
+      };
+    }
+    numbers.push(n);
+  }
+
+  return { ok: true, numbers: numbers as [number, number, number] };
+}
+
 export function parseMeihuaNumbers(raw: string): ParseMeihuaNumbersResult {
   const trimmed = raw.trim();
   if (!trimmed) {

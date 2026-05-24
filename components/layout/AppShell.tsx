@@ -10,7 +10,7 @@ interface AppShellProps {
 }
 
 function shouldHideNav(pathname: string): boolean {
-  const prefixes = ["/onboarding", "/fortune", "/feedback"];
+  const prefixes = ["/onboarding", "/fortune", "/feedback", "/profile"];
   return prefixes.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
 

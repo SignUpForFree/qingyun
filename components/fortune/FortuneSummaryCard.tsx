@@ -9,6 +9,8 @@ interface FortuneSummaryCardProps {
   overall: number;
   scores: DimensionScores7;
   oneLiner: string | null;
+  /** card：独立玻璃卡；flat：融入首页顶栏一体区 */
+  variant?: "card" | "flat";
 }
 
 export function FortuneSummaryCard({
@@ -16,12 +18,10 @@ export function FortuneSummaryCard({
   overall,
   scores,
   oneLiner,
+  variant = "card",
 }: FortuneSummaryCardProps) {
-  return (
-    <GlassCard
-      className="space-y-4 p-5"
-      data-testid="fortune-summary-card"
-    >
+  const body = (
+    <>
       <div className="grid grid-cols-[auto_1fr] items-center gap-3">
         <div className="flex flex-col items-center gap-1.5">
           <span className="text-[12px] font-bold tracking-ritual text-[var(--color-ink-mist)]">
@@ -48,6 +48,20 @@ export function FortuneSummaryCard({
       >
         查 看 运 势 详 情 <span className="ml-1.5">→</span>
       </Link>
+    </>
+  );
+
+  if (variant === "flat") {
+    return (
+      <div className="space-y-4" data-testid="fortune-summary-card">
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <GlassCard className="space-y-4 p-5" data-testid="fortune-summary-card">
+      {body}
     </GlassCard>
   );
 }

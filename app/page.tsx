@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/layout";
 import { GlassCard, Sparkle, Divider } from "@/components/su";
 import { Button } from "@/components/ui/button";
-import { FortuneSummaryCard } from "@/components/fortune/FortuneSummaryCard";
+import { HomeFortuneHero } from "@/components/fortune/HomeFortuneHero";
 import { LuckyAttrsCard } from "@/components/fortune/LuckyAttrsCard";
 import { LauncherStack } from "@/components/fortune/LauncherStack";
 import { ProfileSwitcher, type ProfileSwitcherItem } from "@/components/profile/ProfileSwitcher";
@@ -45,39 +45,45 @@ export default async function HomePage() {
   const isPlaceholder = def.birth_place === "未填" || def.gender === "other";
   const { headerText } = getLunarToday();
 
+  const profileChip = (
+    <HomeProfileChip
+      nickname={def.nickname}
+      gender={def.gender}
+      avatarUrl={def.avatar_url}
+    />
+  );
+
   return (
     <>
-      <AppHeader
-        left={
-          <HomeProfileChip
-            nickname={def.nickname}
-            gender={def.gender}
-            avatarUrl={def.avatar_url}
+      {isPlaceholder ? (
+        <>
+          <AppHeader
+            left={profileChip}
+            title={
+              <span
+                className="font-[family-name:var(--font-serif)] text-[13px] font-bold tracking-ritual text-[var(--color-ink-plum)]"
+                data-testid="home-lunar-date"
+              >
+                {headerText}
+              </span>
+            }
           />
-        }
-        title={
-          <span
-            className="font-[family-name:var(--font-serif)] text-[13px] font-bold tracking-ritual text-[var(--color-ink-plum)]"
-            data-testid="home-lunar-date"
-          >
-            {headerText}
-          </span>
-        }
-      />
-      <div className="relative flex flex-1 flex-col items-center gap-5 p-4 pb-safe-bottom">
-        <div className="relative z-10 mt-6 w-full max-w-md space-y-4">
-          {profileList.length >= 2 && (
-            <div className="flex justify-center">
-              <ProfileSwitcher profiles={toSwitcherItems(profileList)} />
+          <div className="relative flex flex-1 flex-col items-center gap-5 px-4 pt-2 pb-safe-bottom">
+            <div className="relative z-10 mt-1 w-full max-w-md space-y-4">
+              <CompleteProfileCard nickname={def.nickname} />
             </div>
-          )}
-          {isPlaceholder ? (
-            <CompleteProfileCard nickname={def.nickname} />
-          ) : (
-            <FortuneSection userId={userId} nickname={def.nickname} />
-          )}
+          </div>
+        </>
+      ) : (
+        <div className="relative flex flex-1 flex-col pb-safe-bottom">
+          <FortuneSection
+            userId={userId}
+            headerText={headerText}
+            profileChip={profileChip}
+            profileList={profileList}
+          />
         </div>
-      </div>
+      )}
     </>
   );
 }
@@ -91,13 +97,13 @@ function HomeProfileChip({
   gender: "male" | "female" | "other";
   avatarUrl: string | null;
 }) {
-  const href = "/me/profiles";
+  const href = "/profile";
   // 优先用用户上传的头像，否则用默认 AI 头像
   const imgSrc = avatarUrl || "/images/ai-avatar.png";
   return (
     <Link
       href={href}
-      aria-label="我的"
+      aria-label="档案信息"
       className="flex min-w-0 max-w-full items-center gap-2"
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -115,10 +121,14 @@ function HomeProfileChip({
 
 async function FortuneSection({
   userId,
-  nickname: _nickname,
+  headerText,
+  profileChip,
+  profileList,
 }: {
   userId: string;
-  nickname: string;
+  headerText: string;
+  profileChip: React.ReactNode;
+  profileList: Awaited<ReturnType<typeof listProfiles>>;
 }) {
   let fortune;
   try {
@@ -132,14 +142,23 @@ async function FortuneSection({
 
   return (
     <>
-      <FortuneSummaryCard
+      <HomeFortuneHero
+        profileSlot={profileChip}
+        headerText={headerText}
         date={fortune.date}
         overall={fortune.overall}
         scores={fortune.scores}
         oneLiner={fortune.oneLiner}
       />
-      <LuckyAttrsCard attrs={fortune.attributes} />
-      <LauncherStack />
+      <div className="relative z-10 mx-auto w-full max-w-md space-y-4 px-4 pt-3">
+        {profileList.length >= 2 && (
+          <div className="flex justify-center">
+            <ProfileSwitcher profiles={toSwitcherItems(profileList)} />
+          </div>
+        )}
+        <LuckyAttrsCard attrs={fortune.attributes} />
+        <LauncherStack />
+      </div>
     </>
   );
 }

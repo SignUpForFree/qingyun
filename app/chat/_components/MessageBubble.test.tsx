@@ -159,7 +159,12 @@ describe("MessageBubble (M2.14 — 22 ui dispatch)", () => {
     render(<MessageBubble message={assistantMsg({ ui: "meihua_number_input" })} />);
     expect(screen.getByText("请报3个1-99之间的任意随机数")).toBeInTheDocument();
     expect(screen.queryByText("输入任意3个数字")).not.toBeInTheDocument();
-    expect(screen.getByPlaceholderText("例如：2，5，7")).toBeInTheDocument();
+    expect(screen.getByText("第一个数字：")).toBeInTheDocument();
+    expect(screen.getByText("第二个数字：")).toBeInTheDocument();
+    expect(screen.getByText("第三个数字：")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("请输入第一个数字")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("请输入第二个数字")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("请输入第三个数字")).toBeInTheDocument();
     const questionLabel = screen.getByText(/描述你想测的事情/);
     expect(questionLabel).toHaveClass("font-[family-name:var(--font-serif)]");
     expect(questionLabel).toHaveClass("text-[var(--color-ink-plum)]");

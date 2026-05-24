@@ -66,17 +66,39 @@ export const BAZI_QUICK_FIELDS: readonly FormField[] = [
   { key: "birth_place", label: "出生地（省 市 区）", type: "text", required: true, max: 30, placeholder: "例如：广东省 深圳市 南山区" },
 ];
 
-/** 梅花报数卡顶部唯一说明（字段 label 留空，避免重复两行） */
+/** 梅花报数卡顶部说明 */
 export const MEIHUA_NUMBER_FORM_TITLE = "请报3个1-99之间的任意随机数";
 
 export const MEIHUA_NUMBER_FIELDS: readonly FormField[] = [
   {
-    key: "numbers",
-    label: "",
-    type: "text",
+    key: "number1",
+    label: "第一个数字：",
+    labelInline: true,
+    type: "number",
     required: true,
-    max: 32,
-    placeholder: "例如：2，5，7",
+    min: 1,
+    maxValue: 99,
+    placeholder: "请输入第一个数字",
+  },
+  {
+    key: "number2",
+    label: "第二个数字：",
+    labelInline: true,
+    type: "number",
+    required: true,
+    min: 1,
+    maxValue: 99,
+    placeholder: "请输入第二个数字",
+  },
+  {
+    key: "number3",
+    label: "第三个数字：",
+    labelInline: true,
+    type: "number",
+    required: true,
+    min: 1,
+    maxValue: 99,
+    placeholder: "请输入第三个数字",
   },
   {
     key: "userQuestion",
@@ -86,6 +108,7 @@ export const MEIHUA_NUMBER_FIELDS: readonly FormField[] = [
     required: true,
     max: 200,
     placeholder: "请输入内容",
+    fieldClassName: "mt-4",
   },
 ];
 

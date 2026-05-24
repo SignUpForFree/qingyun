@@ -22,10 +22,12 @@ export interface ProfileCardItem {
 
 interface ProfileCardListProps {
   profiles: ProfileCardItem[];
+  /** 编辑/新建链接前缀：默认 /me/profiles；首页独立入口用 /profile */
+  routeBase?: string;
 }
 
 /**
- * /me/profiles 多档案卡片列表（A3 模型）
+ * 多档案卡片列表（A3 模型）
  *
  * 每卡：圆形头像 + 昵称（默认徽章）+ 出生信息 + 操作按钮（编辑 / 设为默认 / 删除）。
  * 默认档不可删除（已在 API 层拒，此处只隐藏按钮）。
@@ -34,7 +36,10 @@ interface ProfileCardListProps {
  *   - PUT { is_default: true } → 设为默认
  *   - DELETE                    → 删除非默认档
  */
-export function ProfileCardList({ profiles }: ProfileCardListProps) {
+export function ProfileCardList({
+  profiles,
+  routeBase = "/me/profiles",
+}: ProfileCardListProps) {
   const router = useRouter();
   const [busy, setBusy] = React.useState<string | null>(null);
 
@@ -86,7 +91,7 @@ export function ProfileCardList({ profiles }: ProfileCardListProps) {
   if (profiles.length === 0) {
     return (
       <div className="space-y-3" data-testid="profile-card-list">
-        <AddProfileCard />
+        <AddProfileCard routeBase={routeBase} />
       </div>
     );
   }
@@ -124,7 +129,7 @@ export function ProfileCardList({ profiles }: ProfileCardListProps) {
 
           <div className="flex items-center justify-end gap-2 border-t border-[var(--color-accent-lavender)]/15 pt-2">
             <Link
-              href={`/me/profiles/${p.id}/edit`}
+              href={`${routeBase}/${p.id}/edit`}
               className="text-[11px] text-[var(--color-accent-plum)] hover:opacity-80"
               data-testid={`profile-edit-${p.id}`}
             >
@@ -160,15 +165,15 @@ export function ProfileCardList({ profiles }: ProfileCardListProps) {
         </GlassCard>
       ))}
 
-      <AddProfileCard />
+      <AddProfileCard routeBase={routeBase} />
     </div>
   );
 }
 
-function AddProfileCard() {
+function AddProfileCard({ routeBase }: { routeBase: string }) {
   return (
     <Link
-      href="/me/profiles/new"
+      href={`${routeBase}/new`}
       className="flex h-14 items-center justify-center gap-2 rounded-[16px] border border-dashed border-[var(--color-accent-plum)]/45 bg-white/40 font-[family-name:var(--font-serif)] text-[14px] tracking-ritual text-[var(--color-accent-plum)] transition hover:bg-white/60"
       data-testid="profile-new-cta"
     >

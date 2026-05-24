@@ -28,7 +28,7 @@ function isActive(pathname: string, href: string) {
 //   - /onboarding：多步建档专心填表
 //   - /fortune/*：单页详情滑屏
 //   - /feedback：表单页
-const HIDE_NAV_PREFIXES = ["/onboarding", "/fortune", "/feedback"];
+const HIDE_NAV_PREFIXES = ["/onboarding", "/fortune", "/feedback", "/profile"];
 
 function shouldHideNav(pathname: string) {
   return HIDE_NAV_PREFIXES.some(
