@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { GlassCard, Sparkle, WatercolorDot } from "@/components/su";
+import { Sparkle, WatercolorDot } from "@/components/su";
 import { StepIndicator } from "./StepIndicator";
 
 interface StepShellProps {
@@ -25,12 +25,7 @@ interface StepShellProps {
 /**
  * onboarding 单步骨架（design §2 STEP 表单）
  *
- * - 顶部进度点 ●●○
- * - STEP {n} 11px ritual3 字距小标 lavender-gray
- * - 标题 22px serif ritual2 墨紫 + ✧ 装饰
- * - 内容由 children 填
- * - 底部上一步 / 下一步（48px 渐变 CTA），下方可选 skip 链接
- * - 全屏 3 颗水彩晕染做仙气底（lavender / pink / blue）
+ * 仅去掉外层 GlassCard 大框，表单项样式由 children 自行保持。
  */
 export function StepShell({
   step,
@@ -51,7 +46,6 @@ export function StepShell({
       className="relative mx-auto flex min-h-[100dvh] w-full max-w-md flex-col overflow-hidden px-5 py-6"
       data-testid="onboarding-step-shell"
     >
-      {/* 仙气水彩底（与 home 一致风格） */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <WatercolorDot color="lavender" size={140} className="absolute left-[8%] top-[10%]" />
         <WatercolorDot color="pink" size={120} className="absolute right-[10%] top-[16%]" />
@@ -61,7 +55,7 @@ export function StepShell({
       <div className="relative z-10 flex flex-1 flex-col">
         <StepIndicator current={step} total={total} className="mb-6" />
 
-        <GlassCard className="flex min-h-[calc(100dvh-9rem)] flex-col gap-6 px-6 py-8">
+        <div className="flex min-h-[calc(100dvh-9rem)] flex-1 flex-col gap-6">
           <header className="space-y-1.5 text-center">
             <p
               className="font-[family-name:var(--font-serif)] text-[11px] uppercase tracking-ritual3 text-[var(--color-accent-lavender)]"
@@ -81,7 +75,6 @@ export function StepShell({
                 {desc}
               </p>
             )}
-            {/* ✧ 装饰小行（design §2 第 176 行 "Tiny ✧ decoration below"） */}
             <div className="flex items-center justify-center gap-1.5 pt-1">
               <span
                 aria-hidden
@@ -95,9 +88,7 @@ export function StepShell({
             </div>
           </header>
 
-          <div className="flex flex-col gap-4">
-            {children}
-          </div>
+          <div className="flex flex-col gap-4">{children}</div>
 
           <footer className="mt-auto space-y-2">
             <div className="flex gap-2">
@@ -133,7 +124,7 @@ export function StepShell({
               </button>
             )}
           </footer>
-        </GlassCard>
+        </div>
       </div>
     </div>
   );

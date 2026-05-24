@@ -10,6 +10,12 @@ import { AvatarPicker } from "@/components/profile/AvatarPicker";
 
 type Step1Value = Pick<OnboardingForm, "nickname" | "gender" | "birth" | "region">;
 
+/** 与 DatePicker / RegionPicker 触发行一致的白底输入框 */
+const onboardingTextFieldClass =
+  "w-full min-w-0 rounded-[8px] border border-input bg-white px-3 py-2.5 text-sm outline-none transition-colors placeholder:text-[var(--color-ink-fade)] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+
+const fieldLabelClass = "text-[13px] text-[var(--color-ink-fade)]";
+
 interface Step1Props {
   initial: Partial<OnboardingForm>;
   editing?: boolean;
@@ -65,12 +71,14 @@ export function Step1Profile({
           profileId={profileId}
           size={84}
         />
-        <p className="text-[10px] text-[var(--color-ink-fade)]">点 击 上 传 头 像 · 可 跳 过</p>
+        <p className="text-[10px] text-[var(--color-ink-fade)]">点击上传头像</p>
       </div>
 
       {/* 昵称 */}
       <div className="space-y-2">
-        <label htmlFor="nickname" className="text-xs text-[var(--color-ink-fade)]">如何称呼你</label>
+        <label htmlFor="nickname" className={fieldLabelClass}>
+          如何称呼你
+        </label>
         <input
           id="nickname"
           autoFocus
@@ -78,13 +86,14 @@ export function Step1Profile({
           placeholder="昵称（最多 20 字）"
           value={nickname}
           onChange={(e) => setNickname(e.target.value)}
-          className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm"
+          className={onboardingTextFieldClass}
         />
       </div>
 
-      {/* 性别 */}
       <div className="space-y-2">
-        <span id="gender-label" className="text-xs text-[var(--color-ink-fade)]">性别（影响大运排法）</span>
+        <span id="gender-label" className={fieldLabelClass}>
+          性别（影响大运排法）
+        </span>
         <div
           role="radiogroup"
           aria-labelledby="gender-label"
@@ -103,13 +112,12 @@ export function Step1Profile({
 
       {/* 出生日期与时分 */}
       <div className="space-y-2">
-        <label className="text-xs text-[var(--color-ink-fade)]">出生日期与时分</label>
+        <label className={fieldLabelClass}>出生日期与时分</label>
         <DatePicker value={birthValue} onChange={setBirthValue} />
       </div>
 
-      {/* 出生地 */}
       <div className="space-y-2">
-        <label className="text-xs text-[var(--color-ink-fade)]">出生地</label>
+        <label className={fieldLabelClass}>出生地</label>
         <RegionPicker value={region} onChange={setRegion} />
       </div>
     </StepShell>
