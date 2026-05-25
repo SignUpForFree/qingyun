@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
  * docs/superpowers/designs/meihua-result-card-20260424/a-refined-fairy.html）
  *
  * - 顶部 verdict chip + 应期 timeHint
- * - 4 宫格：本/互/变/卦中卦
+ * - 三卦横排：本/互/变
  *   每格：八卦 unicode 大字 + 卦名 + 五行标签 + 五行 watercolor glow
  * - 底部 体用 row + 动爻位
  *
@@ -55,7 +55,6 @@ interface MeihuaResultCardProps {
   ben: HexagramView;
   hu: HexagramView;
   bian: HexagramView;
-  guaZhongGua: HexagramView;
   dongYao: number;
   ti: string;
   yong: string;
@@ -77,7 +76,6 @@ export function MeihuaResultCard({
   ben,
   hu,
   bian,
-  guaZhongGua,
   dongYao,
   ti,
   yong,
@@ -109,12 +107,11 @@ export function MeihuaResultCard({
         <Sparkle size={10} variant="asterisk" />
       </div>
 
-      {/* 4 卦 grid */}
-      <div className="grid grid-cols-2 gap-3" data-testid="meihua-grid">
+      {/* 三卦横排 */}
+      <div className="grid grid-cols-3 gap-2" data-testid="meihua-grid">
         <Cell label="本 卦" view={ben} />
         <Cell label="互 卦" view={hu} />
         <Cell label="变 卦" view={bian} />
-        <Cell label="卦 中 卦" view={guaZhongGua} />
       </div>
 
       {/* ✦ Divider */}

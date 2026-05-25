@@ -9,6 +9,9 @@ const INTENT_AUTO_TEXT: Record<string, string> = {
   meihua: "我要测算",
 };
 
+/** StrictMode 双 mount 时 ref 会重置；用模块级锁避免同一条 auto-send 连发两次 */
+const mountAutoSendDone = new Set<string>();
+
 interface UseMountActionsOptions {
   send: (text: string) => Promise<void>;
   autoSendText?: string;
@@ -35,14 +38,17 @@ export function useMountActions({
 
   React.useEffect(() => {
     if (sentRef.current) return;
-    if (autoSendText) {
+    const autoText = autoSendText
+      ?? (initialIntent ? INTENT_AUTO_TEXT[initialIntent] : undefined);
+    if (!autoText) return;
+
+    const lockKey = autoSendText ? `initial:${autoSendText}` : `intent:${initialIntent}`;
+    if (mountAutoSendDone.has(lockKey)) {
       sentRef.current = true;
-      void sendRef.current(autoSendText);
       return;
     }
-    if (initialIntent && INTENT_AUTO_TEXT[initialIntent]) {
-      sentRef.current = true;
-      void sendRef.current(INTENT_AUTO_TEXT[initialIntent]);
-    }
+    mountAutoSendDone.add(lockKey);
+    sentRef.current = true;
+    void sendRef.current(autoText);
   }, [autoSendText, initialIntent]);
 }

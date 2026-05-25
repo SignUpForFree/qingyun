@@ -12,7 +12,7 @@ import { judgeTiYong, type TiYongRelation } from "@/lib/meihua/tiyong";
  * 梅花易数 V2 入口 (M3.17)
  *
  * 把 V1 lib/meihua/* 全套（castByNumbers / interpretMeihua / huGua / bianGua /
- * guaZhongGua / judgeTiYong / computeYingQi）wire 成一个 V2 结果对象。在 M3.16 的
+ * judgeTiYong / computeYingQi）wire 成一个 V2 结果对象。在 M3.16 的
  * 64 卦字典之上叠加 panci / yaoci / tuanci 文本，给 M3.22 prompt 做准备。
  *
  * V2 vs V1 增量（接 M3.18-M3.21）：

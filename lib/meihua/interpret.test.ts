@@ -11,10 +11,9 @@ describe("interpretMeihua — 全链路", () => {
     expect(r.ben).toMatchObject({ number: 10, upper: "乾", lower: "兑" });
     expect(r.dongYao).toBe(3);
 
-    // 互/变/卦中卦都有 number + name
+    // 互/变都有 number + name
     expect(r.hu.number).toBeGreaterThanOrEqual(1);
     expect(r.bian.number).toBeGreaterThanOrEqual(1);
-    expect(r.guaZhongGua.number).toBeGreaterThanOrEqual(1);
 
     // tiYong + yingQi
     expect(["bi_he", "ti_ke_yong", "yong_ke_ti", "ti_sheng_yong", "yong_sheng_ti"]).toContain(

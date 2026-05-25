@@ -56,12 +56,12 @@ describe("buildMeihuaPrompt (五章结构)", () => {
     expect(r.systemPrompt).toContain("变用卦");
   });
 
-  it("userPrompt 含本卦 / 互卦 / 变卦 / 卦中卦", () => {
+  it("userPrompt 含本卦 / 互卦 / 变卦", () => {
     const r = buildMeihuaPrompt({ result: sampleResult });
     expect(r.userPrompt).toContain("本卦");
     expect(r.userPrompt).toContain("互卦");
     expect(r.userPrompt).toContain("变卦");
-    expect(r.userPrompt).toContain("卦中卦");
+    expect(r.userPrompt).not.toContain("卦中卦");
   });
 
   it("userPrompt 含卦辞 + 彖辞 + 大象传 + 动爻爻辞", () => {

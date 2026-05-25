@@ -199,7 +199,6 @@ export function buildMeihuaPrompt(args: BuildMeihuaPromptArgs): BuildMeihuaPromp
     `变卦六爻爻辞：${formatYaoCi(result.bianDict.yaoCi)}`,
     "",
     "===== 辅助素材 =====",
-    `卦中卦：${result.guaZhongGua.name}（上${result.guaZhongGua.upper}下${result.guaZhongGua.lower}）`,
     `应期：${yingQiLine}`,
   ];
 

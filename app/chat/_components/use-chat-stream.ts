@@ -37,9 +37,23 @@ interface SubActionJsonResponse {
   profileId?: string;
 }
 
+const INTENT_AUTO_TEXT: Record<
+  "divination" | "dream" | "bazi" | "meihua",
+  string
+> = {
+  divination: "我要抽灵签",
+  dream: "我要解梦",
+  bazi: "我要八字解读",
+  meihua: "我要测算",
+};
+
 interface UseChatStreamOptions {
   initialConvId: string | null;
   initialMessages: DisplayMessage[];
+  /** dev-login 或生产登录就绪前为 false，阻止 /api/chat 401 */
+  sessionReady?: boolean;
+  /** /chat?intent=meihua 等入口：仅首条预设话术带 ?intent=，避免分类器偶发偏差 */
+  forcedIntent?: "divination" | "dream" | "bazi" | "meihua" | null;
 }
 
 /** 抽签等：API 返回后合并进已有本地卡，而非追加第二条消息 */
@@ -83,6 +97,8 @@ export interface UseChatStreamReturn {
 export function useChatStream({
   initialConvId,
   initialMessages,
+  sessionReady = true,
+  forcedIntent = null,
 }: UseChatStreamOptions): UseChatStreamReturn {
   const [convId, setConvId] = React.useState<string | null>(initialConvId);
   const [messages, setMessages] = React.useState<DisplayMessage[]>(initialMessages);
@@ -93,6 +109,8 @@ export function useChatStream({
   const [busy, setBusy] = React.useState(false);
   const abortRef = React.useRef<AbortController | null>(null);
   const dreamFastWaitingRef = React.useRef(false);
+  /** 首页 ?intent= 入口：仅首条 /api/chat 带 query，避免后续闲聊仍被锁死在同一意图 */
+  const forcedIntentOnceRef = React.useRef(forcedIntent);
 
   // 注意：不要在 unmount 时主动 abort 进行中的 fetch。
   // React 18+ StrictMode 下 dev 双跑（mount → cleanup → mount）会把第一次 mount
@@ -319,7 +337,11 @@ export function useChatStream({
 
   const send = React.useCallback(
     async (text: string) => {
-      if (streamingText !== null || streamingSlipReport !== null || busy) return;
+      if (busy || streamingSlipReport !== null) return;
+      if (!sessionReady) {
+        toast.error("会话准备中，请稍候再试");
+        return;
+      }
 
       // dream fast：下一条用户消息直接走 /api/divination/dream
       if (dreamFastWaitingRef.current && convId) {
@@ -344,20 +366,64 @@ export function useChatStream({
         created_at: new Date().toISOString(),
       };
       setMessages((m) => [...m, userMsg]);
+      setBusy(true);
       setStreamingText("");
 
-      let res: Response;
-      try {
-        res = await apiFetch("/api/chat", {
+      const intentOnce = forcedIntentOnceRef.current;
+      if (intentOnce) forcedIntentOnceRef.current = null;
+      const chatUrl =
+        intentOnce && text === INTENT_AUTO_TEXT[intentOnce]
+          ? `/api/chat?intent=${intentOnce}`
+          : "/api/chat";
+
+      const postChat = (activeConvId: string | null) =>
+        apiFetch(chatUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ conversationId: convId, text }),
-          signal: abortRef.current.signal,
+          body: JSON.stringify({ conversationId: activeConvId, text }),
+          signal: abortRef.current!.signal,
         });
+
+      let activeConvId = convId;
+      let res: Response;
+      try {
+        res = await postChat(activeConvId);
+
+        // 旧 URL ?cid= 会话已删 → 清 cid 自动重试一次
+        if (res.status === 404 && activeConvId) {
+          setConvId(null);
+          if (typeof window !== "undefined") {
+            window.history.replaceState(null, "", "/chat");
+          }
+          activeConvId = null;
+          res = await postChat(null);
+        }
+
+        // dev：db:reset 后 cookie 在但 user 行没了 → dev-login 自愈后重试
+        if (
+          !res.ok &&
+          res.status >= 500 &&
+          process.env.NODE_ENV !== "production"
+        ) {
+          try {
+            const heal = await fetch("/api/dev-login", {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: "{}",
+            });
+            if (heal.ok) {
+              res = await postChat(activeConvId);
+            }
+          } catch {
+            /* 静默 */
+          }
+        }
       } catch (e) {
         // 用户主动取消 / 旧请求被新请求覆盖：静默
         if ((e as Error).name === "AbortError") {
           setStreamingText(null);
+          setBusy(false);
           return;
         }
         if (process.env.NODE_ENV !== "production") {
@@ -365,6 +431,7 @@ export function useChatStream({
         }
         toast.error("网络一时不通，稍候再试");
         setStreamingText(null);
+        setBusy(false);
         return;
       }
 
@@ -372,6 +439,12 @@ export function useChatStream({
         let friendly = "福小运一时走神，请再说一次";
         if (res.status === 401) {
           friendly = "请先登录后再继续";
+        } else if (res.status === 429) {
+          friendly = "操作太频繁，请稍后再试";
+        } else if (res.status === 404) {
+          friendly = "会话已失效，请刷新页面后重试";
+        } else if (res.status >= 500) {
+          friendly = "服务暂时不可用，请刷新页面后再试";
         }
         try {
           const j = (await res.clone().json()) as {
@@ -379,15 +452,22 @@ export function useChatStream({
             error?: string;
           };
           if (j.errorCard?.message) friendly = j.errorCard.message;
-          else if (j.error && res.status !== 401) friendly = j.error;
+          else if (j.error) {
+            if (res.status === 401 && j.error === "unauthorized") {
+              friendly = "请先登录后再继续";
+            } else if (res.status !== 401) {
+              friendly = j.error;
+            }
+          }
         } catch {
           /* 静默 */
         }
         if (process.env.NODE_ENV !== "production") {
-          console.warn(`/api/chat ${res.status}`);
+          console.warn(`/api/chat ${res.status}`, friendly);
         }
         toast.error(friendly);
         setStreamingText(null);
+        setBusy(false);
         return;
       }
 
@@ -405,8 +485,9 @@ export function useChatStream({
 
       setMessages((m) => commitTurn(m, assistantText, cards));
       setStreamingText(null);
+      setBusy(false);
     },
-    [convId, streamingText, streamingSlipReport, busy, consumeStream, postSubAction],
+    [convId, busy, streamingSlipReport, sessionReady, consumeStream, postSubAction, setConvId],
   );
 
   return {

@@ -84,7 +84,7 @@ export async function consumeSseStream(
         case "card": {
           if (typeof parsed.data === "object" && parsed.data !== null) {
             const card = parsed.data as SseCardData;
-            if (card.id) cb.onCard?.(card);
+            cb.onCard?.(card);
           }
           break;
         }

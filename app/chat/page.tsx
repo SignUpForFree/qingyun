@@ -101,7 +101,7 @@ export default async function ChatPage({ searchParams }: PageProps) {
         prefillText={prefill}
         userAvatarUrl={userAvatarUrl}
         userNickname={userNickname}
-        needsDevBootstrap={isDev && !userId}
+        needsDevBootstrap={isDev}
       />
     </>
   );

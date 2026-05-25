@@ -60,10 +60,3 @@ export function bianGua(h: HexagramShape, dongYao: number): HexagramShape {
     lines: newLines,
   };
 }
-
-/**
- * 卦中卦（spec §5.4 档 4 加项）：变卦的互卦
- */
-export function guaZhongGua(h: HexagramShape, dongYao: number): HexagramShape {
-  return huGua(bianGua(h, dongYao));
-}

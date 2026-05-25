@@ -86,9 +86,10 @@ describe("ProfileCardList", () => {
     render(<ProfileCardList profiles={[makeProfile({ is_default: false })]} />);
     fireEvent.click(screen.getByTestId("profile-delete-p-1"));
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith("/api/me/profiles/p-1", {
-        method: "DELETE",
-      });
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/me/profiles/p-1",
+        expect.objectContaining({ method: "DELETE", credentials: "include" }),
+      );
     });
     expect(toastSuccess).toHaveBeenCalledWith("档案已删除");
   });

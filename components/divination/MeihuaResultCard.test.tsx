@@ -13,7 +13,6 @@ const baseProps = {
   ben: view(1, "乾为天", "乾", "乾"),
   hu: view(43, "泽天夬", "兑", "乾"),
   bian: view(13, "天火同人", "乾", "离"),
-  guaZhongGua: view(44, "天风姤", "乾", "巽"),
   dongYao: 3,
   ti: "乾",
   yong: "兑",
@@ -30,20 +29,19 @@ describe("MeihuaResultCard (M2.13)", () => {
     expect(screen.getByText("大吉")).toBeInTheDocument();
   });
 
-  it("渲染 4 卦标签：本/互/变/卦中卦", () => {
+  it("渲染 3 卦标签：本/互/变", () => {
     render(<MeihuaResultCard {...baseProps} />);
     expect(screen.getByText("本 卦")).toBeInTheDocument();
     expect(screen.getByText("互 卦")).toBeInTheDocument();
     expect(screen.getByText("变 卦")).toBeInTheDocument();
-    expect(screen.getByText("卦 中 卦")).toBeInTheDocument();
+    expect(screen.queryByText("卦 中 卦")).not.toBeInTheDocument();
   });
 
-  it("渲染 4 卦名", () => {
+  it("渲染 3 卦名", () => {
     render(<MeihuaResultCard {...baseProps} />);
     expect(screen.getByText("乾为天")).toBeInTheDocument();
     expect(screen.getByText("泽天夬")).toBeInTheDocument();
     expect(screen.getByText("天火同人")).toBeInTheDocument();
-    expect(screen.getByText("天风姤")).toBeInTheDocument();
   });
 
   it("渲染体用 + 五行注释", () => {

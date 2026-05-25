@@ -4,7 +4,6 @@ import { judgeTiYong, type TiYongResult } from "./tiyong";
 import {
   bianGua,
   buildHexagram,
-  guaZhongGua,
   huGua,
   type Hexagram6,
   type HexagramShape,
@@ -19,7 +18,6 @@ export interface MeihuaResult {
   ben: HexagramView;
   hu: HexagramView;
   bian: HexagramView;
-  guaZhongGua: HexagramView;
   dongYao: number;
   tiYong: TiYongResult;
   yingQi: YingQiResult;
@@ -47,7 +45,6 @@ export function interpretMeihua(
   const benShape = buildHexagram(cast.upper, cast.lower);
   const huShape = huGua(benShape);
   const bianShape = bianGua(benShape, cast.dongYao);
-  const guaZhongShape = guaZhongGua(benShape, cast.dongYao);
 
   const tiYong = judgeTiYong({
     upper: cast.upper,
@@ -65,7 +62,6 @@ export function interpretMeihua(
     ben: shapeToView(benShape),
     hu: shapeToView(huShape),
     bian: shapeToView(bianShape),
-    guaZhongGua: shapeToView(guaZhongShape),
     dongYao: cast.dongYao,
     tiYong,
     yingQi,

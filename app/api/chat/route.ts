@@ -50,6 +50,21 @@ function parseIntentQuery(req: Request): Intent | null {
 }
 
 export async function POST(req: Request) {
+  try {
+    return await handleChatPost(req);
+  } catch (e) {
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[/api/chat] unhandled", e);
+    }
+    const msg =
+      process.env.NODE_ENV !== "production" && e instanceof Error
+        ? e.message
+        : "服务暂时不可用，请稍后再试";
+    return jsonError(msg, 500);
+  }
+}
+
+async function handleChatPost(req: Request): Promise<Response> {
   let raw: unknown;
   try {
     raw = await req.json();

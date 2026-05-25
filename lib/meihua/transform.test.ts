@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   bianGua,
   buildHexagram,
-  guaZhongGua,
   huGua,
   type HexagramShape,
 } from "./transform";
@@ -87,17 +86,5 @@ describe("huGua", () => {
     // 上三 = [2,3,4] = [T,T,T] = 乾
     expect(hu.upper).toBe("乾");
     expect(hu.lower).toBe("乾");
-  });
-});
-
-describe("guaZhongGua = 变卦的互卦", () => {
-  it("乾为天动爻 1 → 变 = 巽下乾上 → 互 = ?", () => {
-    const h = buildHexagram("乾", "乾");
-    const result = guaZhongGua(h, 1);
-    // 变卦 lines = [F,T,T,T,T,T]
-    // 互 lower = [1,2,3] = [T,T,T] = 乾
-    // 互 upper = [2,3,4] = [T,T,T] = 乾
-    expect(result.upper).toBe("乾");
-    expect(result.lower).toBe("乾");
   });
 });

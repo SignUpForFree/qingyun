@@ -275,7 +275,7 @@ describe("MessageBubble (M2.14 — 22 ui dispatch)", () => {
     expect(screen.getByText("AI 解读八字")).toBeInTheDocument();
   });
 
-  it("meihua_result → MeihuaResultCard 4 卦展示", () => {
+  it("meihua_result → MeihuaResultCard 三卦展示", () => {
     render(
       <MessageBubble
         message={assistantMsg({
@@ -283,7 +283,6 @@ describe("MessageBubble (M2.14 — 22 ui dispatch)", () => {
           ben: { number: 1, name: "乾为天", upper: "乾", lower: "乾" },
           hu: { number: 43, name: "泽天夬", upper: "兑", lower: "乾" },
           bian: { number: 13, name: "天火同人", upper: "乾", lower: "离" },
-          guaZhongGua: { number: 44, name: "天风姤", upper: "乾", lower: "巽" },
           dongYao: 3,
           tiYong: { ti: "乾", yong: "兑", relation: "yong_sheng_ti" },
           yingQi: { speed: "fast", timeHint: "三日内", branchHour: "卯时" },

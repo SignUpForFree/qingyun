@@ -46,24 +46,17 @@ async function getUserIdFromBearer(): Promise<string | null> {
   }
 }
 
-/**
- * dev-only：进程内已 ensure 过的 user_id 缓存，避免每次 ensureUserId 都打一次 db。
- * 重启进程清空（dev 不重要；prod 永远跳过这段逻辑）。
- */
-const devBootstrappedUsers = new Set<string>();
-
 export async function ensureUserId(): Promise<string> {
   const existing = await getCurrentUserId();
   if (existing) {
-    // dev 自愈：cookie 有 uid 但 db 没该 user（典型场景：刚跑过 db:reset，浏览器旧 cookie）
-    // 自动建占位 user + profile，避免下游 13 个 route 全部撞 FOREIGN KEY constraint failed。
-    // prod 模式跳过：V2.0 强制微信 OAuth 登录，cookie ↔ db 必须一致；不一致就是真异常应浮现。
-    if (process.env.NODE_ENV !== "production" && !devBootstrappedUsers.has(existing)) {
+    // dev 自愈：cookie 有 uid 但 db 没该 user（典型场景：db:reset 后浏览器仍带旧 qy_uid）
+    // 必须每次请求都幂等 ensure — 不能用进程内 Set 缓存，否则 reset 后永远 FOREIGN KEY 500。
+    if (process.env.NODE_ENV !== "production") {
       try {
         ensureUserWithPlaceholderProfile(existing);
-        devBootstrappedUsers.add(existing);
       } catch (e) {
         console.error("[dev] ensureUserId auto-bootstrap 失败", e);
+        throw e;
       }
     }
     return existing;
@@ -71,12 +64,7 @@ export async function ensureUserId(): Promise<string> {
   const fresh = crypto.randomUUID();
   await setUserId(fresh);
   if (process.env.NODE_ENV !== "production") {
-    try {
-      ensureUserWithPlaceholderProfile(fresh);
-      devBootstrappedUsers.add(fresh);
-    } catch (e) {
-      console.error("[dev] ensureUserId fresh-bootstrap 失败", e);
-    }
+    ensureUserWithPlaceholderProfile(fresh);
   }
   return fresh;
 }

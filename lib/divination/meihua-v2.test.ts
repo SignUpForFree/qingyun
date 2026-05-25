@@ -11,12 +11,11 @@ const mockProfile: Pick<Profile, "id" | "gender" | "birth_date" | "birth_time" |
 };
 
 describe("meihuaV2 (M3.17)", () => {
-  it("3 数字 → ben + hu + bian + guaZhongGua + dongYao(1-6)", () => {
+  it("3 数字 → ben + hu + bian + dongYao(1-6)", () => {
     const r = meihuaV2({ numbers: [3, 6, 9], userQuestion: "q", profile: mockProfile });
     expect(r.ben).toBeDefined();
     expect(r.hu).toBeDefined();
     expect(r.bian).toBeDefined();
-    expect(r.guaZhongGua).toBeDefined();
     expect(r.dongYao).toBeGreaterThanOrEqual(1);
     expect(r.dongYao).toBeLessThanOrEqual(6);
   });

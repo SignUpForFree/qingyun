@@ -177,7 +177,6 @@ const meihuaResult = z.object({
   benGua: z.string(),
   huGua: z.string(),
   bianGua: z.string(),
-  guaZhongGua: z.string().optional(),
   dongYao: z.number().int().min(1).max(6),
   tiYong: z.string(),
   yingQi: z.string(),

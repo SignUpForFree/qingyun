@@ -119,7 +119,6 @@ export interface MeihuaResultMeta {
   ben: { number: number; name: string; upper: string; lower: string };
   hu: { number: number; name: string; upper: string; lower: string };
   bian: { number: number; name: string; upper: string; lower: string };
-  guaZhongGua: { number: number; name: string; upper: string; lower: string };
   dongYao: number;
   tiYong: { ti: string; yong: string; relation: string };
   yingQi: { speed: "fast" | "medium" | "slow"; timeHint: string; branchHour: string | null };

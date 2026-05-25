@@ -10,7 +10,7 @@ import { test, expect } from "@playwright/test";
  *   4. /api/divination/meihua { profileId } → number_input 引导卡
  *   5. /api/divination/meihua { profileId, numbers: [3,5,2] } → SSE → meihua_result
  *
- * V2 卦象断言：ben/hu/bian/guaZhongGua 5 卦 + tiYong + yingQi + timeEnergy + sunYi。
+ * V2 卦象断言：ben/hu/bian 三卦 + tiYong + yingQi + timeEnergy + sunYi。
  */
 
 interface SseEvent {
@@ -112,8 +112,8 @@ test("meihua V2 端到端：建档 → 报数 → SSE → V2 卦象", async ({ r
     expect(cardMeta.profileId).toBe(profileId);
     expect(cardMeta.numbers).toEqual([3, 5, 2]);
 
-    // V2 5 卦
-    for (const key of ["ben", "hu", "bian", "guaZhongGua"]) {
+    // V2 三卦
+    for (const key of ["ben", "hu", "bian"]) {
       expect(cardMeta[key], `${key} 卦缺失`).toBeDefined();
       expect(typeof cardMeta[key].name).toBe("string");
       expect(["乾", "兑", "离", "震", "巽", "坎", "艮", "坤"]).toContain(

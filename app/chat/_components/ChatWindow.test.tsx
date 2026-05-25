@@ -68,8 +68,11 @@ describe("ChatWindow (M2.24)", () => {
     await waitFor(() => {
       expect(fetchSpy).toHaveBeenCalled();
     });
-    const call = fetchSpy.mock.calls.find((c) => (c[0] as string) === "/api/chat");
+    const call = fetchSpy.mock.calls.find((c) =>
+      String(c[0]).startsWith("/api/chat"),
+    );
     expect(call).toBeTruthy();
+    expect(String(call![0])).toContain("intent=divination");
     const body = JSON.parse((call![1] as RequestInit).body as string);
     expect(body.text).toBe("我要抽灵签");
     expect(body.conversationId).toBeNull();
@@ -94,9 +97,13 @@ describe("ChatWindow (M2.24)", () => {
       />,
     );
     await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
-    const call = fetchSpy.mock.calls.find((c) => (c[0] as string) === "/api/chat");
+    const call = fetchSpy.mock.calls.find((c) =>
+      String(c[0]).startsWith("/api/chat"),
+    );
+    expect(call).toBeTruthy();
     const body = JSON.parse((call![1] as RequestInit).body as string);
     expect(body.text).toBe("自定义首条");
+    expect(String(call![0])).not.toContain("intent=");
   });
 
   it("无 autoSend / initialIntent → 不自动发送", async () => {
@@ -106,7 +113,9 @@ describe("ChatWindow (M2.24)", () => {
     render(<ChatWindow conversationId={null} initialMessages={[]} />);
     // 等一会儿确认没自动发
     await new Promise((r) => setTimeout(r, 100));
-    const apiChatCalls = fetchSpy.mock.calls.filter((c) => (c[0] as string) === "/api/chat");
+    const apiChatCalls = fetchSpy.mock.calls.filter((c) =>
+      String(c[0]).startsWith("/api/chat"),
+    );
     expect(apiChatCalls.length).toBe(0);
   });
 

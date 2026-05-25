@@ -48,7 +48,6 @@ export default function MeihuaPreviewPage() {
               ben={r.ben}
               hu={r.hu}
               bian={r.bian}
-              guaZhongGua={r.guaZhongGua}
               dongYao={r.dongYao}
               ti={r.tiYong.ti}
               yong={r.tiYong.yong}

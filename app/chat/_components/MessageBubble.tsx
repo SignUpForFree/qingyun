@@ -426,7 +426,6 @@ export function MessageBubble({
             ben={m.ben}
             hu={m.hu}
             bian={m.bian}
-            guaZhongGua={m.guaZhongGua}
             dongYao={m.dongYao}
             ti={m.tiYong.ti}
             yong={m.tiYong.yong}

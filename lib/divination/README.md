@@ -43,7 +43,7 @@ const r = meihuaV2({
   userQuestion: "近期事业",
   profile: { id, gender, birth_date, birth_time, bazi_pillars },
 });
-console.log(r.ben, r.hu, r.bian, r.guaZhongGua);
+console.log(r.ben, r.hu, r.bian);
 console.log(r.tiYong, r.yingQi, r.timeEnergy, r.sunYi);
 console.log(r.benDict, r.huDict, r.bianDict);
 ```

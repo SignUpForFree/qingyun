@@ -56,6 +56,8 @@ export function ChatWindow({
   const stream = useChatStream({
     initialConvId: conversationId,
     initialMessages,
+    sessionReady: !needsDevBootstrap || sessionReady,
+    forcedIntent: initialIntent ?? null,
   });
 
   const { handleCardPick, handleCardSubmit, handleCardAction } = useCardHandlers({

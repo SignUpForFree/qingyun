@@ -318,16 +318,10 @@ export async function POST(req: Request) {
           ui: "meihua_result" as const,
           profileId,
           numbers,
-          // V2 5 卦推演：每卦含 number/name/upper/lower/lines
+          // V2 三卦推演：每卦含 name/upper/lower/lines
           ben: { name: v2.ben.name, upper: v2.ben.upper, lower: v2.ben.lower, lines: v2.ben.lines },
           hu: { name: v2.hu.name, upper: v2.hu.upper, lower: v2.hu.lower, lines: v2.hu.lines },
           bian: { name: v2.bian.name, upper: v2.bian.upper, lower: v2.bian.lower, lines: v2.bian.lines },
-          guaZhongGua: {
-            name: v2.guaZhongGua.name,
-            upper: v2.guaZhongGua.upper,
-            lower: v2.guaZhongGua.lower,
-            lines: v2.guaZhongGua.lines,
-          },
           dongYao: v2.dongYao,
           // 体用 / 变用卦 / 应期 / 时辰能量 / 五行损益（V2 新增）
           tiYong: v2.tiYong,
