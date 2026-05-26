@@ -77,21 +77,21 @@ const sampleChart: BaziChartV2 = {
     reason: "命局五行偏均衡，宜补 水 调候",
   },
   dayunWithFortune: [
-    { index: 1, stem: "戊", branch: "辰", pillar: "戊辰", startAge: 5, endAge: 14, fortune: "平", dayunWuxing: "土" },
-    { index: 2, stem: "己", branch: "巳", pillar: "己巳", startAge: 15, endAge: 24, fortune: "凶", dayunWuxing: "土" },
-    { index: 3, stem: "庚", branch: "午", pillar: "庚午", startAge: 25, endAge: 34, fortune: "吉", dayunWuxing: "金" },
-    { index: 4, stem: "辛", branch: "未", pillar: "辛未", startAge: 35, endAge: 44, fortune: "吉", dayunWuxing: "金" },
-    { index: 5, stem: "壬", branch: "申", pillar: "壬申", startAge: 45, endAge: 54, fortune: "吉", dayunWuxing: "水" },
-    { index: 6, stem: "癸", branch: "酉", pillar: "癸酉", startAge: 55, endAge: 64, fortune: "吉", dayunWuxing: "水" },
-    { index: 7, stem: "甲", branch: "戌", pillar: "甲戌", startAge: 65, endAge: 74, fortune: "平", dayunWuxing: "木" },
-    { index: 8, stem: "乙", branch: "亥", pillar: "乙亥", startAge: 75, endAge: 84, fortune: "平", dayunWuxing: "木" },
+    { index: 1, stem: "戊", branch: "辰", pillar: "戊辰", startAge: 5, endAge: 14, fortune: "平", dayunWuxing: "土", r: 0.5 },
+    { index: 2, stem: "己", branch: "巳", pillar: "己巳", startAge: 15, endAge: 24, fortune: "凶", dayunWuxing: "土", r: 0.3 },
+    { index: 3, stem: "庚", branch: "午", pillar: "庚午", startAge: 25, endAge: 34, fortune: "吉", dayunWuxing: "金", r: 0.6 },
+    { index: 4, stem: "辛", branch: "未", pillar: "辛未", startAge: 35, endAge: 44, fortune: "吉", dayunWuxing: "金", r: 0.7 },
+    { index: 5, stem: "壬", branch: "申", pillar: "壬申", startAge: 45, endAge: 54, fortune: "吉", dayunWuxing: "水", r: 0.6 },
+    { index: 6, stem: "癸", branch: "酉", pillar: "癸酉", startAge: 55, endAge: 64, fortune: "吉", dayunWuxing: "水", r: 0.5 },
+    { index: 7, stem: "甲", branch: "戌", pillar: "甲戌", startAge: 65, endAge: 74, fortune: "平", dayunWuxing: "木", r: 0.5 },
+    { index: 8, stem: "乙", branch: "亥", pillar: "乙亥", startAge: 75, endAge: 84, fortune: "平", dayunWuxing: "木", r: 0.4 },
   ],
   liunian: [
-    { year: 2024, stem: "甲", branch: "辰", pillar: "甲辰", offset: -2, fortune: "吉" as const },
-    { year: 2025, stem: "乙", branch: "巳", pillar: "乙巳", offset: -1, fortune: "平" as const },
-    { year: 2026, stem: "丙", branch: "午", pillar: "丙午", offset: 0, fortune: "平" as const },
-    { year: 2027, stem: "丁", branch: "未", pillar: "丁未", offset: 1, fortune: "凶" as const },
-    { year: 2028, stem: "戊", branch: "申", pillar: "戊申", offset: 2, fortune: "吉" as const },
+    { year: 2024, stem: "甲", branch: "辰", pillar: "甲辰", offset: -2, fortune: "吉" as const, r: 0.6 },
+    { year: 2025, stem: "乙", branch: "巳", pillar: "乙巳", offset: -1, fortune: "平" as const, r: 0.5 },
+    { year: 2026, stem: "丙", branch: "午", pillar: "丙午", offset: 0, fortune: "平" as const, r: 0.5 },
+    { year: 2027, stem: "丁", branch: "未", pillar: "丁未", offset: 1, fortune: "凶" as const, r: 0.3 },
+    { year: 2028, stem: "戊", branch: "申", pillar: "戊申", offset: 2, fortune: "吉" as const, r: 0.7 },
   ],
   labels: [],
   timeCorrection: {
@@ -111,16 +111,17 @@ describe("buildBaziPrompt (M3.12)", () => {
     expect(r.userPrompt.length).toBeGreaterThan(0);
   });
 
-  it("systemPrompt 包含字数限制（380-520）", () => {
+  it("systemPrompt 包含十章结构", () => {
     const r = buildBaziPrompt({ chart: sampleChart, focus: "综合运势" });
-    expect(r.systemPrompt).toMatch(/380-520|\d{3}-\d{3}\s*字/);
+    expect(r.systemPrompt).toContain("第一部分");
+    expect(r.systemPrompt).toContain("第十部分");
   });
 
-  it("systemPrompt 包含禁词锁", () => {
+  it("systemPrompt 包含风控硬性规则", () => {
     const r = buildBaziPrompt({ chart: sampleChart, focus: "综合运势" });
-    expect(r.systemPrompt).toContain("禁词");
-    expect(r.systemPrompt).toContain("大凶");
-    expect(r.systemPrompt).toContain("命中注定");
+    expect(r.systemPrompt).toContain("禁止");
+    expect(r.systemPrompt).toContain("恐吓");
+    expect(r.systemPrompt).toContain("正向");
   });
 
   it("systemPrompt 锁 focus 维度", () => {
@@ -167,8 +168,8 @@ describe("buildBaziPrompt (M3.12)", () => {
     expect(r.userPrompt).toContain("大运");
     expect(r.userPrompt).toContain("戊辰");
     expect(r.userPrompt).toContain("乙亥");
-    expect(r.userPrompt).toContain("(5-14)");
-    expect(r.userPrompt).toContain("(75-84)");
+    expect(r.userPrompt).toContain("(5-14岁)");
+    expect(r.userPrompt).toContain("(75-84岁)");
   });
 
   it("userPrompt 包含流年 5 年", () => {

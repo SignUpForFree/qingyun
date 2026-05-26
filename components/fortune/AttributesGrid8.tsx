@@ -25,7 +25,7 @@ export function AttributesGrid8({ attrs }: AttributesGrid8Props) {
     { emoji: "💎", label: "配饰", value: attrs.accessory ?? "—" },
     { emoji: "🕐", label: "幸运时辰", value: attrs.hour?.range ?? "—" },
     { emoji: "🧭", label: "幸运方位", value: attrs.direction ?? "—" },
-    { emoji: "🔢", label: "幸运数", value: attrs.number != null ? String(attrs.number) : "—" },
+    { emoji: "🔢", label: "幸运数", value: attrs.numbers?.length ? attrs.numbers.join("、") : (attrs.number != null ? String(attrs.number) : "—") },
     { emoji: "🍜", label: "幸运食物", value: attrs.food ?? "—" },
     { emoji: "🔮", label: "随身物", value: attrs.item ?? "—" },
     { emoji: "🌻", label: "幸运花", value: attrs.flower ?? "—" },

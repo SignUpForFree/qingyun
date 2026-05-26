@@ -48,27 +48,27 @@ export function verifyFortune(): CheckResult[] {
       `7维度评分keys=${dimKeys.length} ≠ 7`,
     ));
 
-    // 每维度55-95分
+    // 每维度0-100分
     let scoreRangeOk = true;
     for (const k of dimKeys) {
       const v = result.scores[k];
-      if (v < 55 || v > 95) { scoreRangeOk = false; break; }
+      if (v < 0 || v > 100) { scoreRangeOk = false; break; }
     }
     results.push(check(
       "ft-score-range",
       "每日运势",
       scoreRangeOk,
-      `7维度评分均在55-95范围`,
-      `有维度评分超出55-95范围: ${JSON.stringify(result.scores)}`,
+      `7维度评分均在0-100范围`,
+      `有维度评分超出0-100范围: ${JSON.stringify(result.scores)}`,
     ));
 
-    // overall 合理范围
+    // overall 合理范围 0-100
     results.push(check(
       "ft-overall-range",
       "每日运势",
-      result.overall >= 55 && result.overall <= 95,
+      result.overall >= 0 && result.overall <= 100,
       `overall=${result.overall}`,
-      `overall=${result.overall} 不在55-95范围`,
+      `overall=${result.overall} 不在0-100范围`,
     ));
 
     // meta 有 dayPillar

@@ -53,7 +53,7 @@ export interface TenGodsResult {
 const WUXING_ZERO: WuxingCountMap = { 金: 0, 木: 0, 水: 0, 火: 0, 土: 0 };
 
 /** 从可变干支列表计算五行 count 分（含权重） */
-function computeWuxingCountFromGanZhi(ganZhiList: ReadonlyArray<{ gan: Stem; zhi: Branch }>): WuxingCountMap {
+export function computeWuxingCountFromGanZhi(ganZhiList: ReadonlyArray<{ gan: Stem; zhi: Branch }>): WuxingCountMap {
   const count = { ...WUXING_ZERO };
 
   for (const p of ganZhiList) {
@@ -134,7 +134,7 @@ export function computeWuxingStats(
 // ── 2. 刑冲合害修正 ──────────────────────────────────────────────
 
 /** 通用版：接受地支数组（原局4 + 大运1 + 可选流年1） */
-function applyXchhCorrectionOnZhi(
+export function applyXchhCorrectionOnZhi(
   allZhi: readonly Branch[],
   monthZhi: Branch,
   baseCount: WuxingCountMap,

@@ -154,10 +154,14 @@ export interface PillarDetail {
 export interface DayunWithFortune extends DayunStep {
   fortune: FortuneLevel;
   dayunWuxing: Wuxing;
+  /** 帮扶/克泄耗能量占比 R，用于旺衰映射分线性插值 */
+  r: number;
 }
 
 export interface LiunianWithFortune extends LiunianStep {
   fortune: FortuneLevel;
+  /** 帮扶/克泄耗能量占比 R，用于旺衰映射分线性插值 */
+  r: number;
 }
 
 export interface TimeCorrection {
@@ -273,7 +277,7 @@ export function buildChartV2(input: BuildChartInput, opts?: { centerYear?: numbe
       strengthType: strength.strength_type,
     });
     const fortune = judgeFortuneLevel(d.stem, tempFortune, strength.strength_type, yongShenFull.xiyongshen, yongShenFull.jishen);
-    return { ...d, fortune, dayunWuxing: dayunWX };
+    return { ...d, fortune, dayunWuxing: dayunWX, r: tempFortune.r };
   });
 
   // 10. 流年（含运势）
@@ -293,7 +297,7 @@ export function buildChartV2(input: BuildChartInput, opts?: { centerYear?: numbe
       strengthType: strength.strength_type,
     });
     const fortune = judgeFortuneLevel(ln.stem, tempFortune, strength.strength_type, yongShenFull.xiyongshen, yongShenFull.jishen);
-    return { ...ln, fortune };
+    return { ...ln, fortune, r: tempFortune.r };
   });
 
   // 11. 六维标签

@@ -5,9 +5,8 @@ import { profiles, fortunesMonthly, type Profile } from "@/lib/db/schema";
 import { getDayPillar } from "@/lib/bazi/today";
 import { computeDaily7, type DimensionScores7 } from "./daily-7dim";
 import { computeAttributes, type Attributes } from "./attributes";
-import { pickOneLiner } from "./one-liner";
+import { pickOneLiner7 } from "./one-liner";
 import { buildReadingFallback } from "./reading-fallback";
-import { computeDailyScores } from "./scorer";
 import { NoDefaultProfileError, type ReadingSource } from "./fetch-today";
 import { getChartV2ForProfile } from "./chart-from-profile";
 import { monthKeyFromIso, datesInCalendarMonth } from "./period-utils";
@@ -45,6 +44,8 @@ export function fetchMonthlyFortune(args: {
 
   if (!defaultProfile) throw new NoDefaultProfileError();
 
+  const chartV2 = getChartV2ForProfile(defaultProfile);
+
   const [cached] = db
     .select()
     .from(fortunesMonthly)
@@ -62,6 +63,7 @@ export function fetchMonthlyFortune(args: {
     const midIso = dates[Math.floor((dates.length - 1) / 2)] ?? dates[0]!;
     const attributes = computeAttributes(
       getDayPillar(new Date(`${midIso}T12:00:00+08:00`)),
+      chartV2,
     );
     const [y, m] = month.split("-").map(Number);
     return {
@@ -79,25 +81,20 @@ export function fetchMonthlyFortune(args: {
     };
   }
 
-  return computeAndCacheMonthly(defaultProfile, month, args.anchorDate);
+  return computeAndCacheMonthly(defaultProfile, chartV2, month, args.anchorDate);
 }
 
 function computeAndCacheMonthly(
   profile: Profile,
+  chartV2: ReturnType<typeof getChartV2ForProfile>,
   month: string,
   anchorDate: string,
 ): MonthlyFortuneResult {
   const db = getDb();
-  const chartV2 = getChartV2ForProfile(profile);
-  const chartSlice = {
-    dayMaster: chartV2.dayMaster,
-    fiveElements: chartV2.fiveElements,
-  };
-
   const dates = datesInCalendarMonth(month);
   const dailyScores: DimensionScores7[] = dates.map((iso) => {
     const day = getDayPillar(new Date(`${iso}T12:00:00+08:00`));
-    return computeDaily7({ chart: chartSlice, day }).scores;
+    return computeDaily7({ chart: chartV2, day, gender: (profile.gender ?? "other") as "male" | "female" | undefined }).scores;
   });
 
   const scores = averageDimensionScores7(dailyScores);
@@ -105,9 +102,8 @@ function computeAndCacheMonthly(
 
   const midIso = dates[Math.floor((dates.length - 1) / 2)] ?? dates[0];
   const midDay = getDayPillar(new Date(`${midIso}T12:00:00+08:00`));
-  const attributes: Attributes = computeAttributes(midDay);
-  const dailyV1 = computeDailyScores(chartSlice, midDay);
-  const oneLiner = pickOneLiner(dailyV1);
+  const attributes: Attributes = computeAttributes(midDay, chartV2);
+  const oneLiner = pickOneLiner7(scores, midDay.date);
 
   const reading = buildReadingFallback(`${month}|month`, scores);
 

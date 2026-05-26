@@ -4,25 +4,31 @@ import {
   TWELVE_BRANCHES,
   type Wuxing,
   type Branch,
+  type Stem,
 } from "@/lib/bazi/stems-branches";
 import type { DayPillar } from "@/lib/bazi/today";
+import type { BaziChartV2 } from "@/lib/bazi/chart";
+import { computeDayXiyongMatch } from "./first-xiyong";
 
 /**
- * 8 幸运属性（V1.0 文档 §运势 8 属性）
+ * 8 幸运属性（V2 — 基于当日喜用神五行）
  *
- * - 幸运色：当日五行对应色（素笺仙气配色映射）
+ * - 幸运色：当日喜用神五行对应色
  * - 幸运方位：当日地支所属方位
- * - 幸运时辰：日柱地支三合时辰范围
- * - 幸运数：当日地支序数（1-12）
- * - 幸运花 / 事物：按当日五行查静态表
- * - 幸运配饰 / 食物：M4.2 新增，按当日五行查静态表
+ * - 幸运时辰：主时辰 + 副时辰（三合相关）
+ * - 幸运数：当日喜用神五行数字，随机选1-2个（日期稳定）
+ * - 幸运花 / 事物 / 配饰 / 食物：按当日喜用神五行查静态表
  */
 
 export interface Attributes {
   color: { name: string; hex: string };
   direction: string;
   hour: { branch: Branch; range: string };
-  number: number;
+  /** 副时辰（可选） */
+  subHour?: { branch: Branch; range: string };
+  /** 幸运数字1-2个 */
+  numbers: number[];
+  number: number; // 向后兼容，取第一个
   flower: string;
   item: string;
   accessory: string;
@@ -52,10 +58,6 @@ const DIRECTION_BY_BRANCH: Record<Branch, string> = {
   亥: "西北",
 };
 
-/**
- * 三合时辰：每个地支三合的另两个地支取一个最适合的时辰
- *  申-子-辰 / 亥-卯-未 / 寅-午-戌 / 巳-酉-丑
- */
 const SAN_HE_BY_BRANCH: Record<Branch, Branch> = {
   申: "子",
   子: "辰",
@@ -69,6 +71,22 @@ const SAN_HE_BY_BRANCH: Record<Branch, Branch> = {
   巳: "酉",
   酉: "丑",
   丑: "巳",
+};
+
+/** 三合局中另一个地支作为副时辰 */
+const SAN_HE_PARTNER: Record<Branch, Branch> = {
+  申: "辰",
+  子: "申",
+  辰: "子",
+  亥: "未",
+  卯: "亥",
+  未: "卯",
+  寅: "戌",
+  午: "寅",
+  戌: "午",
+  巳: "丑",
+  酉: "巳",
+  丑: "酉",
 };
 
 const FLOWER_BY_WUXING: Record<Wuxing, string> = {
@@ -103,25 +121,86 @@ const FOOD_BY_WUXING: Record<Wuxing, string> = {
   土: "黄色食物（南瓜、玉米、黄豆）",
 };
 
-export function computeAttributes(day: DayPillar): Attributes {
-  const dayWuxing = wuxingOf(day.gan);
-  const luckyBranch = SAN_HE_BY_BRANCH[day.zhi];
-  const range = branchHourRange(luckyBranch);
+const NUMBER_BY_WUXING: Record<Wuxing, number[]> = {
+  金: [7, 1],
+  木: [3, 8],
+  水: [1, 6],
+  火: [2, 7],
+  土: [5, 0],
+};
+
+/** 日期稳定的 hash — 同一天同一档案返回同一随机结果 */
+function hashString(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function formatHourRange(branch: Branch): string {
+  const range = branchHourRange(branch);
   const startStr = String(range.startHour).padStart(2, "0");
   const endStr = String(range.endHour).padStart(2, "0");
-  const number = TWELVE_BRANCHES.indexOf(day.zhi) + 1;
+  return `${startStr}:00–${endStr}:00`;
+}
+
+export function computeAttributes(
+  day: DayPillar,
+  chart?: BaziChartV2,
+): Attributes {
+  // V2: 基于当日喜用神五行；无 chart 时回退到日干五行
+  let luckyWuxing: Wuxing;
+  if (chart) {
+    const match = computeDayXiyongMatch(chart, day.gan as Stem, day.zhi as Branch);
+    luckyWuxing = match.wuxing;
+  } else {
+    luckyWuxing = wuxingOf(day.gan);
+  }
+
+  // 主时辰：日柱地支三合时辰
+  const mainBranch = SAN_HE_BY_BRANCH[day.zhi];
+  // 副时辰：三合局中另一地支
+  const subBranch = SAN_HE_PARTNER[day.zhi];
+
+  // 幸运数字：从五行数字中随机选1-2个（日期稳定）
+  const allNumbers = NUMBER_BY_WUXING[luckyWuxing];
+  const seed = hashString(day.date + luckyWuxing);
+  const count = seed % 2 === 0 ? 2 : 1;
+  const numbers: number[] = [];
+  const used = new Set<number>();
+  for (let i = 0; i < count && i < allNumbers.length; i++) {
+    const idx = (seed + i) % allNumbers.length;
+    if (!used.has(allNumbers[idx]!)) {
+      numbers.push(allNumbers[idx]!);
+      used.add(allNumbers[idx]!);
+    }
+  }
+  // 若去重后不足，补齐
+  for (const n of allNumbers) {
+    if (numbers.length >= count) break;
+    if (!used.has(n)) {
+      numbers.push(n);
+      used.add(n);
+    }
+  }
 
   return {
-    color: COLOR_BY_WUXING[dayWuxing],
+    color: COLOR_BY_WUXING[luckyWuxing],
     direction: DIRECTION_BY_BRANCH[day.zhi],
     hour: {
-      branch: luckyBranch,
-      range: `${startStr}:00–${endStr}:00`,
+      branch: mainBranch,
+      range: formatHourRange(mainBranch),
     },
-    number,
-    flower: FLOWER_BY_WUXING[dayWuxing],
-    item: ITEM_BY_WUXING[dayWuxing],
-    accessory: ACCESSORY_BY_WUXING[dayWuxing],
-    food: FOOD_BY_WUXING[dayWuxing],
+    subHour: subBranch
+      ? { branch: subBranch, range: formatHourRange(subBranch) }
+      : undefined,
+    numbers,
+    number: numbers[0] ?? TWELVE_BRANCHES.indexOf(day.zhi) + 1,
+    flower: FLOWER_BY_WUXING[luckyWuxing],
+    item: ITEM_BY_WUXING[luckyWuxing],
+    accessory: ACCESSORY_BY_WUXING[luckyWuxing],
+    food: FOOD_BY_WUXING[luckyWuxing],
   };
 }

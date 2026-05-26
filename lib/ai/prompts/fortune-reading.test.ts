@@ -17,6 +17,7 @@ const SAMPLE_ATTRS: Attributes = {
   color: { name: "新柳绿", hex: "#BFD9C2" },
   direction: "正东",
   hour: { branch: "辰", range: "07:00–09:00" },
+  numbers: [3, 8],
   number: 3,
   flower: "栀子",
   item: "一卷书",

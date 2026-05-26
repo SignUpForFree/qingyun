@@ -101,13 +101,11 @@ function computeAndCacheFortune(
   const chartV2 = getChartV2ForProfile(profile);
 
   const daily7 = computeDaily7({
-    chart: {
-      dayMaster: chartV2.dayMaster,
-      fiveElements: chartV2.fiveElements,
-    },
+    chart: chartV2,
     day: today,
+    gender: (profile.gender ?? "other") as "male" | "female" | undefined,
   });
-  const attributes = computeAttributes(today);
+  const attributes = computeAttributes(today, chartV2);
   const oneLiner = pickOneLiner7(daily7.scores, today.date);
   const reading = buildReadingFallback(today.date, daily7.scores);
 
