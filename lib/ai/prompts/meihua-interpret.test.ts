@@ -25,14 +25,17 @@ describe("buildMeihuaPrompt (测算结果解读结构)", () => {
     expect(r.userPrompt.length).toBeGreaterThan(0);
   });
 
-  it("systemPrompt 含新五段结构", () => {
+  it("systemPrompt 含新五段结构（核心结论前置）", () => {
     const r = buildMeihuaPrompt({ result: sampleResult });
     expect(r.systemPrompt).toContain("测算结果解读");
-    expect(r.systemPrompt).toContain("一、测算溯源 · 象数推演");
-    expect(r.systemPrompt).toContain("二、体用生克 · 成败枢机");
-    expect(r.systemPrompt).toContain("三、卦象详解 · 玄机洞明");
-    expect(r.systemPrompt).toContain("四、核心结论");
+    expect(r.systemPrompt).toContain("一、卦象概括");
+    expect(r.systemPrompt).toContain("二、测算溯源 · 象数推演");
+    expect(r.systemPrompt).toContain("三、体用生克 · 成败枢机");
+    expect(r.systemPrompt).toContain("四、卦象详解 · 玄机洞明");
     expect(r.systemPrompt).toContain("五、建议指引");
+    expect(r.systemPrompt).toContain("### 本卦");
+    expect(r.systemPrompt).toContain("### 互卦 {{");
+    expect(r.systemPrompt).not.toContain("本卦 · {{");
   });
 
   it("systemPrompt 含 Markdown 结构要求与自检清单", () => {
@@ -44,20 +47,20 @@ describe("buildMeihuaPrompt (测算结果解读结构)", () => {
     expect(r.systemPrompt).toContain("淬炼");
   });
 
-  it("systemPrompt 含人设、### 三卦与第三节 300-500 字", () => {
+  it("systemPrompt 含女修人设、去 AI 味与 300-500 字详解", () => {
     const r = buildMeihuaPrompt({ result: sampleResult });
-    expect(r.systemPrompt).toContain("# 人设：");
-    expect(r.systemPrompt).toContain("精通《周易》智慧");
-    expect(r.systemPrompt).toContain("### 本卦 ·");
+    expect(r.systemPrompt).toContain("亲和的女修");
+    expect(r.systemPrompt).toContain("去掉AI味");
+    expect(r.systemPrompt).toContain("### 本卦");
     expect(r.systemPrompt).toContain("体卦、变卦、变用卦的状况");
     expect(r.systemPrompt).toContain("控制在300-500字");
-    expect(r.systemPrompt).not.toContain("### 本卦\"");
   });
 
-  it("userPrompt 要求体用分析与 300-500 字详解", () => {
+  it("userPrompt 要求开篇结论、体用分析与 300-500 字详解", () => {
     const r = buildMeihuaPrompt({ result: sampleResult });
+    expect(r.userPrompt).toContain("卦象概括");
     expect(r.userPrompt).toContain("300-500 字");
-    expect(r.userPrompt).toContain("体卦、变卦");
+    expect(r.userPrompt).toContain("亲和女修");
     expect(r.userPrompt).toContain("变用卦");
   });
 

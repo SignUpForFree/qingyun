@@ -139,7 +139,7 @@ function Line({ line }: { line: string }) {
 }
 
 function isGuaSubhead(line: string): boolean {
-  return /^(本卦|互卦|变卦)\s*·/.test(line);
+  return /^(本卦|互卦|变卦)(\s*·|\s{2,})/.test(line);
 }
 
 function parseHeadingLine(trimmed: string): { level: 1 | 2 | 3; title: string } | null {
