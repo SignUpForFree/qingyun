@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { buildMeihuaPrompt } from "./meihua-interpret";
+import {
+  buildMeihuaPrompt,
+  formatGregorianDateTime,
+} from "./meihua-interpret";
 import { meihuaV2 } from "@/lib/divination/meihua-v2";
 
 const sampleResult = meihuaV2({
@@ -15,45 +18,53 @@ const sampleResult = meihuaV2({
   },
 });
 
-describe("buildMeihuaPrompt (五章结构)", () => {
+describe("buildMeihuaPrompt (测算结果解读结构)", () => {
   it("返回 systemPrompt + userPrompt", () => {
     const r = buildMeihuaPrompt({ result: sampleResult });
     expect(r.systemPrompt.length).toBeGreaterThan(0);
     expect(r.userPrompt.length).toBeGreaterThan(0);
   });
 
-  it("systemPrompt 含 1500-2000 字限制 + 五章结构", () => {
+  it("systemPrompt 含新五段结构", () => {
     const r = buildMeihuaPrompt({ result: sampleResult });
-    expect(r.systemPrompt).toContain("1500-2000");
-    expect(r.systemPrompt).toContain("测算溯源·象数推演");
-    expect(r.systemPrompt).toContain("体用生克·成败枢机");
-    expect(r.systemPrompt).toContain("卦象详解·玄机洞明");
-    expect(r.systemPrompt).toContain("综合断辞");
-    expect(r.systemPrompt).toContain("易道指引·修心行事");
+    expect(r.systemPrompt).toContain("测算结果解读");
+    expect(r.systemPrompt).toContain("一、测算溯源 · 象数推演");
+    expect(r.systemPrompt).toContain("二、体用生克 · 成败枢机");
+    expect(r.systemPrompt).toContain("三、卦象详解 · 玄机洞明");
+    expect(r.systemPrompt).toContain("四、核心结论");
+    expect(r.systemPrompt).toContain("五、建议指引");
   });
 
-  it("systemPrompt 含禁词锁", () => {
+  it("systemPrompt 含 Markdown 结构要求与自检清单", () => {
     const r = buildMeihuaPrompt({ result: sampleResult });
-    expect(r.systemPrompt).toContain("禁词");
+    expect(r.systemPrompt).toContain("严格遵守Markdown排版规范");
+    expect(r.systemPrompt).toContain("最终输出前自检清单");
+    expect(r.systemPrompt).toContain("大吉");
     expect(r.systemPrompt).toContain("大凶");
-    expect(r.systemPrompt).toContain("命中注定");
+    expect(r.systemPrompt).toContain("淬炼");
   });
 
-  it("systemPrompt 含核心卦德'以'字结构要求", () => {
+  it("systemPrompt 含人设、### 三卦与第三节 300-500 字", () => {
     const r = buildMeihuaPrompt({ result: sampleResult });
-    expect(r.systemPrompt).toContain("以");
-    expect(r.systemPrompt).toContain("核心卦德");
+    expect(r.systemPrompt).toContain("# 人设：");
+    expect(r.systemPrompt).toContain("精通《周易》智慧");
+    expect(r.systemPrompt).toContain("### 本卦 ·");
+    expect(r.systemPrompt).toContain("体卦、变卦、变用卦的状况");
+    expect(r.systemPrompt).toContain("控制在300-500字");
+    expect(r.systemPrompt).not.toContain("### 本卦\"");
   });
 
-  it("systemPrompt 含固定结语", () => {
+  it("userPrompt 要求体用分析与 300-500 字详解", () => {
     const r = buildMeihuaPrompt({ result: sampleResult });
-    expect(r.systemPrompt).toContain("易为君子谋");
+    expect(r.userPrompt).toContain("300-500 字");
+    expect(r.userPrompt).toContain("体卦、变卦");
+    expect(r.userPrompt).toContain("变用卦");
   });
 
-  it("systemPrompt 含角色表+象征列要求", () => {
+  it("不再使用旧版综合断辞 / 易道指引结语", () => {
     const r = buildMeihuaPrompt({ result: sampleResult });
-    expect(r.systemPrompt).toContain("象征");
-    expect(r.systemPrompt).toContain("变用卦");
+    expect(r.systemPrompt).not.toContain("综合断辞");
+    expect(r.systemPrompt).not.toContain("易为君子谋");
   });
 
   it("userPrompt 含本卦 / 互卦 / 变卦", () => {
@@ -64,93 +75,37 @@ describe("buildMeihuaPrompt (五章结构)", () => {
     expect(r.userPrompt).not.toContain("卦中卦");
   });
 
-  it("userPrompt 含卦辞 + 彖辞 + 大象传 + 动爻爻辞", () => {
+  it("userPrompt 含公历测算时间与报数", () => {
+    const r = buildMeihuaPrompt({
+      result: sampleResult,
+      numbers: [3, 6, 9],
+      measuredAtText: "2026年5月19日 16:30",
+    });
+    expect(r.userPrompt).toContain("2026年5月19日 16:30");
+    expect(r.userPrompt).toContain("【数字1】3");
+    expect(r.userPrompt).toContain("【数字2】6");
+    expect(r.userPrompt).toContain("【数字3】9");
+  });
+
+  it("formatGregorianDateTime 输出公历格式", () => {
+    const t = formatGregorianDateTime(new Date("2026-05-19T08:30:00Z"));
+    expect(t).toMatch(/2026年5月19日/);
+    expect(t).toContain("16:30");
+  });
+
+  it("userPrompt 含卦辞 + 体用 + 应期", () => {
     const r = buildMeihuaPrompt({ result: sampleResult });
     expect(r.userPrompt).toContain("卦辞");
-    expect(r.userPrompt).toContain("彖辞");
-    expect(r.userPrompt).toContain("大象传");
-    expect(r.userPrompt).toContain("动爻");
-    expect(r.userPrompt).toContain(`第 ${sampleResult.dongYao} 爻`);
-  });
-
-  it("userPrompt 含上下卦五行", () => {
-    const r = buildMeihuaPrompt({ result: sampleResult });
-    expect(r.userPrompt).toContain("本卦上卦");
-    expect(r.userPrompt).toContain("本卦下卦");
-    expect(r.userPrompt).toContain("互卦上卦");
-    expect(r.userPrompt).toContain("互卦下卦");
-    expect(r.userPrompt).toContain("变卦上卦");
-    expect(r.userPrompt).toContain("变卦下卦");
-  });
-
-  it("userPrompt 含体卦 + 用卦 + 变用卦 + 应期", () => {
-    const r = buildMeihuaPrompt({ result: sampleResult });
-    expect(r.userPrompt).toContain("体卦");
-    expect(r.userPrompt).toContain("用卦");
-    expect(r.userPrompt).toContain("变用卦");
+    expect(r.userPrompt).toContain("体卦象");
     expect(r.userPrompt).toContain("应期");
   });
 
-  it("userPrompt 含本卦/互卦/变卦六爻爻辞", () => {
-    const r = buildMeihuaPrompt({ result: sampleResult });
-    expect(r.userPrompt).toContain("本卦六爻爻辞");
-    expect(r.userPrompt).toContain("互卦六爻爻辞");
-    expect(r.userPrompt).toContain("变卦六爻爻辞");
-  });
-
-  it("userPrompt 含起卦数字", () => {
-    const r = buildMeihuaPrompt({ result: sampleResult, numbers: [3, 6, 9] });
-    expect(r.userPrompt).toContain("数字起卦");
-    expect(r.userPrompt).toContain("3、6、9");
-  });
-
-  it("userPrompt 含农历日期", () => {
-    const r = buildMeihuaPrompt({ result: sampleResult, lunarDateText: "丙午年·三月初七·午时" });
-    expect(r.userPrompt).toContain("丙午年");
-  });
-
-  it("有 hourBranch 时 userPrompt 含时辰能量行", () => {
-    const r = buildMeihuaPrompt({ result: sampleResult });
-    expect(r.userPrompt).toContain("时辰能量");
-  });
-
-  it("userPrompt 含五行损益 summary", () => {
-    const r = buildMeihuaPrompt({ result: sampleResult });
-    expect(r.userPrompt).toContain("五行损益");
-  });
-
-  it("userQuestion 同时出现在 system + user prompt 里", () => {
+  it("userQuestion 出现在 system + user prompt", () => {
     const r = buildMeihuaPrompt({
       result: sampleResult,
       userQuestion: "下个月项目能不能按时上线",
     });
     expect(r.systemPrompt).toContain("下个月项目能不能按时上线");
     expect(r.userPrompt).toContain("下个月项目能不能按时上线");
-  });
-
-  it("无 hourBranch → userPrompt 不含时辰能量行", () => {
-    const noTime = meihuaV2({
-      numbers: [3, 6, 9],
-      userQuestion: "q",
-      profile: null,
-    });
-    const r = buildMeihuaPrompt({ result: noTime });
-    expect(r.userPrompt).not.toContain("时辰能量");
-  });
-
-  it("6 爻线条以 ▬▬ / ▬ ▬ 美化", () => {
-    const r = buildMeihuaPrompt({ result: sampleResult });
-    expect(r.userPrompt).toMatch(/▬▬|▬ ▬/);
-  });
-
-  it("不含 sunYi.adjustments 全 0 时 损益分布 行（仅在 unrelated 时）", () => {
-    const noYong = meihuaV2({
-      numbers: [3, 6, 9],
-      userQuestion: "q",
-      profile: null,
-    });
-    const r = buildMeihuaPrompt({ result: noYong });
-    expect(r.userPrompt).toContain("五行损益"); // summary 行始终在
-    expect(r.userPrompt).not.toContain("损益分布"); // delta=0 不输出
   });
 });

@@ -124,6 +124,9 @@ export interface MeihuaResultMeta {
   yingQi: { speed: "fast" | "medium" | "slow"; timeHint: string; branchHour: string | null };
   verdict: string;
   aiText?: string;
+  measuredAtText?: string;
+  userQuestion?: string;
+  numbers?: number[];
 }
 
 export function parseMeta(raw: string | null | undefined): MetaUi | null {

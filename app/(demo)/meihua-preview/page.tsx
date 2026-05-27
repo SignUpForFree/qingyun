@@ -6,7 +6,7 @@ import { interpretMeihua } from "@/lib/meihua/interpret";
 /**
  * Design lab：MeihuaResultCard 视觉预览
  *
- * 跑 5 个不同 relation 的卦让设计校对每种 verdict 的颜色 + 4 宫格 layout
+ * 跑 5 个不同 relation 的卦校对三卦 layout
  * 仅 dev 用，访问 /meihua-preview 看
  */
 const SAMPLES: ReadonlyArray<{ args: [number, number, number] | [number, number]; label: string }> = [
@@ -18,14 +18,6 @@ const SAMPLES: ReadonlyArray<{ args: [number, number, number] | [number, number]
 ];
 
 export default function MeihuaPreviewPage() {
-  const relationVerdict: Record<string, string> = {
-    ti_ke_yong: "体克用 · 吉",
-    yong_ke_ti: "用克体 · 需留神",
-    ti_sheng_yong: "体生用 · 略耗心力",
-    yong_sheng_ti: "用生体 · 大吉",
-    bi_he: "比和 · 平顺",
-  };
-
   const samples = SAMPLES.map((s) => {
     const cast = castByNumbers(...s.args);
     const r = interpretMeihua(cast);
@@ -51,8 +43,6 @@ export default function MeihuaPreviewPage() {
               dongYao={r.dongYao}
               ti={r.tiYong.ti}
               yong={r.tiYong.yong}
-              relation={r.tiYong.relation}
-              verdict={relationVerdict[r.tiYong.relation] ?? r.tiYong.relation}
               speed={r.yingQi.speed}
               timeHint={r.yingQi.timeHint}
               branchHour={r.yingQi.branchHour}

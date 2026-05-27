@@ -1,6 +1,7 @@
 "use client";
 
 import { GlassCard } from "@/components/su";
+import { MeihuaReadingMarkdown } from "@/components/divination/MeihuaReadingMarkdown";
 import { cn } from "@/lib/utils";
 import { CardWrap } from "./TextBubble";
 
@@ -18,15 +19,13 @@ export function StreamingReadingCard({
     <div data-testid="streaming-reading-card" className={className}>
       <CardWrap>
         <GlassCard className="w-full p-5">
-          <p className="whitespace-pre-wrap text-[13px] leading-[1.85] text-[var(--color-ink-plum)]">
-            {text}
-            <span
-              aria-hidden
-              className="ml-1 inline-block animate-pulse text-[var(--color-accent-lavender)]"
-            >
-              ✦
-            </span>
-          </p>
+          <MeihuaReadingMarkdown text={text} />
+          <span
+            aria-hidden
+            className="ml-1 inline-block animate-pulse text-[var(--color-accent-lavender)]"
+          >
+            ✦
+          </span>
         </GlassCard>
       </CardWrap>
     </div>

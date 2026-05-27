@@ -88,6 +88,12 @@ describe("stripMarkdownDecoration", () => {
     const r = sanitizeAiOutput("### 火旺耗身\n此处需多留意。");
     expect(r.cleaned).toBe("火旺耗身\n此处需多留意。");
   });
+
+  it("preserveMarkdown 时保留标题与加粗", () => {
+    const raw = "**## 一、测算溯源**\n\n正文";
+    const r = sanitizeAiOutput(raw, "divination", { preserveMarkdown: true });
+    expect(r.cleaned).toBe(raw);
+  });
 });
 
 describe("detectForbidden (audit)", () => {

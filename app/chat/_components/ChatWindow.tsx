@@ -94,6 +94,7 @@ export function ChatWindow({
         messages={stream.messages}
         streamingText={stream.streamingText}
         streamingSlipReport={stream.streamingSlipReport}
+        streamingMeihuaMessageId={stream.streamingMeihuaMessageId}
         onCardPick={handleCardPick}
         onCardSubmit={handleCardSubmit}
         onCardAction={handleCardAction}

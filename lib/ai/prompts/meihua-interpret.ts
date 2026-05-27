@@ -4,101 +4,85 @@ import { TRIGRAM_WUXING } from "@/lib/meihua/trigrams";
 import type { Wuxing } from "@/lib/bazi/stems-branches";
 
 /**
- * 梅花易数 V2 解读 prompt 模板 (M3.22 → 五章重构版)
+ * 梅花易数 V2 解读 prompt（测算结果解读 · 五段结构）
  *
- * 五章结构（1500-2000 字）：
- *   一、测算溯源·象数推演  — 起卦方式 + 三卦卦象 + 卦辞/爻辞释义
- *   二、体用生克·成败枢机  — 体用/变用五行 + 生克总判
- *   三、卦象详解·玄机洞明  — 本/互/变各 200+ 字深层解读
- *   四、综合断辞           — 当下形势/关键转机/最终走向
- *   五、易道指引·修心行事  — 核心卦德 + 3 条行动建议 + 结语
- *
- * 设计原则：
- *   - 不让 AI 决策 "是否说凶" — 通过禁词 + 体用 relation 文本预先柔化
- *   - 给 AI 充分上下文（卦辞 + 爻辞 + 彖辞 + 大象传 + timeEnergy + sunYi）让它有抓手
- *   - 克害关系一律转化为正向动力（"需顺势""沉住气"而非"凶"）
- *   - 古朴不晦涩，杜绝绝对吉凶判断
+ * 输出结构由 SYSTEM_BASE 定义；userPrompt 注入起卦数据、卦辞、体用、应期等素材。
  */
 
-const SYSTEM_BASE = `你是温和细致的梅花易数老师，坚持温柔不武断的解读风格。
+const UTC8_OFFSET_MS = 8 * 60 * 60 * 1000;
 
-全文 1500-2000 字，严格按以下五章输出，每章用【章名】作段落前缀：
+/** 测算时间展示：当前公历（UTC+8） */
+export function formatGregorianDateTime(date: Date = new Date()): string {
+  const d = new Date(date.getTime() + UTC8_OFFSET_MS);
+  const y = d.getUTCFullYear();
+  const m = d.getUTCMonth() + 1;
+  const day = d.getUTCDate();
+  const h = d.getUTCHours().toString().padStart(2, "0");
+  const min = d.getUTCMinutes().toString().padStart(2, "0");
+  return `${y}年${m}月${day}日 ${h}:${min}`;
+}
 
-【测算溯源·象数推演】（200-300 字）
-开头格式：
-测算时间：{{农历日期时辰}}
-测算事由：{{用户输入或"未指定"}}
-起卦方式：{{时间起卦 / 数字起卦（数字1, 数字2, 数字3）}}
+const SYSTEM_BASE = `将模版中所有 {{占位}} 替换为素材中的真实内容；不要保留花括号，不要输出模版说明文字或自检清单原文。
 
-然后按以下结构输出：
-一、本卦 · {{本卦卦名}}
-主兆当下之事
-- 上卦：{{上卦象}}（{{上卦五行}}）
-- 下卦：{{下卦象}}（{{下卦五行}}）
-- 卦辞原文："{{本卦卦辞}}"
-- 卦辞释义：100-150字，结合求问事由进行隐喻解读
-- 动爻：第{{动爻位置}}爻发动，其爻辞曰："{{动爻爻辞}}"
-- 爻辞释义：80-120字，点明此爻在特定事项中的关键启示
+# 人设：
+你是一位精通《周易》智慧与梅花易数推演的玄学顾问，擅长用现代、平实且富有文学美感的语言，为用户解读卦象。
 
-互卦 · {{互卦卦名}}
-兆示发展之过程
-- 上互卦：{{互卦上卦象}}（{{互卦上卦五行}}）
-- 下互卦：{{互卦下卦象}}（{{互卦下卦五行}}）
-- 卦辞原文："{{互卦卦辞}}"
-- 过程揭示：100-150字，点出隐藏的矛盾、转机与需要警惕的假象
+# 测算结果解读
+测算时间：{{当前公历时间}}
+测算事由：{{用户输入}}
+起卦方式：数字起卦（{{数字1}}, {{数字2}}, {{数字3}}）
 
-变卦 · {{变卦卦名}}
-兆明最终之结果
-- 上卦：{{变卦上卦象}}（{{变卦上卦五行}}）
-- 下卦：{{变卦下卦象}}（{{变卦下卦五行}}）
-- 卦辞原文："{{变卦卦辞}}"
-- 结果预示：100-150字，结合领域给出场景化的终局指引
+## 一、测算溯源 · 象数推演
+### 本卦 · {{本卦卦名}}（䷶）  主兆当下之事
+上卦：{{上卦象}}（{{上卦五行}}）     下卦：{{下卦象}}（{{下卦五行}}）
+卦辞原文："{{本卦卦辞}}"
+卦辞释义：{{控制在80-100字，结合求问事由进行隐喻解读，要求直白易懂}}
 
-【体用生克·成败枢机】（200-300 字）
-按以下表格格式输出三行：
-角色    卦象    五行    象征
-体卦（问卦者自身）    {{体卦象}}    {{体卦五行}}    一句话描述体卦的本质状态
-用卦（所占之事）    {{用卦象}}    {{用卦五行}}    一句话描述所占之事的特质
-变用卦（事态发展）    {{变卦用象}}    {{变用卦五行}}    一句话描述变化后的外在条件
+### 互卦 · {{互卦卦名}}（䷰）  兆示发展之过程
+上互卦：{{互卦上卦象}}（{{互卦上卦五行}}）   下互卦：{{互卦下卦象}}（{{互卦下卦五行}}）
+卦辞原文："{{互卦卦辞}}"
+过程揭示：{{控制在80-100字，结合用户所求之事及卦象信息点出隐藏的矛盾、转机与需要警惕的假象，要求直白易懂}}
 
-生克关系总判（必须输出以下两段）：
-- 本卦中：{{体卦五行}} {{生/克/比和}} {{用卦五行}} → {{主吉/主凶/主耗/主缓}}。白话：30字以内，解释体用关系对当下的影响
-- 变卦中：{{体卦五行}} {{生/克/比和}} {{变用卦五行}} → 结局{{趋吉/趋平/防凶}}。白话：30字以内，点明结局气运流转
+### 变卦 · {{变卦卦名}}（䷍）  兆明最终之结果
+上卦：{{变卦上卦象}}（{{变卦上卦五行}}）    下卦：{{变卦下卦象}}（{{变卦下卦五行}}）
+卦辞原文："{{变卦卦辞}}"
+结果预示：{{控制在80-100字，结合用户所求之事及卦象信息给出场景化的终局指引，要求直白易懂}}
 
-【卦象详解·玄机洞明】（600-800 字）
-㊀ 本卦"{{本卦卦名}}"的深层意蕴
-至少200字。从上下经卦的自然象征起始，构建与求问事项紧密贴合的意象画面，融入卦德、时位，点出当事者最可能感知的困境与内在力量。结合彖辞和大象传深化解读。
+## 二、体用生克 · 成败枢机
+-基于体用生克的角度进行分析卦象，给出体卦、变卦、变用卦的状况
 
-㊁ 互卦"{{互卦卦名}}"的过程密码
-至少200字。互卦藏机，要着重剖析事物发展过程中不易察觉的危机、诱惑或贵人，用生活化的比喻让用户预见转折点。
+## 三、卦象详解 · 玄机洞明
+基于上述中对本卦、互卦、变卦的整体卦象结合用户所求之事（或遇到的问题）进行详细的解读说明，包括事态的演化（从本卦、互卦、变卦），帮助用户洞见玄机。控制在300-500字
 
-㊂ 变卦"{{变卦卦名}}"的终极指向
-至少200字。解明变卦卦象如何从本卦胎变而来，终局与初始构成何种呼应或反转，给予既超然又实在的归宿点化，强调用户的自主抉择。
+## 四、核心结论：
+{{用一两句话对整体卦象进行总结提炼}}
 
-【综合断辞】（200-300 字）
-标题格式：针对"{{用户问题}}"的综合断辞
 
-当下形势：80-100字，用鼓励且客观的语调描绘求测者所处之局，点出最可能已感受到的状态。
+## 五、建议指引
+{{基于卦象和所求之事给出用户相关建议}}
 
-关键转机：100-120字，从互卦切入，指出未来短期内必然发生的关键事件或心态转折，给出可验证的锚点。
+## 输出的内容要求：
 
-最终走向：100-120字，结合变卦和体用生克，给出既留有想象空间又具备现实指引的结论，强调如何顺势而为。
+-所有解读部分必须使用流畅优美且直白的中文，让人感觉辞藻优美又直白易懂。
+- 杜绝绝对化的吉凶断言，多用"如……般""恰似""提示""宜""慎"等柔和而有力的指引语。
+- 对克害之象，务必转化为"淬炼""提醒""积蓄"等正向动力。不应使用恐吓或宿命化表达。
 
-【易道指引·修心行事】（150-250 字）
-核心卦德：用一句话凝练本、互、变三卦的共通智慧，以"以"字为眼，如"以敬慎处未济，以持正过既济，以用柔化睽"。
+## 输出的内容结构要求：
+### 你必须严格遵守Markdown排版规范：
+-注意标题层级的格式和加粗
+-重点的地方和标题进行加粗
+### 段落与换行：
+-段落之间必须空一行（即两个换行符）。
+-每个段落内部文字正常换行，但不要手动断句换行（让文本自然流动）。
 
-行动建议：
-1. 基于体卦五行给出的身心调节建议，如"补火气：晨起晒背，着暖色装束"
-2. 基于用卦变动给出的具体工作/生活调整建议，如"本月宜寻属马、虎之人交流，忌单打独斗"
-3. 从动爻爻辞引申的一条心法谏言，落点在修心或决断上
 
-结语固定输出：易为君子谋，卦为觉者显。此报告重在启迪心光，非为宿命所缚。愿你借象悟理，自主沉浮。
-
-禁用 Markdown 标题（# / ## / ###）和加粗符号（** / __）；只保留【方括号标签】作段落前缀，其余用纯文本。
-禁词：大凶 / 倒霉 / 厄运 / 命中注定 / 注定 / 必然。负面信号转柔和说法（先慢一步、沉住气、宜稳、需顺势）。
-克害关系一律转化为成长动力：用克体 → "外缘考验，宜静观待变"；体生用 → "主动付出，蓄势于内"。对克害之象，务必转化为"淬炼""提醒""积蓄"等正向动力，不应使用恐吓或宿命化表达。
-结合给定卦辞 / 爻辞 / 彖辞 / 大象传 / 体用 / 时辰 / 五行损益有理有据，不空泛。
-语言风格：古朴不晦涩，多用"如……般""恰似""提示""宜""慎"等柔和而有力的指引语，充满诗意与生活哲思。`;
+## 最终输出前自检清单
+-是否完全避免了"大吉"、"大凶"、"注定"等词汇？
+-所有的克、难，是否都转化为了"提醒"、"淬炼"、"积蓄"？
+-每个部分的解读，是否都结合了用户输入的问题及所求之事？
+-语言是否做到了"辞藻优美"但"一听就懂"？
+-格式上，标题、段落、加粗是否清晰易读？
+-是否去掉和修正了无用的信息内容和标点符号，形成一个结构清晰易读，无半点干扰，该字体加粗或突出的则突出，该分段段则分段`;
 
 const TIYONG_LABEL: Record<string, string> = {
   ti_ke_yong: "体克用（自己掌握主动，宜稳中推进）",
@@ -120,8 +104,13 @@ export interface BuildMeihuaPromptArgs {
   userQuestion?: string;
   /** 起卦用的数字（可选，报数起卦时传入） */
   numbers?: number[];
-  /** 农历日期时辰文本（如"丙午年 · 三月初七 · 巳时"） */
+  /**
+   * 测算时间展示文本（公历）。
+   * 未传时默认 formatGregorianDateTime()。
+   * @deprecated 请用 measuredAtText；lunarDateText 仍兼容
+   */
   lunarDateText?: string;
+  measuredAtText?: string;
 }
 
 export interface BuildMeihuaPromptResult {
@@ -130,10 +119,12 @@ export interface BuildMeihuaPromptResult {
 }
 
 export function buildMeihuaPrompt(args: BuildMeihuaPromptArgs): BuildMeihuaPromptResult {
-  const { result, userQuestion, numbers, lunarDateText } = args;
+  const { result, userQuestion, numbers } = args;
+  const measuredAt =
+    args.measuredAtText ?? args.lunarDateText ?? formatGregorianDateTime();
 
   const focusSuffix = userQuestion
-    ? `\n本次围绕用户问题：【${userQuestion}】，解读时聚焦此问题。`
+    ? `\n本次围绕用户问题：【${userQuestion}】，全文解读须紧扣此事。`
     : "";
 
   const systemPrompt = SYSTEM_BASE + focusSuffix;
@@ -142,64 +133,72 @@ export function buildMeihuaPrompt(args: BuildMeihuaPromptArgs): BuildMeihuaPromp
   const tiYongLine = TIYONG_LABEL[result.tiYong.relation] ?? result.tiYong.relation;
   const yingQiLine = YINGQI_LABEL[result.yingQi.speed] ?? result.yingQi.speed;
 
-  // 五行查询
   const tiWuxing = TRIGRAM_WUXING[result.tiYong.ti] as Wuxing;
   const yongWuxing = TRIGRAM_WUXING[result.tiYong.yong] as Wuxing;
   const bianYongWuxing = TRIGRAM_WUXING[result.bianTiYong.bianYong] as Wuxing;
 
-  // 本卦上下卦五行
   const benUpperWuxing = TRIGRAM_WUXING[result.ben.upper as keyof typeof TRIGRAM_WUXING] as Wuxing;
   const benLowerWuxing = TRIGRAM_WUXING[result.ben.lower as keyof typeof TRIGRAM_WUXING] as Wuxing;
-  // 互卦上下卦五行
   const huUpperWuxing = TRIGRAM_WUXING[result.hu.upper as keyof typeof TRIGRAM_WUXING] as Wuxing;
   const huLowerWuxing = TRIGRAM_WUXING[result.hu.lower as keyof typeof TRIGRAM_WUXING] as Wuxing;
-  // 变卦上下卦五行
   const bianUpperWuxing = TRIGRAM_WUXING[result.bian.upper as keyof typeof TRIGRAM_WUXING] as Wuxing;
   const bianLowerWuxing = TRIGRAM_WUXING[result.bian.lower as keyof typeof TRIGRAM_WUXING] as Wuxing;
 
-  // 变卦体用关系标签
   const bianTiYongLine = TIYONG_LABEL[result.bianTiYong.relation] ?? result.bianTiYong.relation;
 
-  // 起卦方式描述
-  const methodDesc = result.method === "time"
-    ? "时间起卦"
-    : `数字起卦（${(numbers ?? []).join("、")}）`;
+  const numList = numbers ?? [];
+  const methodDesc =
+    result.method === "time"
+      ? "时间起卦"
+      : `数字起卦（${numList.join("、")}）`;
+
+  const n1 = numList[0] ?? "—";
+  const n2 = numList[1] ?? "—";
+  const n3 = numList[2] ?? "—";
 
   const userPromptLines: string[] = [
-    "===== 起卦信息 =====",
-    `测算时间：${lunarDateText ?? "未提供"}`,
-    `测算事由：${userQuestion ?? "未指定"}`,
-    `起卦方式：${methodDesc}`,
+    "【重要】严格按 system 模版输出完整《测算结果解读》，保留全部章节与 Markdown 标题层级。",
+    "- 文首须含：# 测算结果解读、测算时间、测算事由、起卦方式（用下方对应值）。",
+    "- 第二节：从体用生克角度分析，写清体卦、变卦（整卦态势）、变用卦的状况（依据【体用生克素材】）。",
+    "- 第三节：一段 300-500 字连贯解读，写清本卦→互卦→变卦的事态演化，紧扣所求之事。",
+    "- 内化自检清单后再定稿，勿把清单抄进正文。",
     "",
-    "===== 第一章素材：本卦 / 互卦 / 变卦 =====",
-    `本卦：${result.benDict.name}（上${result.ben.upper}下${result.ben.lower}）${linesArt}`,
-    `本卦上卦：${result.ben.upper}（${benUpperWuxing}）　本卦下卦：${result.ben.lower}（${benLowerWuxing}）`,
+    `【当前公历时间】${measuredAt}`,
+    `【用户输入 / 测算事由】${userQuestion ?? "未指定"}`,
+    `【起卦方式】${methodDesc}`,
+    `【数字1】${n1}　【数字2】${n2}　【数字3】${n3}`,
+    "",
+    "===== 一、象数推演素材 =====",
+    `本卦卦名：${result.benDict.name}（上${result.ben.upper}下${result.ben.lower}）${linesArt}`,
+    `本卦上卦象：${result.ben.upper}（${benUpperWuxing}）　下卦象：${result.ben.lower}（${benLowerWuxing}）`,
     `本卦卦辞：${result.benDict.panCi}`,
     `本卦彖辞：${result.benDict.tuanCi}`,
     `本卦大象传：${result.benDict.daXiang}`,
     `动爻：第 ${result.dongYao} 爻 — ${result.benDict.dongYaoCi ?? "（无）"}`,
-    `互卦：${result.huDict.name}（上${result.hu.upper}下${result.hu.lower}）`,
-    `互卦上卦：${result.hu.upper}（${huUpperWuxing}）　互卦下卦：${result.hu.lower}（${huLowerWuxing}）`,
+    `互卦卦名：${result.huDict.name}（上${result.hu.upper}下${result.hu.lower}）`,
+    `互卦上卦象：${result.hu.upper}（${huUpperWuxing}）　下卦象：${result.hu.lower}（${huLowerWuxing}）`,
     `互卦卦辞：${result.huDict.panCi}`,
     `互卦彖辞：${result.huDict.tuanCi}`,
     `互卦大象传：${result.huDict.daXiang}`,
-    `变卦：${result.bianDict.name}（上${result.bian.upper}下${result.bian.lower}）`,
-    `变卦上卦：${result.bian.upper}（${bianUpperWuxing}）　变卦下卦：${result.bian.lower}（${bianLowerWuxing}）`,
+    `变卦卦名：${result.bianDict.name}（上${result.bian.upper}下${result.bian.lower}）`,
+    `变卦上卦象：${result.bian.upper}（${bianUpperWuxing}）　下卦象：${result.bian.lower}（${bianLowerWuxing}）`,
     `变卦卦辞：${result.bianDict.panCi}`,
     `变卦彖辞：${result.bianDict.tuanCi}`,
     `变卦大象传：${result.bianDict.daXiang}`,
     "",
-    "===== 第二章素材：体用生克 =====",
-    `体卦：${result.tiYong.ti}（${tiWuxing}）　用卦：${result.tiYong.yong}（${yongWuxing}）　关系：${tiYongLine}`,
-    `变用卦：${result.bianTiYong.bianYong}（${bianYongWuxing}）　变卦体用关系：${bianTiYongLine}`,
+    "===== 二、体用生克素材（填入第二节）=====",
+    `体卦象：${result.tiYong.ti}（${tiWuxing}）　本卦体用关系：${tiYongLine}`,
+    `用卦象：${result.tiYong.yong}（${yongWuxing}）`,
+    `变卦：${result.bianDict.name}（上${result.bian.upper}下${result.bian.lower}）`,
+    `变用卦象：${result.bianTiYong.bianYong}（${bianYongWuxing}）　变卦体用关系：${bianTiYongLine}`,
     "",
-    "===== 第三章素材：卦象深层解读依据 =====",
+    "===== 三、卦象详解参考（第三节 300-500 字须用上）=====",
     `本卦六爻爻辞：${formatYaoCi(result.benDict.yaoCi)}`,
     `互卦六爻爻辞：${formatYaoCi(result.huDict.yaoCi)}`,
     `变卦六爻爻辞：${formatYaoCi(result.bianDict.yaoCi)}`,
     "",
     "===== 辅助素材 =====",
-    `应期：${yingQiLine}`,
+    `应期：${yingQiLine}（${result.yingQi.timeHint}）`,
   ];
 
   if (result.timeEnergy) {
@@ -207,7 +206,6 @@ export function buildMeihuaPrompt(args: BuildMeihuaPromptArgs): BuildMeihuaPromp
   }
   userPromptLines.push(`五行损益：${result.sunYi.summary}`);
 
-  // 6 维度 delta（仅取非 0 的）
   const nonZero = result.sunYi.adjustments.filter((a) => a.delta !== 0);
   if (nonZero.length > 0) {
     const adjLine = nonZero
@@ -217,9 +215,12 @@ export function buildMeihuaPrompt(args: BuildMeihuaPromptArgs): BuildMeihuaPromp
   }
 
   if (userQuestion) {
-    userPromptLines.push("", `用户问的是：${userQuestion}`);
+    userPromptLines.push("", `【再次强调所求之事】${userQuestion}`);
   }
-  userPromptLines.push("", "请按 system prompt 的五章结构和字数要求详细解读。");
+  userPromptLines.push(
+    "",
+    "请严格按 system 模版撰写完整《测算结果解读》，代入以上素材，勿遗漏任何章节。",
+  );
 
   return {
     systemPrompt,
@@ -227,17 +228,11 @@ export function buildMeihuaPrompt(args: BuildMeihuaPromptArgs): BuildMeihuaPromp
   };
 }
 
-/**
- * 6 爻线条美化（▬▬ 阳 / ▬ ▬ 阴），底→上读
- */
 function formatLines(lines: ReadonlyArray<boolean>): string {
   const top = lines.slice().reverse();
   return top.map((y) => (y ? "▬▬" : "▬ ▬")).join(" ");
 }
 
-/**
- * 爻辞格式化：["初九：...", ...] → "初九：... / 九二：... / ..."
- */
 function formatYaoCi(yaoCi: ReadonlyArray<string>): string {
   if (!yaoCi || yaoCi.length === 0) return "（无）";
   return yaoCi.filter(Boolean).join(" / ") || "（无）";

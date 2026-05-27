@@ -60,6 +60,8 @@ interface MessageBubbleProps {
   onCardSubmit?: CardSubmitCallback;
   onCardAction?: CardActionCallback;
   busy?: boolean;
+  /** 梅花解读流式更新中的消息 id */
+  streamingMeihuaMessageId?: string | null;
   /** user 气泡左侧头像（来自默认档案 avatar_url） */
   userAvatarUrl?: string | null;
   /** user 昵称（avatar fallback + alt） */
@@ -92,6 +94,7 @@ export function MessageBubble({
   onCardSubmit,
   onCardAction,
   busy,
+  streamingMeihuaMessageId,
   userAvatarUrl,
   userNickname,
 }: MessageBubbleProps) {
@@ -429,12 +432,11 @@ export function MessageBubble({
             dongYao={m.dongYao}
             ti={m.tiYong.ti}
             yong={m.tiYong.yong}
-            relation={m.tiYong.relation}
-            verdict={m.verdict}
             speed={m.yingQi.speed}
             timeHint={m.yingQi.timeHint}
             branchHour={m.yingQi.branchHour}
             aiText={m.aiText ?? message.content}
+            readingStreaming={message.id === streamingMeihuaMessageId}
           />
         </CardWrap>
       );

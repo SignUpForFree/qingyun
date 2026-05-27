@@ -40,7 +40,10 @@ export interface SanitizeResult {
 }
 
 /**
- * 替换禁词为柔和说法 + 去掉 Markdown 装饰（标题 / 加粗）+ 剥离思考链
+ * 替换禁词为柔和说法 + （可选）去掉 Markdown 装饰 + 剥离思考链
+ *
+ * 默认会 strip # / **（chat 等路径）。梅花《测算结果解读》需保留 Markdown，
+ * 调用时传 `preserveMarkdown: true`。
  *
  * Prompt 已经禁用 # / ## / ### 和 ** **，但 DeepSeek 偶尔仍会写出
  * （训练语料里教科书风格强烈）。持久化前最后一道清扫，避免 UI 上
@@ -54,16 +57,24 @@ export interface SanitizeResult {
  * @param text AI 原始输出
  * @param scope core (chat) | divination (含开源签强词)
  */
+export interface SanitizeAiOutputOptions {
+  /** 为 true 时不剥离 # 标题与 ** 加粗（梅花解读等 Markdown 报告） */
+  preserveMarkdown?: boolean;
+}
+
 export function sanitizeAiOutput(
   text: string,
   scope: "core" | "divination" = "core",
+  options?: SanitizeAiOutputOptions,
 ): SanitizeResult {
   const list = scope === "divination" ? ALL_FORBIDDEN : FORBIDDEN_CORE;
   const extraDream = ["凶兆", "不祥"] as const;
   const all = scope === "divination" ? [...list, ...extraDream] : [...list, ...extraDream];
 
   let cleaned = stripThinkChain(text);
-  cleaned = stripMarkdownDecoration(cleaned);
+  if (!options?.preserveMarkdown) {
+    cleaned = stripMarkdownDecoration(cleaned);
+  }
   const hitWords: string[] = [];
   for (const word of all) {
     if (cleaned.includes(word)) {

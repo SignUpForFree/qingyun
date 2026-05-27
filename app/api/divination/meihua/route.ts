@@ -8,9 +8,12 @@ import { chat } from "@/lib/ai/client";
 import { frame, heartbeat, safeEnqueue, SSE_HEADERS } from "@/lib/chat/sse";
 import { serializeJson } from "@/lib/db/json";
 import { meihuaProvider } from "@/lib/divination-providers";
-import { buildMeihuaPrompt } from "@/lib/ai/prompts/meihua-interpret";
+import {
+  buildMeihuaPrompt,
+  formatGregorianDateTime,
+} from "@/lib/ai/prompts/meihua-interpret";
 import { sanitizeAiOutput } from "@/lib/ai/output-sanitizer";
-import { getLunarToday } from "@/lib/util/lunar-date";
+import { buildMeihuaResultCardMeta } from "@/lib/meihua/card-meta";
 import {
   bumpConversationActivity,
   enforceRateLimit,
@@ -270,6 +273,48 @@ export async function POST(req: Request) {
 
       safeEnqueue(controller, frame("progress", { stage: "computing", percent: 20 }));
 
+      const measuredAtText = formatGregorianDateTime();
+      const shellMeta = buildMeihuaResultCardMeta({
+        v2,
+        profileId,
+        numbers,
+        userQuestion,
+        measuredAtText,
+        aiText: "",
+      });
+
+      let cardMessageId: string | undefined;
+      try {
+        const [shellRow] = await db
+          .insert(messages)
+          .values({
+            conversation_id: conversationId,
+            role: "assistant",
+            content: "",
+            intent: "meihua",
+            metadata: serializeJson(shellMeta),
+            profile_id_used: profileId,
+          })
+          .returning();
+        cardMessageId = shellRow?.id;
+      } catch (insertErr) {
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[meihua] shell card insert failed", insertErr);
+        }
+      }
+
+      if (cardMessageId) {
+        safeEnqueue(
+          controller,
+          frame("card", {
+            id: cardMessageId,
+            role: "assistant",
+            content: "",
+            metadata: serializeJson(shellMeta),
+          }),
+        );
+      }
+
       let aiText = "";
       let tokens = 0;
 
@@ -278,7 +323,7 @@ export async function POST(req: Request) {
           result: v2,
           userQuestion,
           numbers,
-          lunarDateText: getLunarToday().headerText,
+          measuredAtText,
         });
 
         safeEnqueue(controller, frame("progress", { stage: "streaming", percent: 40 }));
@@ -305,8 +350,11 @@ export async function POST(req: Request) {
         }
 
         // M3.34: 持久化前禁词兜底
-        const sanitized = sanitizeAiOutput(aiText, "divination");
-        const finalText = sanitized.cleaned || aiText || "(AI 卦辞未生成)";
+        const sanitized = sanitizeAiOutput(aiText, "divination", {
+          preserveMarkdown: true,
+        });
+        const rawFinal = sanitized.cleaned || aiText || "(AI 卦辞未生成)";
+        const finalText = rawFinal;
         if (sanitized.hitCount > 0 && process.env.NODE_ENV !== "production") {
           console.warn(
             `[meihua] sanitizer hit ${sanitized.hitCount} forbidden words:`,
@@ -314,46 +362,44 @@ export async function POST(req: Request) {
           );
         }
 
-        const cardMeta = {
-          ui: "meihua_result" as const,
+        const cardMeta = buildMeihuaResultCardMeta({
+          v2,
           profileId,
           numbers,
-          // V2 三卦推演：每卦含 name/upper/lower/lines
-          ben: { name: v2.ben.name, upper: v2.ben.upper, lower: v2.ben.lower, lines: v2.ben.lines },
-          hu: { name: v2.hu.name, upper: v2.hu.upper, lower: v2.hu.lower, lines: v2.hu.lines },
-          bian: { name: v2.bian.name, upper: v2.bian.upper, lower: v2.bian.lower, lines: v2.bian.lines },
-          dongYao: v2.dongYao,
-          // 体用 / 变用卦 / 应期 / 时辰能量 / 五行损益（V2 新增）
-          tiYong: v2.tiYong,
-          bianTiYong: v2.bianTiYong,
-          yingQi: v2.yingQi,
-          timeEnergy: v2.timeEnergy,
-          sunYi: v2.sunYi,
-          // gua64 字典视图（动爻爻辞 + 卦辞 + 彖辞），前端可直接渲染
-          benDict: v2.benDict,
-          huDict: v2.huDict,
-          bianDict: v2.bianDict,
-          verdict: finalText.slice(0, 60) || "(AI 卦辞未生成)",
+          userQuestion,
+          measuredAtText,
           aiText: finalText,
-        };
+        });
 
-        const [card] = await db
-          .insert(messages)
-          .values({
-            conversation_id: conversationId,
-            role: "assistant",
-            content: finalText,
-            intent: "meihua",
-            metadata: serializeJson(cardMeta),
-            tokens_used: tokens,
-            profile_id_used: profileId,
-          })
-          .returning();
+        if (cardMessageId) {
+          await db
+            .update(messages)
+            .set({
+              content: finalText,
+              metadata: serializeJson(cardMeta),
+              tokens_used: tokens,
+            })
+            .where(eq(messages.id, cardMessageId));
+        } else {
+          const [card] = await db
+            .insert(messages)
+            .values({
+              conversation_id: conversationId,
+              role: "assistant",
+              content: finalText,
+              intent: "meihua",
+              metadata: serializeJson(cardMeta),
+              tokens_used: tokens,
+              profile_id_used: profileId,
+            })
+            .returning();
+          cardMessageId = card?.id;
+        }
 
         safeEnqueue(
           controller,
           frame("card", {
-            id: card?.id,
+            id: cardMessageId,
             role: "assistant",
             content: finalText,
             metadata: serializeJson(cardMeta),

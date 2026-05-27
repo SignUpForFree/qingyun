@@ -16,17 +16,15 @@ const baseProps = {
   dongYao: 3,
   ti: "乾",
   yong: "兑",
-  relation: "yong_sheng_ti",
-  verdict: "大吉",
   speed: "fast" as const,
   timeHint: "三日内",
   branchHour: "卯时",
 };
 
 describe("MeihuaResultCard (M2.13)", () => {
-  it("渲染 verdict 大吉 chip", () => {
+  it("不渲染体用关系 verdict 气泡", () => {
     render(<MeihuaResultCard {...baseProps} />);
-    expect(screen.getByText("大吉")).toBeInTheDocument();
+    expect(screen.queryByTestId("meihua-verdict")).not.toBeInTheDocument();
   });
 
   it("渲染 3 卦标签：本/互/变", () => {

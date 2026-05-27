@@ -1,11 +1,12 @@
 import { GlassCard, Sparkle } from "@/components/su";
 import { cn } from "@/lib/utils";
+import { MeihuaReadingMarkdown } from "./MeihuaReadingMarkdown";
 
 /**
  * 梅花结果卡（设计 §6 MeihuaResultCard，参考 mockup
  * docs/superpowers/designs/meihua-result-card-20260424/a-refined-fairy.html）
  *
- * - 顶部 verdict chip + 应期 timeHint
+ * - 应期 timeHint（体用关系长文案在解读第二节展示，不在此重复）
  * - 三卦横排：本/互/变
  *   每格：八卦 unicode 大字 + 卦名 + 五行标签 + 五行 watercolor glow
  * - 底部 体用 row + 动爻位
@@ -58,12 +59,11 @@ interface MeihuaResultCardProps {
   dongYao: number;
   ti: string;
   yong: string;
-  relation: string;
-  verdict: string;
   speed: "fast" | "medium" | "slow";
   timeHint: string;
   branchHour: string | null;
   aiText?: string;
+  readingStreaming?: boolean;
   className?: string;
 }
 
@@ -79,11 +79,10 @@ export function MeihuaResultCard({
   dongYao,
   ti,
   yong,
-  relation,
-  verdict,
   timeHint,
   branchHour,
   aiText,
+  readingStreaming,
   className,
 }: MeihuaResultCardProps) {
   const tiWx = TRIGRAM_WUXING[ti] ?? "?";
@@ -148,20 +147,6 @@ export function MeihuaResultCard({
         </p>
       </div>
 
-      {/* VERDICT 居中（mockup m-verdict-wrap） */}
-      <div className="flex justify-center">
-        <span
-          className={cn(
-            "rounded-full px-4 py-1.5 font-[family-name:var(--font-serif)] text-[13px] tracking-ritual text-[var(--color-ink-plum)]",
-            "border border-[var(--color-accent-lavender)]/40 shadow-[0_2px_8px_rgba(200,170,220,0.15)]",
-            relationChipBg(relation),
-          )}
-          data-testid="meihua-verdict"
-        >
-          {verdict}
-        </span>
-      </div>
-
       {/* TIMING ☷ 应期 */}
       <p
         className="text-center text-[11px] tracking-ritual2 text-[var(--color-ink-mist)]"
@@ -172,12 +157,20 @@ export function MeihuaResultCard({
         {branchHour ? ` · ${branchHour}` : ""}
       </p>
 
-      {/* AI 解读 */}
-      {aiText && (
-        <p className="whitespace-pre-wrap text-[13px] leading-[1.85] text-[var(--color-ink-plum)]">
-          <Sparkle size={10} variant="diamond" className="mr-1" />
-          {aiText}
-        </p>
+      {/* AI 解读（流式写入；文首元数据由报告正文 # 测算结果解读 段呈现） */}
+      {(aiText || readingStreaming) && (
+        <div className="space-y-2 border-t border-[var(--color-accent-lavender)]/20 pt-3">
+          <Sparkle size={10} variant="diamond" className="inline-block" />
+          {aiText ? <MeihuaReadingMarkdown text={aiText} /> : null}
+          {readingStreaming && (
+            <span
+              aria-hidden
+              className="ml-1 inline-block animate-pulse text-[var(--color-accent-lavender)]"
+            >
+              ✦
+            </span>
+          )}
+        </div>
       )}
     </GlassCard>
   );
@@ -213,21 +206,4 @@ function Cell({ label, view }: { label: string; view: HexagramView }) {
       </p>
     </div>
   );
-}
-
-function relationChipBg(relation: string): string {
-  switch (relation) {
-    case "yong_sheng_ti":
-      return "bg-[var(--color-wuxing-fire)]/30"; // 大吉，胭脂粉
-    case "ti_ke_yong":
-      return "bg-[var(--color-wuxing-wood)]/30"; // 吉，新柳绿
-    case "bi_he":
-      return "bg-[var(--color-wuxing-water)]/25"; // 平顺，雾烟蓝
-    case "ti_sheng_yong":
-      return "bg-[var(--color-wuxing-earth)]/25"; // 略耗，杏沙黄
-    case "yong_ke_ti":
-      return "bg-[var(--color-wuxing-metal)]/25"; // 留神，象牙白
-    default:
-      return "";
-  }
 }

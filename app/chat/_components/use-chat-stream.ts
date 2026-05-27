@@ -17,6 +17,7 @@ import {
 } from "@/lib/ai/strip-think-chain";
 import { extractSlipSections } from "@/lib/ai/slip-sections";
 import { mergeMessagesById } from "@/lib/chat/merge-messages";
+import { patchMeihuaStreamingMessage } from "@/lib/chat/meihua-stream-message";
 import { mergeSlipDrawReveal } from "@/lib/chat/merge-slip-draw-reveal";
 import type { DisplayMessage } from "./MessageBubble";
 import type {
@@ -68,6 +69,8 @@ export interface UseChatStreamReturn {
   streamingText: string | null;
   /** 解签流式：直接渲染 SlipReportCard，不走纯文本气泡 */
   streamingSlipReport: StreamingSlipReport | null;
+  /** 梅花流式：先出三卦卡，再更新同条消息的 aiText */
+  streamingMeihuaMessageId: string | null;
   progressHint: string | null;
   busy: boolean;
   send: (text: string) => Promise<void>;
@@ -105,6 +108,9 @@ export function useChatStream({
   const [streamingText, setStreamingText] = React.useState<string | null>(null);
   const [streamingSlipReport, setStreamingSlipReport] =
     React.useState<StreamingSlipReport | null>(null);
+  const [streamingMeihuaMessageId, setStreamingMeihuaMessageId] = React.useState<
+    string | null
+  >(null);
   const [progressHint, setProgressHint] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const abortRef = React.useRef<AbortController | null>(null);
@@ -135,11 +141,18 @@ export function useChatStream({
           onStart: (shell: SlipReportShell) => void;
           onUpdate: (report: StreamingSlipReport) => void;
         };
+        /** 梅花：先 card 再三卦，token 写入同条消息 */
+        meihua?: {
+          onShellCard: (card: DisplayMessage) => void;
+          onReadingUpdate: (messageId: string, rawText: string) => void;
+        };
       },
     ): Promise<{ assistantText: string; cards: DisplayMessage[] }> => {
       let assistantText = "";
       const cards: DisplayMessage[] = [];
       let rafId: number | null = null;
+      let meihuaRafId: number | null = null;
+      let meihuaCardId: string | null = null;
       let slipShell: SlipReportShell | null = null;
       let slipReportRafId: number | null = null;
       // 跨 chunk 拼半截 <think> 也能识别，UI 上完全不会闪现思考链
@@ -151,6 +164,16 @@ export function useChatStream({
       const sched = () => {
         if (rafId !== null) return;
         rafId = requestAnimationFrame(flush);
+      };
+      const flushMeihua = () => {
+        meihuaRafId = null;
+        if (meihuaCardId && extra.meihua) {
+          extra.meihua.onReadingUpdate(meihuaCardId, assistantText);
+        }
+      };
+      const schedMeihua = () => {
+        if (meihuaRafId !== null) return;
+        meihuaRafId = requestAnimationFrame(flushMeihua);
       };
       const buildStreamingReport = (shell: SlipReportShell): StreamingSlipReport => ({
         slipNumber: shell.slipNumber,
@@ -190,12 +213,21 @@ export function useChatStream({
               assistantText += visible;
               if (slipShell && extra.slipReport) {
                 schedSlipReport();
+              } else if (meihuaCardId && extra.meihua) {
+                schedMeihua();
               } else {
                 sched();
               }
             }
           },
-          onCard: (card) => cards.push(toDisplayCard(card)),
+          onCard: (card) => {
+            const display = toDisplayCard(card);
+            cards.push(display);
+            if (extra.meihua && !meihuaCardId) {
+              meihuaCardId = display.id;
+              extra.meihua.onShellCard(display);
+            }
+          },
           onProgress: (data) => {
             const stage = String(data.stage ?? "");
             const pct = typeof data.percent === "number" ? data.percent : 0;
@@ -221,7 +253,11 @@ export function useChatStream({
           extra.slipReport.onUpdate(buildStreamingReport(slipShell));
         }
         if (rafId !== null) cancelAnimationFrame(rafId);
+        if (meihuaRafId !== null) cancelAnimationFrame(meihuaRafId);
         if (slipReportRafId !== null) cancelAnimationFrame(slipReportRafId);
+        if (meihuaCardId && extra.meihua) {
+          extra.meihua.onReadingUpdate(meihuaCardId, assistantText);
+        }
         setProgressHint(null);
       }
 
@@ -241,6 +277,10 @@ export function useChatStream({
       setBusy(true);
       const mergeMessageId = options?.mergeMessageId;
       const isSlipExplain = url.includes("/qianwen/explain");
+      const isMeihuaStream =
+        url.includes("/divination/meihua") &&
+        Array.isArray(body.numbers) &&
+        (body.numbers as unknown[]).length > 0;
       let res: Response;
       try {
         res = await apiFetch(url, {
@@ -281,7 +321,11 @@ export function useChatStream({
       // Branch D: SSE 流式
       const ct = res.headers.get("content-type") ?? "";
       if (ct.includes("text/event-stream") && res.body) {
-        if (!isSlipExplain) setStreamingText("");
+        if (isMeihuaStream) {
+          setStreamingMeihuaMessageId(null);
+        } else if (!isSlipExplain) {
+          setStreamingText("");
+        }
         const { assistantText, cards } = await consumeStream(
           res.body,
           label,
@@ -297,9 +341,24 @@ export function useChatStream({
                   onUpdate: (report) => setStreamingSlipReport(report),
                 },
               }
-            : {},
+            : isMeihuaStream
+              ? {
+                  meihua: {
+                    onShellCard: (card) => {
+                      setStreamingMeihuaMessageId(card.id);
+                      setMessages((m) => mergeMessagesById(m, [card]));
+                    },
+                    onReadingUpdate: (messageId, rawText) => {
+                      setMessages((m) =>
+                        patchMeihuaStreamingMessage(m, messageId, rawText),
+                      );
+                    },
+                  },
+                }
+              : {},
         );
         setStreamingSlipReport(null);
+        setStreamingMeihuaMessageId(null);
         setMessages((m) => commitTurn(m, assistantText, cards));
         setStreamingText(null);
         setBusy(false);
@@ -496,6 +555,7 @@ export function useChatStream({
     setMessages,
     streamingText,
     streamingSlipReport,
+    streamingMeihuaMessageId,
     progressHint,
     busy,
     send,
