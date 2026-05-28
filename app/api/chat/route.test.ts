@@ -187,14 +187,16 @@ describe("POST /api/chat — M2.15 SSE 路由", () => {
     expect(text).toContain('"intent":"divination"');
   });
 
-  it("intent=dream → SSE card 事件含 dream_choice metadata", async () => {
+  it("intent=dream → SSE card 直接含梦境输入引导", async () => {
     const req = new Request("http://test/api/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ text: "我想解梦" }),
     });
     const text = await readSse(await POST(req));
-    expect(text).toContain("dream_choice");
+    expect(text).toContain("请描述你的梦境内容");
+    expect(text).toContain("dreamAwaitingInput");
+    expect(text).not.toContain("dream_choice");
   });
 
   it("?intent=meihua query 覆盖分类器（即使 text 是抽签关键词）", async () => {

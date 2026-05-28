@@ -10,6 +10,8 @@ export interface DivinationReadingSectionProps {
   readingStreaming?: boolean;
   /** 结果卡内解读区顶部分隔线；独立流式气泡不需要 */
   withDivider?: boolean;
+  /** 无正文且流式中的占位文案 */
+  thinkingLabel?: string;
   className?: string;
   children?: ReactNode;
 }
@@ -21,6 +23,7 @@ export function DivinationReadingSection({
   aiText,
   readingStreaming = false,
   withDivider = true,
+  thinkingLabel = "思考中...",
   className,
   children,
 }: DivinationReadingSectionProps) {
@@ -42,7 +45,7 @@ export function DivinationReadingSection({
       {thinking ? (
         <p className="flex items-center gap-1.5 text-[13px] leading-[1.85] text-[var(--color-ink-mist)]">
           <Sparkle size={10} variant="diamond" className="shrink-0" />
-          <span className="animate-pulse tracking-ritual2">思考中...</span>
+          <span className="animate-pulse tracking-ritual2">{thinkingLabel}</span>
         </p>
       ) : (
         <>

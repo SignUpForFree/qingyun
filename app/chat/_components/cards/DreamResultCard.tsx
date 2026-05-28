@@ -1,4 +1,6 @@
 "use client";
+import { DivinationReadingSection } from "@/components/divination/DivinationReadingSection";
+import { MeihuaReadingMarkdown } from "@/components/divination/MeihuaReadingMarkdown";
 import { GlassCard, Sparkle } from "@/components/su";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +24,8 @@ interface DreamSections {
 interface DreamResultCardProps {
   mode: "fast" | "precise";
   aiText: string;
+  /** 解读区流式输出中 */
+  readingStreaming?: boolean;
   /** precise 模式结构化段落（可选，有则分段渲染，无则 fallback aiText） */
   sections?: DreamSections | null;
   className?: string;
@@ -37,13 +41,18 @@ const DIM_LABELS: { key: keyof ThreeViews; label: string; icon: string }[] = [
 /**
  * 解梦结果卡（V1.0 需求对齐）
  *
- * - fast：纯文本渲染
- * - precise：6 段结构化渲染（🌙 → 🔮 → 📜 → 💡 → 💌 → 🌷）
- *   有 sections 数据时分段展示，无则 fallback 到纯 aiText
+ * - fast：Markdown 渲染（**标题** / 列表 / 加粗）
+ * - precise：结构化分段 + 段内 Markdown
  */
-export function DreamResultCard({ mode, aiText, sections, className }: DreamResultCardProps) {
-  // fast 模式：纯文本
+export function DreamResultCard({
+  mode,
+  aiText,
+  readingStreaming = false,
+  sections,
+  className,
+}: DreamResultCardProps) {
   if (mode === "fast" || !sections) {
+    const hasText = aiText.trim().length > 0;
     return (
       <GlassCard className={cn("space-y-3 p-4", className)}>
         <div className="flex items-center justify-between">
@@ -60,9 +69,16 @@ export function DreamResultCard({ mode, aiText, sections, className }: DreamResu
           </span>
           <Sparkle size={10} variant="diamond" />
         </div>
-        <p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--color-ink-plum)]">
-          {aiText}
-        </p>
+        {hasText || readingStreaming ? (
+          <DivinationReadingSection
+            aiText={aiText}
+            readingStreaming={readingStreaming}
+            withDivider={false}
+            thinkingLabel="正在解读梦境…"
+          >
+            {hasText ? <MeihuaReadingMarkdown text={aiText} className="text-sm" /> : null}
+          </DivinationReadingSection>
+        ) : null}
       </GlassCard>
     );
   }
@@ -87,9 +103,7 @@ export function DreamResultCard({ mode, aiText, sections, className }: DreamResu
       {/* 🌙 开篇共情 */}
       {sections.empathy && (
         <Section emoji="🌙" title="你的梦境深度解析">
-          <p className="text-sm leading-relaxed text-[var(--color-ink-plum)]">
-            {sections.empathy}
-          </p>
+          <MeihuaReadingMarkdown text={sections.empathy} className="text-sm" />
         </Section>
       )}
 
@@ -104,9 +118,7 @@ export function DreamResultCard({ mode, aiText, sections, className }: DreamResu
                 <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-[var(--color-accent-lavender)]/15 px-2 py-0.5 text-[11px] tracking-ritual2 text-[var(--color-ink-plum)]">
                   {icon} {label}
                 </span>
-                <p className="mt-1 text-sm leading-relaxed text-[var(--color-ink-plum)]">
-                  {text}
-                </p>
+                <MeihuaReadingMarkdown text={text} className="mt-1 text-sm" />
               </div>
             );
           })}
@@ -116,9 +128,7 @@ export function DreamResultCard({ mode, aiText, sections, className }: DreamResu
       {/* 📜 核心寓意 */}
       {sections.coreMeaning && (
         <Section emoji="📜" title="核心寓意与重要节点指引">
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--color-ink-plum)]">
-            {sections.coreMeaning}
-          </p>
+          <MeihuaReadingMarkdown text={sections.coreMeaning} className="text-sm" />
         </Section>
       )}
 
@@ -139,18 +149,14 @@ export function DreamResultCard({ mode, aiText, sections, className }: DreamResu
       {/* 💌 潜意识真心话 */}
       {sections.subconsciousMsg && (
         <Section emoji="💌" title="潜意识想对你说的真心话">
-          <p className="text-sm leading-relaxed text-[var(--color-ink-plum)]">
-            {sections.subconsciousMsg}
-          </p>
+          <MeihuaReadingMarkdown text={sections.subconsciousMsg} className="text-sm" />
         </Section>
       )}
 
       {/* 🌷 结语 */}
       {sections.conclusion && (
         <Section emoji="🌷" title="结语">
-          <p className="text-sm leading-relaxed text-[var(--color-ink-plum)]">
-            {sections.conclusion}
-          </p>
+          <MeihuaReadingMarkdown text={sections.conclusion} className="text-sm" />
         </Section>
       )}
     </GlassCard>

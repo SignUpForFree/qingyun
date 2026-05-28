@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db/client";
 import { messages, profiles } from "@/lib/db/schema";
 import { ensureUserId } from "@/lib/auth/session";
 import { guardTexts } from "@/lib/safety/guard";
+import { collectStreamText } from "@/lib/ai/collect-stream-text";
 import { chat } from "@/lib/ai/client";
 import { sanitizeAiOutput } from "@/lib/ai/output-sanitizer";
 import { frame, heartbeat, safeEnqueue, SSE_HEADERS } from "@/lib/chat/sse";
@@ -13,6 +14,7 @@ import {
   enforceRateLimit,
   jsonError,
   parseJsonBody,
+  requireAiGateway,
   requireConversationOwned,
 } from "@/lib/chat/route-helpers";
 import { buildDreamPrompt, extractDreamSections } from "@/lib/ai/prompts/dream-interpret";
@@ -79,6 +81,8 @@ export async function POST(req: Request) {
   if (safetyFail) return jsonError("检测到您提交的内容包含敏感或违规信息，请修改后重试", 400);
 
   const userId = await ensureUserId();
+  const aiGate = requireAiGateway();
+  if (aiGate) return aiGate;
   const limited = await enforceRateLimit(userId, "dream", "解梦 AI");
   if (limited) return limited;
 
@@ -145,35 +149,59 @@ export async function POST(req: Request) {
         }),
       );
 
-      let aiText = "";
-      let tokens = 0;
+      let progressPct = 5;
+      const progressTimer = setInterval(() => {
+        progressPct = Math.min(progressPct + 12, 88);
+        safeEnqueue(
+          controller,
+          frame("progress", { stage: "dream_ai", percent: progressPct }),
+        );
+      }, 10_000);
 
       try {
-        const stream = await chat({
-          systemPrompt: sysPrompt,
-          messages: [{ role: "user", content: userPrompt }],
-          stream: true,
-          meta: { conversationId: conversationId, userId },
+        const emitToken = (chunk: string) => {
+          safeEnqueue(controller, frame("token", chunk));
+        };
+
+        safeEnqueue(
+          controller,
+          frame("progress", { stage: "dream_ai", percent: progressPct }),
+        );
+
+        const { text: aiText, tokens, finishReason } = await runDreamAiStream(
+          sysPrompt,
+          userPrompt,
+          emitToken,
+        );
+
+        // M3.34: 持久化前禁词兜底；保留 Markdown（解梦 prompt 要求结构化排版）
+        const sanitized = sanitizeAiOutput(aiText, "divination", {
+          preserveMarkdown: true,
         });
-
-        for await (const chunk of stream.textStream) {
-          aiText += chunk;
-          if (!safeEnqueue(controller, frame("token", chunk))) break;
-        }
-        try {
-          tokens = (await stream.usage).totalTokens ?? 0;
-        } catch {
-          /* usage 不致命 */
-        }
-
-        // M3.34: 持久化前禁词兜底（含解梦专属"凶兆/不祥"）
-        const sanitized = sanitizeAiOutput(aiText, "divination");
-        const finalText = sanitized.cleaned || aiText || "(AI 解梦未生成)";
+        const finalText = (sanitized.cleaned || aiText).trim();
         if (sanitized.hitCount > 0 && process.env.NODE_ENV !== "production") {
           console.warn(
             `[dream] sanitizer hit ${sanitized.hitCount} forbidden words:`,
             sanitized.hitWords,
           );
+        }
+
+        if (!finalText) {
+          console.warn("[dream] empty AI output", {
+            finishReason,
+            tokens,
+            conversationId,
+            mode: data.mode,
+          });
+          safeEnqueue(
+            controller,
+            frame("error", {
+              message: "解梦解读未能生成，请检查 AI 网关配置或稍后重试",
+              code: "ai_empty",
+              retryable: true,
+            }),
+          );
+          return;
         }
 
         const cardMeta =
@@ -242,6 +270,7 @@ export async function POST(req: Request) {
           }),
         );
       } finally {
+        clearInterval(progressTimer);
         stopHeartbeat();
         try {
           controller.close();
@@ -260,6 +289,59 @@ export async function POST(req: Request) {
  * 读取用户默认档案的八字信息，返回简短提示词片段。
  * 需求要求"结合生辰八字进行解梦"。
  */
+const DREAM_MAX_OUTPUT_TOKENS = 1_200;
+const DREAM_TIMEOUT_MS = Math.max(
+  90_000,
+  Number(process.env.AI_DREAM_TIMEOUT_MS ?? process.env.AI_TIMEOUT_MS ?? 60_000),
+);
+
+async function runDreamAiStream(
+  systemPrompt: string,
+  userPrompt: string,
+  onToken: (chunk: string) => void,
+): Promise<{ text: string; tokens: number; finishReason?: string }> {
+  const messages = [{ role: "user" as const, content: userPrompt }];
+  const chatOpts = {
+    systemPrompt,
+    messages,
+    thinking: "disabled" as const,
+    maxOutputTokens: DREAM_MAX_OUTPUT_TOKENS,
+    timeoutMs: DREAM_TIMEOUT_MS,
+  };
+
+  try {
+    const stream = await chat({ ...chatOpts, stream: true });
+    const result = await collectStreamText(
+      {
+        textStream: stream.textStream,
+        text: stream.text,
+        fullStream: stream.fullStream,
+        usage: stream.usage,
+        finishReason: stream.finishReason,
+      },
+      onToken,
+    );
+    if (result.text.trim()) return result;
+  } catch (e) {
+    if ((e as Error)?.name !== "AbortError") throw e;
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[dream] stream timeout/abort, non-stream retry");
+    }
+  }
+
+  const retry = await chat({ ...chatOpts, stream: false });
+  if (retry.text.trim()) {
+    onToken(retry.text);
+    return {
+      text: retry.text.trim(),
+      tokens: retry.tokensUsed,
+      finishReason: "stop",
+    };
+  }
+
+  return { text: "", tokens: 0, finishReason: "empty" };
+}
+
 async function getBaziHint(userId: string): Promise<string | undefined> {
   try {
     const db = getDb();

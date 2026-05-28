@@ -44,6 +44,23 @@ describe("MeihuaReadingMarkdown", () => {
     expect(screen.getByText(/本卦 · 鼎/)).toBeTruthy();
   });
 
+  it("渲染解梦整行 **章节标题**（无 #）", () => {
+    render(<MeihuaReadingMarkdown text="**梦境核心解析**" />);
+    const h2 = screen.getByRole("heading", { level: 2 });
+    expect(h2).toHaveTextContent("梦境核心解析");
+    expect(screen.queryByText(/\*\*/)).toBeNull();
+  });
+
+  it("行内 **加粗** 与 * 列表项", () => {
+    render(
+      <MeihuaReadingMarkdown
+        text={"* **河**：象征情绪之流\n* **抓鱼**：代表机遇"}
+      />,
+    );
+    expect(screen.getByText("河", { selector: "strong" })).toBeTruthy();
+    expect(screen.getByText("抓鱼", { selector: "strong" })).toBeTruthy();
+  });
+
   it("渲染体用 Tab 表格", () => {
     render(
       <MeihuaReadingMarkdown

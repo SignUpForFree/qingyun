@@ -9,6 +9,7 @@ import { buildPromptMessages, K_RECENT } from "@/lib/ai/summarizer";
 import { serializeJson } from "@/lib/db/json";
 import { profiles } from "@/lib/db/schema";
 import type { Intent } from "@/types/domain";
+import { DREAM_AWAITING_INPUT_META, DREAM_FAST_GUIDE_TEXT } from "./dream-guide";
 import { frame, safeEnqueue } from "./sse";
 
 /**
@@ -85,13 +86,8 @@ export async function buildGuideCard(
 
     case "dream":
       return {
-        contentText: "请选择解梦方式",
-        meta: {
-          ui: "dream_choice",
-          options: [
-            { key: "fast", label: "解梦", hint: "描述梦境 详细解读" },
-          ],
-        },
+        contentText: DREAM_FAST_GUIDE_TEXT,
+        meta: DREAM_AWAITING_INPUT_META,
       };
 
     case "bazi": {

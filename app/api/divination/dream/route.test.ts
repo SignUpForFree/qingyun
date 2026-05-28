@@ -15,21 +15,30 @@ vi.mock("@/lib/safety/guard", () => ({
 }));
 
 vi.mock("@/lib/ai/client", () => ({
-  chat: vi.fn(async () => ({
-    textStream: (async function* () {
-      yield "🌙 这不是厄运，是潜意识的预警\n\n";
-      yield "🔮 三重维度专业解读\n";
-      yield "周公解梦 · 民俗意象解读\n一夜安寝\n\n";
-      yield "弗洛伊德 · 愿望满足理论\n焦虑投射\n\n";
-      yield "荣格 · 集体无意识与原型\n成长信号\n\n";
-      yield "📜 核心寓意与重要节点指引\n整体寓意：提醒\n\n";
-      yield "💡 可落地的规避方案\n- 多休息\n- 调整作息\n\n";
-      yield "💌 潜意识想对你说的真心话\n你一直在努力\n\n";
-      yield "🌷 结语\n调整后就能顺利化解";
-    })(),
-    usage: Promise.resolve({ totalTokens: 80 }),
-  })),
+  chat: vi.fn(async (input: { stream?: boolean }) => {
+    const body =
+      "**梦境核心解析**\n梦见河流与鱼。\n\n**潜意识情绪解读**\n内心期待。\n\n**温柔建议与疗愈引导**\n- 休息\n*仅为趣味与心理参考。*";
+    if (input.stream) {
+      return {
+        textStream: (async function* () {
+          yield body;
+        })(),
+        text: Promise.resolve(body),
+        fullStream: (async function* () {
+          yield { type: "text-delta", text: body };
+        })(),
+        usage: Promise.resolve({ totalTokens: 80 }),
+        finishReason: Promise.resolve("stop"),
+      };
+    }
+    return { text: body, tokensUsed: 80 };
+  }),
 }));
+
+/** requireAiGateway() 在路由入口校验；测试里给假 key 避免 503 */
+beforeEach(() => {
+  process.env.AI_GATEWAY_API_KEY = "test-key-for-vitest";
+});
 
 function makeFakeDb(opts: { ownedConv?: boolean } = {}) {
   const ownedConv = opts.ownedConv ?? true;
@@ -254,6 +263,95 @@ describe("POST /api/divination/dream — error paths", () => {
       }),
     );
     expect(r.status).toBe(404);
+  });
+
+  it("流式为空但 non-stream 重试成功 → 仍有 dream_result_fast", async () => {
+    const { chat } = await import("@/lib/ai/client");
+    (chat as unknown as { mockImplementation: (fn: unknown) => void }).mockImplementation(
+      async (input: { stream?: boolean }) => {
+        if (input.stream) {
+          return {
+            textStream: (async function* () {})(),
+            text: Promise.resolve(""),
+            fullStream: (async function* () {})(),
+            usage: Promise.resolve({ totalTokens: 0 }),
+            finishReason: Promise.resolve("stop"),
+          };
+        }
+        return { text: "重试成功的解梦正文，梦见河流与鱼。", tokensUsed: 42 };
+      },
+    );
+    const r = await POST(
+      new Request("http://test", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          conversationId: "c1",
+          mode: "fast",
+          dream: "做梦了",
+        }),
+      }),
+    );
+    const text = await readSse(r);
+    expect(text).toContain("dream_result_fast");
+    expect(text).toContain("重试成功的解梦正文");
+    expect(text).not.toContain("event: error");
+  });
+
+  it("流式与非流式均为空 → SSE error ai_empty，不写结果卡", async () => {
+    const { chat } = await import("@/lib/ai/client");
+    (chat as unknown as { mockImplementation: (fn: unknown) => void }).mockImplementation(
+      async (input: { stream?: boolean }) => {
+        if (input.stream) {
+          return {
+            textStream: (async function* () {})(),
+            text: Promise.resolve(""),
+            fullStream: (async function* () {})(),
+            usage: Promise.resolve({ totalTokens: 0 }),
+            finishReason: Promise.resolve("stop"),
+          };
+        }
+        return { text: "", tokensUsed: 0 };
+      },
+    );
+    const r = await POST(
+      new Request("http://test", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          conversationId: "c1",
+          mode: "fast",
+          dream: "做梦了",
+        }),
+      }),
+    );
+    expect(r.status).toBe(200);
+    const text = await readSse(r);
+    expect(text).toContain("event: error");
+    expect(text).toContain("ai_empty");
+    expect(text).not.toContain("dream_result_fast");
+    expect(text).not.toContain("AI 解梦未生成");
+  });
+
+  it("AI 网关未配置 → 503", async () => {
+    const prev = process.env.AI_GATEWAY_API_KEY;
+    const prevDs = process.env.DEEPSEEK_API_KEY;
+    delete process.env.AI_GATEWAY_API_KEY;
+    delete process.env.DEEPSEEK_API_KEY;
+    const r = await POST(
+      new Request("http://test", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          conversationId: "c1",
+          mode: "fast",
+          dream: "做梦了",
+        }),
+      }),
+    );
+    if (prev) process.env.AI_GATEWAY_API_KEY = prev;
+    if (prevDs) process.env.DEEPSEEK_API_KEY = prevDs;
+    expect(r.status).toBe(503);
   });
 
   it("AI timeout → SSE error event ai_timeout retryable", async () => {

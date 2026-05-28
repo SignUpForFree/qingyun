@@ -64,6 +64,8 @@ interface MessageBubbleProps {
   streamingMeihuaMessageId?: string | null;
   /** 八字解读流式更新中的消息 id */
   streamingBaziMessageId?: string | null;
+  /** 解梦解读流式更新中的消息 id */
+  streamingDreamMessageId?: string | null;
   /** user 气泡左侧头像（来自默认档案 avatar_url） */
   userAvatarUrl?: string | null;
   /** user 昵称（avatar fallback + alt） */
@@ -98,6 +100,7 @@ export function MessageBubble({
   busy,
   streamingMeihuaMessageId,
   streamingBaziMessageId,
+  streamingDreamMessageId,
   userAvatarUrl,
   userNickname,
 }: MessageBubbleProps) {
@@ -391,7 +394,11 @@ export function MessageBubble({
     case "dream_result_fast":
       return (
         <CardWrap className={className}>
-          <DreamResultCard mode="fast" aiText={message.content} />
+          <DreamResultCard
+            mode="fast"
+            aiText={message.content}
+            readingStreaming={message.id === streamingDreamMessageId}
+          />
         </CardWrap>
       );
 

@@ -10,6 +10,7 @@ import type { CardActionCallback, CardPickCallback, CardSubmitCallback } from ".
 import type { PostSubActionOptions } from "./use-chat-stream";
 import { SLIP_DRAW_ANIM_MS } from "./cards/HeavenlySlipDraw";
 import { parseMeihuaNumberFields } from "@/lib/divination/parse-meihua-numbers";
+import { DREAM_FAST_GUIDE_TEXT } from "@/lib/chat/dream-guide";
 
 interface UseCardHandlersOptions {
   convId: string | null;
@@ -58,12 +59,11 @@ export function useCardHandlers({
         return;
       }
       if (ui === "dream_choice") {
-        if (key === "fast") {
+        const mode = key === "precise" ? "precise" : "fast";
+        if (mode === "fast") {
           markDreamFastWaiting();
         }
-        setMessages((m) =>
-          applyDreamChoicePick(m, msgId, key as "fast" | "precise"),
-        );
+        setMessages((m) => applyDreamChoicePick(m, msgId, mode));
         return;
       }
       if (ui === "bazi_focus_picker") {
@@ -320,19 +320,12 @@ export function applyDreamChoicePick(
       metadata: JSON.stringify({ ui: "text", picked: true }),
     };
   });
-  const dreamGuide = [
-        "请描述你的梦境内容（包含以下信息，描述越详细越精准）",
-        "1、描述梦境中的画面和人 / 物 / 地点以及发生的故事",
-        "2、在梦境里你是什么情绪感受，醒来后情绪有没有变化？",
-        "3、最近的现实生活中，有没有类似的场景、情绪，或者让你在意的事情？",
-        "4、该梦境是否有比较特别的，让你觉得奇怪或是印象深刻的？",
-      ].join("\n");
   const followUp =
     key === "fast"
       ? makeLocalCard(
           `local-dream-fast-${ts}`,
-          dreamGuide,
-          { ui: "text" },
+          DREAM_FAST_GUIDE_TEXT,
+          { ui: "text", dreamAwaitingInput: true },
         )
       : makeLocalCard(
           `local-dream-precise-${ts}`,

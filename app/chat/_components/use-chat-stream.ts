@@ -19,8 +19,13 @@ import { extractSlipSections } from "@/lib/ai/slip-sections";
 import { commitTurn } from "@/lib/chat/commit-turn";
 import { mergeMessagesById } from "@/lib/chat/merge-messages";
 import { patchBaziStreamingMessage } from "@/lib/chat/bazi-stream-message";
+import {
+  createDreamStreamingShell,
+  patchDreamStreamingMessage,
+} from "@/lib/chat/dream-stream-message";
 import { patchMeihuaStreamingMessage } from "@/lib/chat/meihua-stream-message";
 import { mergeSlipDrawReveal } from "@/lib/chat/merge-slip-draw-reveal";
+import { isDreamEmptyContent } from "@/lib/ai/collect-stream-text";
 import { shouldSendDreamFastSubAction } from "@/lib/chat/dream-flow";
 import { CHAT_SEND_BLOCKED_WHILE_GENERATING } from "./chat-input-messages";
 import type { DisplayMessage } from "./MessageBubble";
@@ -76,6 +81,7 @@ export interface UseChatStreamReturn {
   /** 梅花流式：先出三卦卡，再更新同条消息的 aiText */
   streamingMeihuaMessageId: string | null;
   streamingBaziMessageId: string | null;
+  streamingDreamMessageId: string | null;
   progressHint: string | null;
   busy: boolean;
   /** 流式 / 请求进行中，可停止生成 */
@@ -123,6 +129,9 @@ export function useChatStream({
   const [streamingBaziMessageId, setStreamingBaziMessageId] = React.useState<
     string | null
   >(null);
+  const [streamingDreamMessageId, setStreamingDreamMessageId] = React.useState<
+    string | null
+  >(null);
   const [progressHint, setProgressHint] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const abortRef = React.useRef<AbortController | null>(null);
@@ -149,7 +158,8 @@ export function useChatStream({
     streamingText !== null ||
     streamingSlipReport !== null ||
     streamingMeihuaMessageId !== null ||
-    streamingBaziMessageId !== null;
+    streamingBaziMessageId !== null ||
+    streamingDreamMessageId !== null;
 
   const stopGeneration = React.useCallback(() => {
     abortRef.current?.abort(new DOMException("User stopped generation", "AbortError"));
@@ -184,6 +194,11 @@ export function useChatStream({
           onShellCard: (card: DisplayMessage) => void;
           onReadingUpdate: (messageId: string, rawText: string) => void;
         };
+        /** 解梦：客户端先出占位卡，token 写入同条消息 */
+        dream?: {
+          messageId: string;
+          onReadingUpdate: (messageId: string, rawText: string) => void;
+        };
       },
     ): Promise<{ assistantText: string; cards: DisplayMessage[] }> => {
       let assistantText = "";
@@ -193,6 +208,7 @@ export function useChatStream({
       let meihuaCardId: string | null = null;
       let baziRafId: number | null = null;
       let baziCardId: string | null = null;
+      let dreamRafId: number | null = null;
       let slipShell: SlipReportShell | null = null;
       let slipReportRafId: number | null = null;
       // 跨 chunk 拼半截 <think> 也能识别，UI 上完全不会闪现思考链
@@ -224,6 +240,16 @@ export function useChatStream({
       const schedBazi = () => {
         if (baziRafId !== null) return;
         baziRafId = requestAnimationFrame(flushBazi);
+      };
+      const flushDream = () => {
+        dreamRafId = null;
+        if (extra.dream) {
+          extra.dream.onReadingUpdate(extra.dream.messageId, assistantText);
+        }
+      };
+      const schedDream = () => {
+        if (dreamRafId !== null) return;
+        dreamRafId = requestAnimationFrame(flushDream);
       };
       const buildStreamingReport = (shell: SlipReportShell): StreamingSlipReport => ({
         slipNumber: shell.slipNumber,
@@ -267,6 +293,8 @@ export function useChatStream({
                 schedMeihua();
               } else if (baziCardId && extra.bazi) {
                 schedBazi();
+              } else if (extra.dream) {
+                schedDream();
               } else {
                 sched();
               }
@@ -311,12 +339,16 @@ export function useChatStream({
         if (rafId !== null) cancelAnimationFrame(rafId);
         if (meihuaRafId !== null) cancelAnimationFrame(meihuaRafId);
         if (baziRafId !== null) cancelAnimationFrame(baziRafId);
+        if (dreamRafId !== null) cancelAnimationFrame(dreamRafId);
         if (slipReportRafId !== null) cancelAnimationFrame(slipReportRafId);
         if (meihuaCardId && extra.meihua) {
           extra.meihua.onReadingUpdate(meihuaCardId, assistantText);
         }
         if (baziCardId && extra.bazi) {
           extra.bazi.onReadingUpdate(baziCardId, assistantText);
+        }
+        if (extra.dream) {
+          extra.dream.onReadingUpdate(extra.dream.messageId, assistantText);
         }
         setProgressHint(null);
       }
@@ -349,6 +381,8 @@ export function useChatStream({
         url.includes("/divination/bazi") &&
         typeof body.profileId === "string" &&
         typeof body.focus === "string";
+      const isDreamStream = url.includes("/divination/dream");
+      let dreamShellId: string | null = null;
       let res: Response;
       try {
         res = await apiFetch(url, {
@@ -362,6 +396,10 @@ export function useChatStream({
           setStreamingSlipReport(null);
           setStreamingMeihuaMessageId(null);
           setStreamingBaziMessageId(null);
+          setStreamingDreamMessageId(null);
+          if (dreamShellId) {
+            setMessages((m) => m.filter((x) => x.id !== dreamShellId));
+          }
           setStreamingText(null);
           setProgressHint(null);
           setBusy(false);
@@ -399,7 +437,13 @@ export function useChatStream({
       // Branch D: SSE 流式
       const ct = res.headers.get("content-type") ?? "";
       if (ct.includes("text/event-stream") && res.body) {
-        if (!isSlipExplain && !isMeihuaStream && !isBaziStream) {
+        if (isDreamStream) {
+          const shell = createDreamStreamingShell();
+          dreamShellId = shell.id;
+          setStreamingDreamMessageId(shell.id);
+          setProgressHint("正在解读梦境，首次生成约需 30–60 秒…");
+          setMessages((m) => mergeMessagesById(m, [shell]));
+        } else if (!isSlipExplain && !isMeihuaStream && !isBaziStream) {
           setStreamingText("");
         }
         const { assistantText, cards } = await consumeStream(
@@ -445,13 +489,62 @@ export function useChatStream({
                       },
                     },
                   }
-                : {},
+                : isDreamStream && dreamShellId
+                  ? {
+                      dream: {
+                        messageId: dreamShellId,
+                        onReadingUpdate: (messageId, rawText) => {
+                          setMessages((m) =>
+                            patchDreamStreamingMessage(m, messageId, rawText),
+                          );
+                        },
+                      },
+                    }
+                  : {},
         );
         setStreamingSlipReport(null);
         setStreamingMeihuaMessageId(null);
         setStreamingBaziMessageId(null);
-        setMessages((m) => commitTurn(m, assistantText, cards));
+        setStreamingDreamMessageId(null);
+
+        const isDreamApi = isDreamStream;
+        const dreamCards = isDreamApi
+          ? cards.filter((c) => {
+              try {
+                const meta = c.metadata ? JSON.parse(c.metadata) : {};
+                const ui = meta.ui as string | undefined;
+                if (ui !== "dream_result_fast" && ui !== "dream_result_precise") {
+                  return true;
+                }
+                return !isDreamEmptyContent(c.content ?? "");
+              } catch {
+                return !isDreamEmptyContent(c.content ?? "");
+              }
+            })
+          : cards;
+
+        if (
+          isDreamApi &&
+          (dreamCards.length === 0 ||
+            isDreamEmptyContent(assistantText) ||
+            cards.length > dreamCards.length)
+        ) {
+          toast.error("解梦解读未能生成，请稍后重试");
+          if (dreamShellId) {
+            setMessages((m) => m.filter((x) => x.id !== dreamShellId));
+          }
+          setStreamingText(null);
+          setProgressHint(null);
+          setBusy(false);
+          return;
+        }
+
+        setMessages((m) => {
+          const base = dreamShellId ? m.filter((x) => x.id !== dreamShellId) : m;
+          return commitTurn(base, assistantText, dreamCards);
+        });
         setStreamingText(null);
+        setProgressHint(null);
         setBusy(false);
         return;
       }
@@ -496,9 +589,16 @@ export function useChatStream({
         return;
       }
 
-// dream fast：下一条用户消息直接走 /api/divination/dream
+// dream fast：引导卡出现后，用户描述梦境 → /api/divination/dream（勿再走 /api/chat）
       const dreamConvId = convId;
-      if (dreamFastWaitingRef.current && dreamConvId) {
+      const routeDreamFast =
+        shouldSendDreamFastSubAction(
+          messages,
+          text,
+          dreamFastWaitingRef.current,
+        ) && Boolean(dreamConvId);
+
+      if (routeDreamFast) {
         if (!text.trim()) {
           toast.error("请先描述你的梦境内容");
           return;
@@ -516,6 +616,14 @@ export function useChatStream({
           mode: "fast",
           dream: text,
         });
+        return;
+      }
+
+      if (
+        shouldSendDreamFastSubAction(messages, text, dreamFastWaitingRef.current) &&
+        !dreamConvId
+      ) {
+        toast.error("会话尚未建立，请稍候再试");
         return;
       }
 
@@ -638,6 +746,9 @@ export function useChatStream({
 
       const { assistantText, cards } = await consumeStream(res.body, "福小运", {
         onMeta: (data) => {
+          if (data.intent === "dream") {
+            markDreamFastWaiting();
+          }
           if (data.conversationId && !convId) {
             setConvId(data.conversationId);
             // 仅改 URL，不触发 Next.js Server Component 重渲，避免空 initialMessages 覆盖本地 state
@@ -663,6 +774,7 @@ export function useChatStream({
     streamingSlipReport,
     streamingMeihuaMessageId,
     streamingBaziMessageId,
+    streamingDreamMessageId,
     progressHint,
     busy,
     isGenerating,

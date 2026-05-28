@@ -31,7 +31,18 @@ export function shouldSendDreamFastSubAction(
 
   const ui = parseMessageUi(lastAsst.metadata);
   if (ui === "dream_choice") return true;
-  if (ui === "text" && /梦/.test(lastAsst.content ?? "")) return true;
+  if (ui === "text") {
+    if (lastAsst.metadata) {
+      try {
+        if ((JSON.parse(lastAsst.metadata) as { dreamAwaitingInput?: boolean }).dreamAwaitingInput) {
+          return true;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    if (lastAsst.content?.includes("请描述你的梦境内容")) return true;
+  }
 
   return false;
 }

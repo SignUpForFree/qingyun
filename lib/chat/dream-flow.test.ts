@@ -13,10 +13,12 @@ function asst(ui: string, content = ""): DisplayMessage {
 }
 
 describe("shouldSendDreamFastSubAction", () => {
-  it("dream_choice 后用户描述梦境 → true", () => {
+  it("梦境引导文案后用户描述梦境 → true", () => {
     expect(
       shouldSendDreamFastSubAction(
-        [asst("dream_choice", "请问您想快速解梦还是精准解梦？")],
+        [
+          asst("text", "请描述你的梦境内容（包含以下信息，描述越详细越精准）"),
+        ],
         "我梦到被蛇掐住了起不来",
         false,
       ),

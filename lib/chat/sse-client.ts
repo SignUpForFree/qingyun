@@ -118,5 +118,6 @@ export function progressStageLabel(stage: string): string {
   if (stage === "computing") return "演算中";
   if (stage === "streaming") return "拟稿中";
   if (stage === "classifying") return "判定中";
+  if (stage === "dream_ai") return "解梦解读中";
   return stage;
 }

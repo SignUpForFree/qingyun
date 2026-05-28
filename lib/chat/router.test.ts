@@ -70,12 +70,11 @@ describe("buildGuideCard (M2.15 dispatch)", () => {
     expect(card.contentText).toMatch(/求/);
   });
 
-  it("intent=dream → dream_choice (仅快速解梦)", async () => {
+  it("intent=dream → 直接输出梦境描述引导（无选择卡）", async () => {
     const card = await buildGuideCard("dream", "u-1", "c-1");
-    expect(card.meta.ui).toBe("dream_choice");
-    const opts = card.meta.options as Array<{ key: string; label: string }>;
-    expect(opts).toHaveLength(1);
-    expect(opts[0].key).toBe("fast");
+    expect(card.meta.ui).toBe("text");
+    expect((card.meta as { dreamAwaitingInput?: boolean }).dreamAwaitingInput).toBe(true);
+    expect(card.contentText).toContain("请描述你的梦境内容");
   });
 
   it("intent=chat → 空 text fallback (不应被路由调用)", async () => {

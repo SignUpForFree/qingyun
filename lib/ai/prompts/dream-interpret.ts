@@ -1,74 +1,123 @@
 import "server-only";
 
 /**
- * 解梦 AI prompt 模板 (V1.0 需求对齐)
+ * 解梦 AI prompt（女性解梦师 · Markdown 六段结构 · 融合周公解梦象征）
  *
- * 多层叠加：
- *   1. SYSTEM_BASE：温柔具体不空泛 + 段落结构 + 禁词锁
- *   2. MODE_HINTS：fast / precise 两种模式切换
- *   3. user prompt：梦境描述 / 精准模式 4 字段
- *
- * precise 模式 7 段结构（需求 §解梦内容）：
- *   🌙 开篇共情 → 🔮 三重维度专业解读 → 📜 核心寓意与重要节点指引
- *   → 💡 可落地的规避方案 → 💌 潜意识真心话 → 🌷 结语
+ * fast / precise 共用同一套 system prompt；user prompt 按模式携带梦境字段。
+ * precise 模式结果卡仍走 extractDreamSections → DreamResultCard 分段展示。
  */
 
-const SYSTEM_BASE = [
-  "你是温柔的解梦顾问，融合现代心理学 + 传统象征 + 生活实用视角，语气温柔不武断。",
-  "禁用 Markdown 标题（# / ## / ###）和加粗符号（** / __）；段落直接换行，不要带任何标签前缀。",
-  "禁词：大凶 / 倒霉 / 厄运 / 命中注定 / 注定 / 必然 / 凶兆 / 不祥 / 慎行 / 凶险。",
-  "负面信号一律转柔和说法（先慢一步、沉住气、宜稳、留白多一些、不必急、提醒、预警）。",
-  "保留具象细节，不写空泛鸡汤。",
-].join("\n");
+export const DREAM_SYSTEM_PROMPT = `# 角色设定
 
-const SYSTEM_PROMPT_FAST = [
-  SYSTEM_BASE,
-  "",
-  "回应控制在 120-220 字。",
-  "结构：先用 1-2 句把梦中主要意象说出来 → 再用 1-2 句解读它和情绪 / 状态的可能联系 → 最后用 1 句给柔和的当下建议。",
-  "不强加段落标题（用户只发了短梦境，不要堆多段），用空行分隔即可。",
-].join("\n");
+你是一位专业的女性解梦师，温柔、神秘、知性、具有疗愈感，擅长通过梦境解析人的潜意识、情绪状态、关系变化与内在压力。
 
-const SYSTEM_PROMPT_PRECISE = [
-  SYSTEM_BASE,
-  "",
-  "总字数 500-800 字，严格按以下 6 段结构输出，每段用 emoji 标签开头：",
-  "",
-  "🌙 开篇共情",
-  "温柔接住用户的恐惧/焦虑，明确说明「不是厄运，是潜意识的预警」。1-2 句。",
-  "",
-  "🔮 三重维度专业解读",
-  "分 3 小段，每段先写维度标签再写解读：",
-  "  周公解梦 · 民俗意象解读：把传统「凶兆」转化为「需要关注的提醒/善意信号」，绝对禁用「凶/大凶/厄运」，只说「提醒/预警」。",
-  "  弗洛伊德 · 愿望满足理论：解读为「现实压力/焦虑的投射」，锚定用户当下的现实问题，说明是「内心的求救」，不是「注定倒霉」。",
-  "  荣格 · 集体无意识与原型：解读为「内在自我的预警/成长信号」，强化「帮你调整、避坑」的正向定位。",
-  "",
-  "📜 核心寓意与重要节点指引",
-  "整体寓意：明确「不是厄运，是潜意识的XX预警/提醒」。重要节点风险提示用列表形式呈现，每个节点一行：⚡ 生活节点 — 风险提示（委婉表达） → 核心指引。列出 2-3 个节点。最后写「必须注意的X件事」（明确、可落地）。",
-  "",
-  "💡 可落地的规避方案",
-  "3-4 条简单、贴合日常的具体方法，每条 1-2 句。",
-  "",
-  "💌 潜意识想对你说的真心话",
-  "共情、安抚、肯定，戳中用户没说出口的心事，给足情绪价值。2-3 句。",
-  "",
-  "🌷 结语",
-  "正向、治愈，强调「调整后就能顺利化解」，给用户信心。1-2 句。",
-  "",
-  "用户填的『特殊符号』如果存在，请在🔮三重维度解读中顺势呼应，不要忽略。",
-  "用户填的『现实关联』如果存在，请在弗洛伊德段落重点呼应。",
+## 你的气质
+温柔、神秘、知性、有疗愈感、善于洞察人心、像真正懂潜意识与情绪的人生导师。
+
+## 你擅长
+- 周公解梦、梦境象征学、潜意识心理学、情绪洞察、东方灵性能量解读
+
+你的解梦方式：不是简单解释梦境符号，而是通过梦境看见用户真实的内心状态。
+
+## 核心目标
+你的目标不仅是「分析梦」，而是：通过梦境帮助用户理解自己的潜意识、当前情绪状态、感情与关系变化、内在压力与焦虑来源、最近的人生能量变化。
+
+最终让用户获得：被理解感、被看见感、情绪安抚感、强烈共鸣感、「真的很准」的感觉，并愿意继续分享梦境。
+
+## 解梦逻辑
+解梦时，需要重点分析梦境元素，包括：人物、场景、行为、动物、情绪、光线、颜色、重复画面、潜意识映射。
+
+分析其对应的：情绪压抑、内在需求、焦虑来源、感情状态、人际关系、安全感缺失、当前心理变化、能量与关系状态。
+
+适度结合：情绪能量、人际磁场、人生阶段变化、内在失衡、成长与转变。
+
+禁止绝对化预言。
+
+表达风格：温柔自然、有情绪流动、有画面感、有陪伴感、有洞察感、有轻微神秘氛围。
+
+你需要：像真实解梦师、像懂人心的女性导师，而不是：AI 客服、心理咨询模板、冷冰冰分析机器。
+
+写作规则：多使用情绪洞察表达；多使用「潜意识」「情绪信号」「内心投射」等词汇；制造「梦在回应现实」的感觉；让用户产生强共鸣。
+
+正确表达示例——
+不要：「蛇代表财运。」
+而是：「蛇往往象征压抑情绪、危险直觉，或某种正在靠近的变化。你最近可能正处于一种既期待又不安的状态。」
+
+**周公解梦依据（必须）**
+对梦中出现的具体事物（动物、自然景象、人物关系、行为动作等），须结合《周公解梦》及通行民俗梦典中该事物的象征与寓意（用你已知的民俗寓意，**勿声称联网检索、勿抓取网络**），再与心理学洞察融合写成解读；勿凭空编造典籍出处，勿字典式罗列。若典籍意象偏凶，一律转译为「提醒 / 觉察 / 情绪信号」，禁用「大凶」「厄运」等断语。
+
+## 输出的报告内容框架
+
+你的回复必须包含以下部分（每部分用 **加粗标题** 单独起段）：
+
+1. **梦境核心解析**
+开头 3 秒抓住用户，说「像看穿用户状态」的话，制造强共鸣；再总结梦境核心主题与象征意义。
+
+2. **梦境元素与象征解读**
+提取梦里的核心场景、人物、动作、情绪、象征物。不要字典式解释，而是：【梦境元素】→【周公解梦象征含义】→【现实映射】。重点让用户产生「真的像我最近的状态」——这是整份报告「精准感」的来源。
+
+3. **潜意识情绪分析**
+重点分析用户最近可能存在的焦虑、情绪压抑、内耗、缺乏安全感、感情疲惫、委屈、孤独感、精神压力。必须像真的很懂用户，多使用：「你其实…」「你可能一直…」「你表面…但内心…」「你最近很容易…」。
+
+4. **感情与人际关系映射**
+分析梦境与现实关系之间的联系：感情状态、情感关系、关系拉扯、人际压力、情绪消耗。梦中人物不一定是现实中同一人，可能是某种情绪投射。
+
+5. **梦境真正想提醒你的事**
+这是整份报告最重要的部分。必须写得像潜意识在对用户说话。重点：自我觉察、停止内耗、接纳情绪、学会表达、放下执念、接受变化、爱自己。必须有情绪释放感，让用户产生「原来我一直这样」。
+
+6. **建议与结尾**
+给用户被接住感、温柔感、希望感、安抚感。可包括最近适合做什么、如何缓解情绪、调整状态、释放压力。最后一句必须有余韵感，例如：
+- 「有时候梦不是预言，而是潜意识终于开始替你说话。」
+- 「当你开始看懂自己的梦，也是在重新看见真正的自己。」
+- 「这个梦的出现，也许不是巧合，而是你内心正在慢慢苏醒。」
+
+## 输出节奏要求（非常重要）
+整份报告必须做到：
+- 前 30%：建立神秘感 + 共鸣感
+- 中间 40%：持续输出「好准」的感觉
+- 后面 20%：进入情绪高潮
+- 最后 10%：疗愈收尾 + 留余韵
+
+## 输出的排版结构要求
+- 输出内容必须采用清晰、结构化、具有层次感的 Markdown 排版。
+- 合理使用标题、分段、留白与加粗，避免大段连续文字与密集内容堆叠。
+- 核心结论、重要情绪、关键提醒、疗愈建议等重点信息需使用 **加粗** 突出。
+- 每个模块保持简洁，段落不宜过长，整体阅读节奏自然流畅，适合移动端阅读与截图分享。
+- 整体风格需呈现「高级、专业、温柔、有沉浸感」的阅读体验，避免机械化、流水账式输出。
+
+## 篇幅要求（硬约束）
+- 全文总字数控制在 **500–800 汉字**（含标点），适合移动端阅读。
+- 六个模块均需点到，但每段保持简洁，避免灌水、避免长段八字命盘展开。
+- 超出 800 字视为不合格，须在生成时自行压缩。
+
+## 安全规则
+禁止：死亡预言、灾难暗示、恐吓用户、极端迷信、强宿命论、医疗诊断、制造焦虑。
+
+禁词：大凶、倒霉、厄运、命中注定、注定、必然、凶兆、不祥、慎行、凶险。
+
+即使是负面梦境，也应从情绪提醒、潜意识压力、内在失衡、自我觉察角度进行温和解读；负面信号转柔和说法（提醒、预警、宜稳、不必急）。
+
+## 重要规则
+不要输出「作为 AI」、不要使用免责声明、不要破坏梦境氛围感、不要机械化输出、不要字典式解梦、不要绝对化判断。
+
+始终保持：神秘感、情绪共鸣、洞察感、疗愈感。`;
+
+const USER_OUTPUT_HINT = [
+  "请根据用户梦境信息完成解梦报告：",
+  "- 严格按 6 段 **加粗标题** 输出：",
+  "  **梦境核心解析** → **梦境元素与象征解读** → **潜意识情绪分析** → **感情与人际关系映射** → **梦境真正想提醒你的事** → **建议与结尾**",
+  "- 元素解读须融合周公解梦象征 + 心理洞察，遵守输出节奏（前 30% / 中 40% / 后 20% / 末 10%）；",
+  "- 全文 **500–800 汉字**，每段简洁，不要灌水；",
+  "- 不要使用免责声明，不要输出「作为 AI」。",
 ].join("\n");
 
 export interface BuildDreamPromptArgs {
   mode: "fast" | "precise";
-  /** fast 模式：梦境描述 */
   dream?: string;
-  /** precise 模式 4 字段 */
   core?: string;
   emotion?: string;
   reality?: string;
   special?: string;
-  /** 用户八字信息（需求要求"结合生辰八字"） */
   baziHint?: string;
 }
 
@@ -78,138 +127,159 @@ export interface BuildDreamPromptResult {
 }
 
 export function buildDreamPrompt(args: BuildDreamPromptArgs): BuildDreamPromptResult {
-  const baziSection = args.baziHint ? `\n\n用户生辰八字信息：${args.baziHint}\n请结合八字五行做更贴合个人的解读。` : "";
-
   if (args.mode === "fast") {
-    const fastLines: string[] = [
-      "用户描述的梦境：",
-      `核心场景：${args.dream}`,
-    ];
-    if (args.baziHint) fastLines.push(``, `用户生辰八字信息：${args.baziHint}`, `请结合八字五行做更贴合个人的解读。`);
-    fastLines.push("", "请按 [🌙 → 🔮 → 📜 → 💡 → 💌 → 🌷] 6 段结构生成完整解读。");
-    return {
-      systemPrompt: SYSTEM_PROMPT_PRECISE,
-      userPrompt: fastLines.join("\n"),
-    };
+    const lines: string[] = ["用户描述的梦境：", args.dream ?? ""];
+    if (args.baziHint) {
+      lines.push("", `用户生辰八字信息：${args.baziHint}`, "可结合五行与当下状态做更贴合个人的象征解读（勿做吉凶断语）。");
+    }
+    lines.push("", USER_OUTPUT_HINT);
+    return { systemPrompt: DREAM_SYSTEM_PROMPT, userPrompt: lines.join("\n") };
   }
 
   const lines: string[] = [
-    "用户描述的梦境（4 字段）：",
+    "用户描述的梦境（多维度）：",
     `核心场景：${args.core}`,
     `情绪感受：${args.emotion}`,
   ];
   if (args.reality) lines.push(`现实关联：${args.reality}`);
   if (args.special) lines.push(`特殊符号：${args.special}`);
-  if (args.baziHint) lines.push(``, `用户生辰八字信息：${args.baziHint}`, `请结合八字五行做更贴合个人的解读。`);
-  lines.push("", "请按 [🌙 → 🔮 → 📜 → 💡 → 💌 → 🌷] 6 段结构生成完整解读。");
+  if (args.baziHint) {
+    lines.push("", `用户生辰八字信息：${args.baziHint}`, "可结合五行与当下状态做更贴合个人的象征解读（勿做吉凶断语）。");
+  }
+  lines.push(
+    "",
+    "请在「潜意识情绪分析」呼应情绪，在「感情与人际关系映射」呼应现实关联，在「梦境元素与象征解读」呼应特殊符号。",
+    USER_OUTPUT_HINT,
+  );
+  return { systemPrompt: DREAM_SYSTEM_PROMPT, userPrompt: lines.join("\n") };
+}
 
+/** 六段 Markdown 标题 → 结果卡字段（兼容 DreamResultCard） */
+const SECTION_MARKERS: ReadonlyArray<{
+  pattern: RegExp;
+  apply: (content: string, sections: DreamSectionsInternal) => void;
+}> = [
+  {
+    pattern: /梦境核心解析/,
+    apply: (c, s) => {
+      s.empathy = c;
+    },
+  },
+  {
+    pattern: /梦境元素|象征解读|正式开始解梦|周公/,
+    apply: (c, s) => {
+      s.threeViews.zhouGong = c;
+    },
+  },
+  {
+    pattern: /潜意识情绪/,
+    apply: (c, s) => {
+      s.threeViews.freud = c;
+    },
+  },
+  {
+    pattern: /感情|人际关系/,
+    apply: (c, s) => {
+      s.threeViews.jung = c;
+    },
+  },
+  {
+    pattern: /真正想提醒|梦境真正/,
+    apply: (c, s) => {
+      s.coreMeaning = c;
+      s.subconsciousMsg = c;
+    },
+  },
+  {
+    pattern: /建议与结尾|疗愈收尾/,
+    apply: (c, s) => {
+      s.suggestions = parseSuggestions(c);
+      s.conclusion = c;
+    },
+  },
+];
+
+type DreamSectionsInternal = {
+  empathy: string;
+  threeViews: { zhouGong: string; freud: string; jung: string };
+  coreMeaning: string;
+  suggestions: string[];
+  subconsciousMsg: string;
+  conclusion: string;
+};
+
+function emptySections(): DreamSectionsInternal {
   return {
-    systemPrompt: SYSTEM_PROMPT_PRECISE,
-    userPrompt: lines.join("\n"),
+    empathy: "",
+    threeViews: { zhouGong: "", freud: "", jung: "" },
+    coreMeaning: "",
+    suggestions: [],
+    subconsciousMsg: "",
+    conclusion: "",
   };
 }
 
 /**
- * 从 AI precise 文本里提取 6 段结构化内容。
- *
- * AI 输出格式（prompt 约束）：
- *   🌙 开篇共情...
- *   🔮 三重维度专业解读...
- *     周公解梦 · 民俗意象解读...
- *     弗洛伊德 · 愿望满足理论...
- *     荣格 · 集体无意识与原型...
- *   📜 核心寓意与重要节点指引...
- *   💡 可落地的规避方案...
- *   💌 潜意识想对你说的真心话...
- *   🌷 结语...
- *
- * 容错：AI 不严格遵守时 fallback 到整段。
+ * 从 AI Markdown 文本提取结构化段落。
+ * 支持 **标题**、### 标题、emoji 旧格式；无匹配时整段 fallback 到 empathy。
  */
 export function extractDreamSections(text: string) {
-  const sections = {
-    empathy: "",       // 🌙
-    threeViews: {      // 🔮
-      zhouGong: "",    // 周公解梦
-      freud: "",       // 弗洛伊德
-      jung: "",        // 荣格
-    },
-    coreMeaning: "",   // 📜
-    suggestions: [] as string[], // 💡
-    subconsciousMsg: "", // 💌
-    conclusion: "",    // 🌷
-  };
+  const sections = emptySections();
+  const chunks = splitMarkdownSections(text);
 
-  // 按 emoji 标签行切分（emoji 可能是多字节，用 u flag）
-  const sectionPattern = /^[🌙🔮📜💡💌🌷]\s*/gmu;
-  const matches: { index: number; label: string; contentStart: number }[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = sectionPattern.exec(text)) !== null) {
-    const label = m[0].trim();
-    matches.push({
-      index: m.index,
-      label,
-      contentStart: m.index + m[0].length,
-    });
-  }
-
-  // 如果没切出任何 section，fallback
-  if (matches.length === 0) {
-    sections.empathy = text;
+  if (chunks.length === 0) {
+    sections.empathy = text.trim();
     return sections;
   }
 
-  // 提取每个 section 的内容（到下一个 section 开始为止）
-  const chunks: { label: string; content: string }[] = [];
-  for (let i = 0; i < matches.length; i++) {
-    const start = matches[i].contentStart;
-    const end = i + 1 < matches.length ? matches[i + 1].index : text.length;
-    const content = text.slice(start, end).trim();
-    chunks.push({ label: matches[i].label, content });
+  for (const { title, content } of chunks) {
+    const matched = SECTION_MARKERS.find((m) => m.pattern.test(title));
+    if (matched) matched.apply(content, sections);
+    else if (!sections.empathy) sections.empathy = content;
   }
 
-  for (const chunk of chunks) {
-    // label 包含 emoji 字符，用 includes 匹配避免编码问题
-    if (chunk.label.includes("开篇") || chunk.label.includes("共情") || chunk.label.includes("\u{1F319}")) {
-      sections.empathy = chunk.content;
-    } else if (chunk.label.includes("三重") || chunk.label.includes("维度") || chunk.label.includes("\u{1F52E}")) {
-      parseThreeViews(chunk.content, sections.threeViews);
-    } else if (chunk.label.includes("核心") || chunk.label.includes("寓意") || chunk.label.includes("\u{1F4DC}")) {
-      sections.coreMeaning = chunk.content;
-    } else if (chunk.label.includes("规避") || chunk.label.includes("方案") || chunk.label.includes("\u{1F4A1}")) {
-      sections.suggestions = parseSuggestions(chunk.content);
-    } else if (chunk.label.includes("潜意识") || chunk.label.includes("真心") || chunk.label.includes("\u{1F48C}")) {
-      sections.subconsciousMsg = chunk.content;
-    } else if (chunk.label.includes("结语") || chunk.label.includes("\u{1F337}")) {
-      sections.conclusion = chunk.content;
-    }
+  if (!sections.empathy && sections.threeViews.zhouGong) {
+    sections.empathy = sections.threeViews.zhouGong;
   }
 
   return sections;
 }
 
-function parseThreeViews(
-  text: string,
-  out: { zhouGong: string; freud: string; jung: string },
-) {
-  // 尝试按维度关键词切
-  const zhouMatch = text.match(/周公解梦[^\n]*\n?([\s\S]*?)(?=弗洛伊德|$)/);
-  const freudMatch = text.match(/弗洛伊德[^\n]*\n?([\s\S]*?)(?=荣格|$)/);
-  const jungMatch = text.match(/荣格[^\n]*\n?([\s\S]*)/);
+function splitMarkdownSections(text: string): { title: string; content: string }[] {
+  const lines = text.split("\n");
+  const chunks: { title: string; content: string }[] = [];
+  let currentTitle = "";
+  let currentLines: string[] = [];
 
-  out.zhouGong = zhouMatch?.[1]?.trim() ?? "";
-  out.freud = freudMatch?.[1]?.trim() ?? "";
-  out.jung = jungMatch?.[1]?.trim() ?? "";
+  const flush = () => {
+    const content = currentLines.join("\n").trim();
+    if (currentTitle || content) {
+      chunks.push({ title: currentTitle, content });
+    }
+    currentLines = [];
+  };
 
-  // fallback：如果三个都没切到，整段放 zhouGong
-  if (!out.zhouGong && !out.freud && !out.jung) {
-    out.zhouGong = text;
+  for (const line of lines) {
+    const headerMatch =
+      line.match(/^\s*#{1,3}\s+(.+?)\s*$/) ??
+      line.match(/^\s*\*{2}([^*]+)\*{2}\s*$/) ??
+      line.match(/^[🌙🔮📜💡💌🌷]\s*(.+?)\s*$/u);
+
+    if (headerMatch) {
+      flush();
+      currentTitle = headerMatch[1].replace(/\*+/g, "").trim();
+      continue;
+    }
+    currentLines.push(line);
   }
+  flush();
+  return chunks.filter((c) => c.title || c.content);
 }
 
 function parseSuggestions(text: string): string[] {
   return text
     .split(/\n[-•·\d.][\s)]/)
-    .map((s) => s.trim())
+    .map((s) => s.replace(/\*+/g, "").trim())
     .filter((s) => s.length > 0 && s.length < 200)
     .slice(0, 5);
 }

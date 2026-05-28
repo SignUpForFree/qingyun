@@ -44,13 +44,13 @@ function Block({ block }: { block: string }) {
     return <Line line={lines[0]!} />;
   }
 
-  const allList = lines.every((l) => /^\s*-\s+/.test(l));
+  const allList = lines.every((l) => /^\s*[-*]\s+/.test(l));
   if (allList) {
     return (
       <ul className="list-disc space-y-1.5 pl-5">
         {lines.map((l, i) => (
           <li key={i}>
-            <Inline text={l.replace(/^\s*-\s+/, "")} />
+            <Inline text={l.replace(/^\s*[-*]\s+/, "")} />
           </li>
         ))}
       </ul>
@@ -123,10 +123,10 @@ function Line({ line }: { line: string }) {
     );
   }
 
-  if (/^\s*-\s+/.test(trimmed)) {
+  if (/^\s*[-*]\s+/.test(trimmed)) {
     return (
       <p>
-        <Inline text={trimmed.replace(/^\s*-\s+/, "• ")} />
+        <Inline text={trimmed.replace(/^\s*[-*]\s+/, "• ")} />
       </p>
     );
   }
@@ -165,6 +165,12 @@ function parseHeadingLine(trimmed: string): { level: 1 | 2 | 3; title: string } 
     let title = bare[2]!.trim();
     title = title.replace(/：\s*$/, "");
     return { level, title };
+  }
+
+  /** 解梦等：整行 **章节标题**（无 #，且整行仅此加粗段） */
+  const boldSection = trimmed.match(/^\*\*([^*]+)\*\*$/);
+  if (boldSection && !boldSection[1]!.includes("#")) {
+    return { level: 2, title: boldSection[1]!.trim() };
   }
 
   return null;

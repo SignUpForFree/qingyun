@@ -29,8 +29,22 @@ describe("DreamResultCard", () => {
     it("AI 文本保留换行", () => {
       const txt = "周公视角\n\n现代心理学";
       render(<DreamResultCard mode="fast" aiText={txt} />);
-      const p = screen.getByText(/周公视角/);
-      expect(p.textContent).toContain("现代心理学");
+      expect(screen.getByText(/周公视角/)).toBeInTheDocument();
+      expect(screen.getByText(/现代心理学/)).toBeInTheDocument();
+    });
+
+    it("Markdown **标题** 渲染为加粗标题而非裸露星号", () => {
+      render(
+        <DreamResultCard
+          mode="fast"
+          aiText={"**梦境核心解析**\n\n正文含**重点**一词"}
+        />,
+      );
+      expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+        "梦境核心解析",
+      );
+      expect(screen.getByText("重点", { selector: "strong" })).toBeTruthy();
+      expect(screen.queryByText(/\*\*梦境核心解析\*\*/)).toBeNull();
     });
   });
 

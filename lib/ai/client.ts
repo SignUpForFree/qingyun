@@ -35,6 +35,10 @@ export interface ChatInput {
    * 与内部超时 timer 一起工作：任意一方 abort 都会触发 fetch 取消。
    */
   abortSignal?: AbortSignal;
+  /** 覆盖默认 AI_TIMEOUT_MS（解梦等长 TTFT 场景可单独加长） */
+  timeoutMs?: number;
+  /** 限制输出 token，缩短生成时间（解梦 fast 建议 1200 左右） */
+  maxOutputTokens?: number;
 }
 
 export interface ChatNonStreamResult {
@@ -66,7 +70,8 @@ export async function chat(input: ChatInput): Promise<ChatNonStreamResult | Stre
     : input.messages;
 
   const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), DEFAULT_TIMEOUT_MS);
+  const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
 
   // 串接外部 signal：客户端断流 → 立刻 abort 内部 controller → 取消上游 fetch
   const onExternalAbort = () => ac.abort();
@@ -90,6 +95,7 @@ export async function chat(input: ChatInput): Promise<ChatNonStreamResult | Stre
       messages: fullMessages,
       temperature: input.temperature ?? DEFAULT_TEMPERATURE,
       abortSignal: ac.signal,
+      maxOutputTokens: input.maxOutputTokens,
     });
   };
 
