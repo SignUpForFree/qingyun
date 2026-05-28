@@ -44,7 +44,7 @@ const SYSTEM_PROMPT_PRECISE = [
   "  荣格 · 集体无意识与原型：解读为「内在自我的预警/成长信号」，强化「帮你调整、避坑」的正向定位。",
   "",
   "📜 核心寓意与重要节点指引",
-  "整体寓意：明确「不是厄运，是潜意识的XX预警/提醒」。重要节点风险提示以表格形式呈现（生活节点 | 风险提示（委婉表达） | 核心指引），列出 2-3 个节点。最后写「必须注意的X件事」（明确、可落地）。",
+  "整体寓意：明确「不是厄运，是潜意识的XX预警/提醒」。重要节点风险提示用列表形式呈现，每个节点一行：⚡ 生活节点 — 风险提示（委婉表达） → 核心指引。列出 2-3 个节点。最后写「必须注意的X件事」（明确、可落地）。",
   "",
   "💡 可落地的规避方案",
   "3-4 条简单、贴合日常的具体方法，每条 1-2 句。",
@@ -81,9 +81,15 @@ export function buildDreamPrompt(args: BuildDreamPromptArgs): BuildDreamPromptRe
   const baziSection = args.baziHint ? `\n\n用户生辰八字信息：${args.baziHint}\n请结合八字五行做更贴合个人的解读。` : "";
 
   if (args.mode === "fast") {
+    const fastLines: string[] = [
+      "用户描述的梦境：",
+      `核心场景：${args.dream}`,
+    ];
+    if (args.baziHint) fastLines.push(``, `用户生辰八字信息：${args.baziHint}`, `请结合八字五行做更贴合个人的解读。`);
+    fastLines.push("", "请按 [🌙 → 🔮 → 📜 → 💡 → 💌 → 🌷] 6 段结构生成完整解读。");
     return {
-      systemPrompt: SYSTEM_PROMPT_FAST,
-      userPrompt: `用户的梦：${args.dream}${baziSection}\n\n请给一段简短温柔的解读。`,
+      systemPrompt: SYSTEM_PROMPT_PRECISE,
+      userPrompt: fastLines.join("\n"),
     };
   }
 

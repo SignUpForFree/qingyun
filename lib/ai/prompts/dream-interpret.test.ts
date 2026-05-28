@@ -5,9 +5,10 @@ vi.mock("server-only", () => ({}));
 import { buildDreamPrompt, extractDreamSections } from "./dream-interpret";
 
 describe("buildDreamPrompt", () => {
-  it("fast 模式返回快速 prompt", () => {
+  it("fast 模式使用精准 prompt（6段结构）", () => {
     const r = buildDreamPrompt({ mode: "fast", dream: "梦见山顶" });
-    expect(r.systemPrompt).toContain("120-220");
+    expect(r.systemPrompt).toContain("🌙");
+    expect(r.systemPrompt).toContain("🔮");
     expect(r.userPrompt).toContain("梦见山顶");
   });
 
