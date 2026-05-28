@@ -70,12 +70,12 @@ describe("buildGuideCard (M2.15 dispatch)", () => {
     expect(card.contentText).toMatch(/求/);
   });
 
-  it("intent=dream → dream_choice (fast/precise)", async () => {
+  it("intent=dream → dream_choice (仅快速解梦)", async () => {
     const card = await buildGuideCard("dream", "u-1", "c-1");
     expect(card.meta.ui).toBe("dream_choice");
     const opts = card.meta.options as Array<{ key: string; label: string }>;
-    expect(opts).toHaveLength(2);
-    expect(opts.map((o) => o.key)).toEqual(["fast", "precise"]);
+    expect(opts).toHaveLength(1);
+    expect(opts[0].key).toBe("fast");
   });
 
   it("intent=chat → 空 text fallback (不应被路由调用)", async () => {

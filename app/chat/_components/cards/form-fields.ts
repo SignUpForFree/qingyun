@@ -62,7 +62,7 @@ export const BAZI_QUICK_FIELDS: readonly FormField[] = [
       { value: "female", label: "女" },
     ],
   },
-  { key: "birth_time", label: "出生时间（含时辰）", type: "text", required: true, max: 30, placeholder: "例如：1990-06-15 午时" },
+  { key: "birth_time", label: "出生时间（公历，含时辰）", type: "text", required: true, max: 30, placeholder: "例如：1990-06-15 午时" },
   { key: "birth_place", label: "出生地（省 市 区）", type: "text", required: true, max: 30, placeholder: "例如：广东省 深圳市 南山区" },
 ];
 

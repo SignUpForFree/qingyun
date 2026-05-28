@@ -165,12 +165,7 @@ export async function renderSlipToBuffer(input: SlipRenderInput): Promise<Buffer
 }
 
 function resolveShareUrl(): string {
-  const raw =
-    process.env.NEXT_PUBLIC_PUBLIC_BASE_URL?.trim() ||
-    process.env.PUBLIC_BASE_URL?.trim() ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
-    "http://localhost:3000";
-  return `${raw.replace(/\/$/, "")}/chat`;
+  return "http://192.144.226.27:3000/";
 }
 
 function parseFontSize(font: string): number {

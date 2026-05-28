@@ -496,16 +496,13 @@ export function useChatStream({
         return;
       }
 
-      // 解梦：引导卡/快速模式后，底部输入描述梦境 → /api/divination/dream（非 /api/chat 闲聊）
+// dream fast：下一条用户消息直接走 /api/divination/dream
       const dreamConvId = convId;
-      if (
-        dreamConvId &&
-        shouldSendDreamFastSubAction(
-          messages,
-          text,
-          dreamFastWaitingRef.current,
-        )
-      ) {
+      if (dreamFastWaitingRef.current && dreamConvId) {
+        if (!text.trim()) {
+          toast.error("请先描述你的梦境内容");
+          return;
+        }
         dreamFastWaitingRef.current = false;
         const userMsg: DisplayMessage = {
           id: `tmp-user-${Date.now()}`,

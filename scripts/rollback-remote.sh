@@ -35,7 +35,7 @@ else
   TARGET="${DEPLOY_DIR}.bak.${ROLLBACK_TS}"
   echo "$BAKS" | grep -qx "$TARGET" || err "指定备份不存在：$TARGET"
 fi
-log "目标：$TARGET"
+log "目标: $TARGET"
 
 read -r -p "确认回滚到 $TARGET？(y/N) " ANS
 [ "$ANS" = "y" ] || [ "$ANS" = "Y" ] || { warn "已取消"; exit 0; }
