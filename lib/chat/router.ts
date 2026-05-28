@@ -85,12 +85,11 @@ export async function buildGuideCard(
 
     case "dream":
       return {
-        contentText: "请问您想快速解梦还是精准解梦？",
+        contentText: "请选择解梦方式",
         meta: {
           ui: "dream_choice",
           options: [
-            { key: "fast", label: "快速解梦", hint: "简单描述 快速解梦" },
-            { key: "precise", label: "精准解梦", hint: "多维度场景描述 精准解读" },
+            { key: "fast", label: "解梦", hint: "描述梦境 详细解读" },
           ],
         },
       };
