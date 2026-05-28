@@ -1,3 +1,4 @@
+import { DivinationReadingSection } from "@/components/divination/DivinationReadingSection";
 import { GlassCard, Sparkle } from "@/components/su";
 import { cn } from "@/lib/utils";
 import { MeihuaReadingMarkdown } from "./MeihuaReadingMarkdown";
@@ -81,7 +82,7 @@ export function MeihuaResultCard({
   yong,
   timeHint,
   branchHour,
-  aiText,
+  aiText = "",
   readingStreaming,
   className,
 }: MeihuaResultCardProps) {
@@ -157,21 +158,9 @@ export function MeihuaResultCard({
         {branchHour ? ` · ${branchHour}` : ""}
       </p>
 
-      {/* AI 解读（流式写入；文首元数据由报告正文 # 测算结果解读 段呈现） */}
-      {(aiText || readingStreaming) && (
-        <div className="space-y-2 border-t border-[var(--color-accent-lavender)]/20 pt-3">
-          <Sparkle size={10} variant="diamond" className="inline-block" />
-          {aiText ? <MeihuaReadingMarkdown text={aiText} /> : null}
-          {readingStreaming && (
-            <span
-              aria-hidden
-              className="ml-1 inline-block animate-pulse text-[var(--color-accent-lavender)]"
-            >
-              ✦
-            </span>
-          )}
-        </div>
-      )}
+      <DivinationReadingSection aiText={aiText} readingStreaming={readingStreaming}>
+        {aiText.trim() ? <MeihuaReadingMarkdown text={aiText} /> : null}
+      </DivinationReadingSection>
     </GlassCard>
   );
 }

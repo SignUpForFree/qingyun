@@ -16,9 +16,13 @@ import {
   stripThinkChain,
 } from "@/lib/ai/strip-think-chain";
 import { extractSlipSections } from "@/lib/ai/slip-sections";
+import { commitTurn } from "@/lib/chat/commit-turn";
 import { mergeMessagesById } from "@/lib/chat/merge-messages";
+import { patchBaziStreamingMessage } from "@/lib/chat/bazi-stream-message";
 import { patchMeihuaStreamingMessage } from "@/lib/chat/meihua-stream-message";
 import { mergeSlipDrawReveal } from "@/lib/chat/merge-slip-draw-reveal";
+import { shouldSendDreamFastSubAction } from "@/lib/chat/dream-flow";
+import { CHAT_SEND_BLOCKED_WHILE_GENERATING } from "./chat-input-messages";
 import type { DisplayMessage } from "./MessageBubble";
 import type {
   SlipReportShell,
@@ -71,8 +75,12 @@ export interface UseChatStreamReturn {
   streamingSlipReport: StreamingSlipReport | null;
   /** 梅花流式：先出三卦卡，再更新同条消息的 aiText */
   streamingMeihuaMessageId: string | null;
+  streamingBaziMessageId: string | null;
   progressHint: string | null;
   busy: boolean;
+  /** 流式 / 请求进行中，可停止生成 */
+  isGenerating: boolean;
+  stopGeneration: () => void;
   send: (text: string) => Promise<void>;
   postSubAction: (
     url: string,
@@ -82,6 +90,7 @@ export interface UseChatStreamReturn {
   ) => Promise<void>;
   /** dream fast：标记下一条用户消息走 /api/divination/dream 而不是 /api/chat */
   markDreamFastWaiting: () => void;
+  clearDreamFastWaiting: () => void;
 }
 
 /**
@@ -111,6 +120,9 @@ export function useChatStream({
   const [streamingMeihuaMessageId, setStreamingMeihuaMessageId] = React.useState<
     string | null
   >(null);
+  const [streamingBaziMessageId, setStreamingBaziMessageId] = React.useState<
+    string | null
+  >(null);
   const [progressHint, setProgressHint] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const abortRef = React.useRef<AbortController | null>(null);
@@ -126,6 +138,27 @@ export function useChatStream({
 
   const markDreamFastWaiting = React.useCallback(() => {
     dreamFastWaitingRef.current = true;
+  }, []);
+
+  const clearDreamFastWaiting = React.useCallback(() => {
+    dreamFastWaitingRef.current = false;
+  }, []);
+
+  const isGenerating =
+    busy ||
+    streamingText !== null ||
+    streamingSlipReport !== null ||
+    streamingMeihuaMessageId !== null ||
+    streamingBaziMessageId !== null;
+
+  const stopGeneration = React.useCallback(() => {
+    abortRef.current?.abort(new DOMException("User stopped generation", "AbortError"));
+  }, []);
+
+  const beginAbortableRequest = React.useCallback(() => {
+    abortRef.current?.abort(new DOMException("New request started", "AbortError"));
+    abortRef.current = new AbortController();
+    return abortRef.current.signal;
   }, []);
 
   /**
@@ -146,6 +179,11 @@ export function useChatStream({
           onShellCard: (card: DisplayMessage) => void;
           onReadingUpdate: (messageId: string, rawText: string) => void;
         };
+        /** 八字：先命盘 card，token 写入同条消息 */
+        bazi?: {
+          onShellCard: (card: DisplayMessage) => void;
+          onReadingUpdate: (messageId: string, rawText: string) => void;
+        };
       },
     ): Promise<{ assistantText: string; cards: DisplayMessage[] }> => {
       let assistantText = "";
@@ -153,6 +191,8 @@ export function useChatStream({
       let rafId: number | null = null;
       let meihuaRafId: number | null = null;
       let meihuaCardId: string | null = null;
+      let baziRafId: number | null = null;
+      let baziCardId: string | null = null;
       let slipShell: SlipReportShell | null = null;
       let slipReportRafId: number | null = null;
       // 跨 chunk 拼半截 <think> 也能识别，UI 上完全不会闪现思考链
@@ -174,6 +214,16 @@ export function useChatStream({
       const schedMeihua = () => {
         if (meihuaRafId !== null) return;
         meihuaRafId = requestAnimationFrame(flushMeihua);
+      };
+      const flushBazi = () => {
+        baziRafId = null;
+        if (baziCardId && extra.bazi) {
+          extra.bazi.onReadingUpdate(baziCardId, assistantText);
+        }
+      };
+      const schedBazi = () => {
+        if (baziRafId !== null) return;
+        baziRafId = requestAnimationFrame(flushBazi);
       };
       const buildStreamingReport = (shell: SlipReportShell): StreamingSlipReport => ({
         slipNumber: shell.slipNumber,
@@ -215,6 +265,8 @@ export function useChatStream({
                 schedSlipReport();
               } else if (meihuaCardId && extra.meihua) {
                 schedMeihua();
+              } else if (baziCardId && extra.bazi) {
+                schedBazi();
               } else {
                 sched();
               }
@@ -226,6 +278,10 @@ export function useChatStream({
             if (extra.meihua && !meihuaCardId) {
               meihuaCardId = display.id;
               extra.meihua.onShellCard(display);
+            }
+            if (extra.bazi && !baziCardId) {
+              baziCardId = display.id;
+              extra.bazi.onShellCard(display);
             }
           },
           onProgress: (data) => {
@@ -254,9 +310,13 @@ export function useChatStream({
         }
         if (rafId !== null) cancelAnimationFrame(rafId);
         if (meihuaRafId !== null) cancelAnimationFrame(meihuaRafId);
+        if (baziRafId !== null) cancelAnimationFrame(baziRafId);
         if (slipReportRafId !== null) cancelAnimationFrame(slipReportRafId);
         if (meihuaCardId && extra.meihua) {
           extra.meihua.onReadingUpdate(meihuaCardId, assistantText);
+        }
+        if (baziCardId && extra.bazi) {
+          extra.bazi.onReadingUpdate(baziCardId, assistantText);
         }
         setProgressHint(null);
       }
@@ -273,22 +333,40 @@ export function useChatStream({
       body: Record<string, unknown>,
       options?: PostSubActionOptions,
     ) => {
-      if (streamingText !== null || streamingSlipReport !== null || busy) return;
+      if (isGenerating) {
+        toast.message(CHAT_SEND_BLOCKED_WHILE_GENERATING);
+        return;
+      }
       setBusy(true);
+      const signal = beginAbortableRequest();
       const mergeMessageId = options?.mergeMessageId;
       const isSlipExplain = url.includes("/qianwen/explain");
       const isMeihuaStream =
         url.includes("/divination/meihua") &&
         Array.isArray(body.numbers) &&
         (body.numbers as unknown[]).length > 0;
+      const isBaziStream =
+        url.includes("/divination/bazi") &&
+        typeof body.profileId === "string" &&
+        typeof body.focus === "string";
       let res: Response;
       try {
         res = await apiFetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
+          signal,
         });
       } catch (e) {
+        if ((e as Error).name === "AbortError") {
+          setStreamingSlipReport(null);
+          setStreamingMeihuaMessageId(null);
+          setStreamingBaziMessageId(null);
+          setStreamingText(null);
+          setProgressHint(null);
+          setBusy(false);
+          return;
+        }
         if (process.env.NODE_ENV !== "production") {
           console.error(`${label} fetch failed`, e);
         }
@@ -321,9 +399,7 @@ export function useChatStream({
       // Branch D: SSE 流式
       const ct = res.headers.get("content-type") ?? "";
       if (ct.includes("text/event-stream") && res.body) {
-        if (isMeihuaStream) {
-          setStreamingMeihuaMessageId(null);
-        } else if (!isSlipExplain) {
+        if (!isSlipExplain && !isMeihuaStream && !isBaziStream) {
           setStreamingText("");
         }
         const { assistantText, cards } = await consumeStream(
@@ -355,10 +431,25 @@ export function useChatStream({
                     },
                   },
                 }
-              : {},
+              : isBaziStream
+                ? {
+                    bazi: {
+                      onShellCard: (card) => {
+                        setStreamingBaziMessageId(card.id);
+                        setMessages((m) => mergeMessagesById(m, [card]));
+                      },
+                      onReadingUpdate: (messageId, rawText) => {
+                        setMessages((m) =>
+                          patchBaziStreamingMessage(m, messageId, rawText),
+                        );
+                      },
+                    },
+                  }
+                : {},
         );
         setStreamingSlipReport(null);
         setStreamingMeihuaMessageId(null);
+        setStreamingBaziMessageId(null);
         setMessages((m) => commitTurn(m, assistantText, cards));
         setStreamingText(null);
         setBusy(false);
@@ -391,32 +482,47 @@ export function useChatStream({
       }
       setBusy(false);
     },
-    [convId, streamingText, streamingSlipReport, busy, consumeStream],
+    [convId, isGenerating, beginAbortableRequest, consumeStream],
   );
 
   const send = React.useCallback(
     async (text: string) => {
-      if (busy || streamingSlipReport !== null) return;
+      if (isGenerating) {
+        toast.message(CHAT_SEND_BLOCKED_WHILE_GENERATING);
+        return;
+      }
       if (!sessionReady) {
         toast.error("会话准备中，请稍候再试");
         return;
       }
 
-      // dream fast：下一条用户消息直接走 /api/divination/dream
-      if (dreamFastWaitingRef.current && convId) {
+      // 解梦：引导卡/快速模式后，底部输入描述梦境 → /api/divination/dream（非 /api/chat 闲聊）
+      const dreamConvId = convId;
+      if (
+        dreamConvId &&
+        shouldSendDreamFastSubAction(
+          messages,
+          text,
+          dreamFastWaitingRef.current,
+        )
+      ) {
         dreamFastWaitingRef.current = false;
+        const userMsg: DisplayMessage = {
+          id: `tmp-user-${Date.now()}`,
+          role: "user",
+          content: text,
+          created_at: new Date().toISOString(),
+        };
+        setMessages((m) => [...m, userMsg]);
         await postSubAction("/api/divination/dream", "解梦", {
-          conversationId: convId,
+          conversationId: dreamConvId,
           mode: "fast",
           dream: text,
         });
         return;
       }
 
-      // 给 abort 显式传 reason，避免浏览器抛 "signal is aborted without reason"
-      // 触发 Next dev overlay 误报（已在下方 catch 中识别 AbortError 静默）。
-      abortRef.current?.abort(new DOMException("New request started", "AbortError"));
-      abortRef.current = new AbortController();
+      const signal = beginAbortableRequest();
 
       const userMsg: DisplayMessage = {
         id: `tmp-user-${Date.now()}`,
@@ -440,7 +546,7 @@ export function useChatStream({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ conversationId: activeConvId, text }),
-          signal: abortRef.current!.signal,
+          signal,
         });
 
       let activeConvId = convId;
@@ -479,9 +585,12 @@ export function useChatStream({
           }
         }
       } catch (e) {
-        // 用户主动取消 / 旧请求被新请求覆盖：静默
         if ((e as Error).name === "AbortError") {
           setStreamingText(null);
+          setStreamingSlipReport(null);
+          setStreamingMeihuaMessageId(null);
+          setStreamingBaziMessageId(null);
+          setProgressHint(null);
           setBusy(false);
           return;
         }
@@ -546,7 +655,7 @@ export function useChatStream({
       setStreamingText(null);
       setBusy(false);
     },
-    [convId, busy, streamingSlipReport, sessionReady, consumeStream, postSubAction, setConvId],
+    [convId, messages, isGenerating, sessionReady, consumeStream, postSubAction, setConvId, beginAbortableRequest],
   );
 
   return {
@@ -556,11 +665,15 @@ export function useChatStream({
     streamingText,
     streamingSlipReport,
     streamingMeihuaMessageId,
+    streamingBaziMessageId,
     progressHint,
     busy,
+    isGenerating,
+    stopGeneration,
     send,
     postSubAction,
     markDreamFastWaiting,
+    clearDreamFastWaiting,
   };
 }
 
@@ -582,23 +695,4 @@ function toDisplayCard(card: SseCardData): DisplayMessage {
     created_at: new Date().toISOString(),
     metadata: card.metadata ?? null,
   };
-}
-
-function commitTurn(
-  prev: DisplayMessage[],
-  assistantText: string,
-  cards: DisplayMessage[],
-): DisplayMessage[] {
-  const incoming: DisplayMessage[] = [...cards];
-  // 若有卡片（bazi/meihua/explain 等 SSE 路径），则卡片 content 已含完整文字，
-  // 不再额外插入纯文本气泡，避免用户看到两条内容相同的消息。
-  if (assistantText && cards.length === 0) {
-    incoming.unshift({
-      id: `tmp-asst-${Date.now()}`,
-      role: "assistant",
-      content: assistantText,
-      created_at: new Date().toISOString(),
-    });
-  }
-  return mergeMessagesById(prev, incoming);
 }

@@ -23,6 +23,7 @@ interface UseCardHandlersOptions {
   ) => Promise<void>;
   /** dream fast 模式：标记下一条 send() 走 dream 路由 */
   markDreamFastWaiting: () => void;
+  clearDreamFastWaiting: () => void;
 }
 
 export interface UseCardHandlersReturn {
@@ -44,6 +45,7 @@ export function useCardHandlers({
   setMessages,
   postSubAction,
   markDreamFastWaiting,
+  clearDreamFastWaiting,
 }: UseCardHandlersOptions): UseCardHandlersReturn {
   // 抽签 dimension 在 picker→input 跨两条卡之间暂存
   const slipDimRef = React.useRef<string | null>(null);
@@ -58,18 +60,12 @@ export function useCardHandlers({
       if (ui === "dream_choice") {
         if (key === "fast") {
           markDreamFastWaiting();
-          setMessages((m) => [
-            ...m,
-            makeLocalCard(`local-dream-fast-${Date.now()}`, "请描述你的梦境，描述越详细解读越精准哦。", { ui: "text" }),
-          ]);
         } else if (key === "precise") {
-          setMessages((m) => [
-            ...m,
-            makeLocalCard(`local-dream-precise-${Date.now()}`, "请填写以下信息，帮助我更精准地解读你的梦境。", {
-              ui: "dream_precise_form",
-            }),
-          ]);
+          clearDreamFastWaiting();
         }
+        setMessages((m) =>
+          applyDreamChoicePick(m, msgId, key as "fast" | "precise"),
+        );
         return;
       }
       if (ui === "bazi_focus_picker") {
@@ -135,7 +131,7 @@ export function useCardHandlers({
         })();
       }
     },
-    [convId, messages, postSubAction, setMessages, markDreamFastWaiting],
+    [convId, messages, postSubAction, setMessages, markDreamFastWaiting, clearDreamFastWaiting],
   );
 
   const handleCardSubmit = React.useCallback<CardSubmitCallback>(
@@ -308,6 +304,46 @@ function resolveSlipExplainMessageId(
     /* 静默 */
   }
   return msgId;
+}
+
+/** 选完解梦方式：收起 dream_choice，只保留 fast 或 precise 一条引导 */
+export function applyDreamChoicePick(
+  messages: DisplayMessage[],
+  pickerMsgId: string,
+  key: "fast" | "precise",
+): DisplayMessage[] {
+  const label = resolvePickerOptionLabel(messages, pickerMsgId, key);
+  const ts = Date.now();
+  const collapsed = messages.map((msg) => {
+    if (msg.id !== pickerMsgId) return msg;
+    return {
+      ...msg,
+      content: `已选择：${label}`,
+      metadata: JSON.stringify({ ui: "text", picked: true }),
+    };
+  });
+  const followUp =
+    key === "fast"
+      ? makeLocalCard(
+          `local-dream-fast-${ts}`,
+          "请描述你的梦境，描述越详细解读越精准哦。",
+          { ui: "text" },
+        )
+      : makeLocalCard(
+          `local-dream-precise-${ts}`,
+          "请填写以下信息，帮助我更精准地解读你的梦境。",
+          { ui: "dream_precise_form" },
+        );
+  return [
+    ...collapsed,
+    {
+      id: `local-dream-choice-user-${ts}`,
+      role: "user" as const,
+      content: label,
+      created_at: new Date().toISOString(),
+    },
+    followUp,
+  ];
 }
 
 /** 选完签类：收起 picker → 用户气泡记录选择 → 助手回复问题输入卡 */

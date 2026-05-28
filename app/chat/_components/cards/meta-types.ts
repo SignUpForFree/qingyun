@@ -42,6 +42,8 @@ export interface SlipImageMeta {
 
 export interface BaziResultMeta {
   focus: string;
+  /** 流式解读正文（与 message.content 同步） */
+  aiText?: string;
   chart: {
     pillars: BaziPillars;
     fiveElements: Record<Wuxing, number>;

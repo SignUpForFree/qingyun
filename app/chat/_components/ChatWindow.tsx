@@ -66,6 +66,7 @@ export function ChatWindow({
     setMessages: stream.setMessages,
     postSubAction: stream.postSubAction,
     markDreamFastWaiting: stream.markDreamFastWaiting,
+    clearDreamFastWaiting: stream.clearDreamFastWaiting,
   });
 
   useMountActions({
@@ -75,11 +76,7 @@ export function ChatWindow({
   });
 
   const drawer = useHistoryDrawer(Boolean(openHistoryOnMount));
-  const inputBusy =
-    stream.streamingText !== null ||
-    stream.streamingSlipReport !== null ||
-    stream.busy ||
-    (needsDevBootstrap && !sessionReady);
+  const sessionBlocked = needsDevBootstrap && !sessionReady;
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden">
@@ -95,17 +92,20 @@ export function ChatWindow({
         streamingText={stream.streamingText}
         streamingSlipReport={stream.streamingSlipReport}
         streamingMeihuaMessageId={stream.streamingMeihuaMessageId}
+        streamingBaziMessageId={stream.streamingBaziMessageId}
         onCardPick={handleCardPick}
         onCardSubmit={handleCardSubmit}
         onCardAction={handleCardAction}
         busy={stream.busy}
         userAvatarUrl={userAvatarUrl}
         userNickname={userNickname}
-        empty={<EmptyLauncher onPick={stream.send} busy={inputBusy} />}
+        empty={<EmptyLauncher onPick={stream.send} busy={sessionBlocked || stream.isGenerating} />}
       />
       <ChatInput
         onSend={stream.send}
-        busy={inputBusy}
+        disabled={sessionBlocked}
+        generating={stream.isGenerating}
+        onStop={stream.stopGeneration}
         initialText={prefillText}
         showQuickChips={stream.messages.length > 0}
         solid

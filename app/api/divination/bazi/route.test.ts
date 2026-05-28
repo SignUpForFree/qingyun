@@ -299,8 +299,11 @@ describe("POST /api/divination/bazi — Branch D (profileId + focus → SSE)", (
     const text = await readSse(r);
     expect(text).toContain("event: meta");
     expect(text).toContain("event: progress");
-    expect(text).toContain("event: token");
-    expect(text).toContain("event: card");
+    const cardIdx = text.indexOf("event: card");
+    const tokenIdx = text.indexOf("event: token");
+    expect(cardIdx).toBeGreaterThan(-1);
+    expect(tokenIdx).toBeGreaterThan(-1);
+    expect(cardIdx).toBeLessThan(tokenIdx);
     expect(text).toContain("event: done");
     expect(text).toContain("bazi_result");
   });

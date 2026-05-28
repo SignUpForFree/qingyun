@@ -1,19 +1,22 @@
 "use client";
 
 import * as React from "react";
-import { Send, Mic, MicOff } from "lucide-react";
+import { Send, Mic, MicOff, Square } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import { useVisualViewportInset } from "@/lib/util/use-visual-viewport-inset";
 import { IntentChips } from "./IntentChips";
 import { isSpeechRecognitionSupported, startRecording } from "@/lib/speech/asr";
+import { CHAT_SEND_BLOCKED_WHILE_GENERATING } from "./chat-input-messages";
 
 interface ChatInputProps {
   onSend: (text: string) => void;
   disabled?: boolean;
   placeholder?: string;
-  /** AI 正在回复中（spec §4 弱化输入区） */
-  busy?: boolean;
+  /** AI 正在流式生成：输入框可编辑，禁止发送，展示停止钮 */
+  generating?: boolean;
+  onStop?: () => void;
   /** 显示意图 chip 行（M2.25, 招呼页 / 空对话页用） */
   showQuickChips?: boolean;
   /** M4.10 ?prefill= 预填初始文本（不自动 send，让用户改后再发） */
@@ -29,16 +32,15 @@ interface ChatInputProps {
  *
  * - 单行 textarea，Enter 发送 / Shift+Enter 换行
  * - 🎤 麦克风按钮：按住录音 → ASR → 自动填入文本
- * - busy=true 时输入禁用 + 浮 "AI 正在回应…"
- * - showQuickChips: 在输入框上方挂 4 个意图 chip（抽签 / 测算 / 解梦 / 八字）
- *   chip 点击直接 onSend(预设话术)，触发关键词层路由（0 token，spec §4.2）
+ * - generating=true：输入不禁用；发送/chip 拦截并 toast；框内右侧「停止」
  * - 不做路由/发送 — 纯受控组件，由父决定
  */
 export function ChatInput({
   onSend,
   disabled,
   placeholder,
-  busy,
+  generating = false,
+  onStop,
   showQuickChips,
   initialText,
   solid,
@@ -48,16 +50,13 @@ export function ChatInput({
   const taRef = React.useRef<HTMLTextAreaElement | null>(null);
   const keyboardInset = useVisualViewportInset();
 
-  // 语音录制状态
   const [isRecording, setIsRecording] = React.useState(false);
   const [interimText, setInterimText] = React.useState("");
-  // 仅在客户端 mount 后检测，避免 SSR 无 window → false、浏览器 → true 导致 hydration mismatch
   const [hasSpeechSupport, setHasSpeechSupport] = React.useState(false);
   React.useEffect(() => {
     setHasSpeechSupport(isSpeechRecognitionSupported());
   }, []);
 
-  // 简易自适应高度
   React.useEffect(() => {
     const el = taRef.current;
     if (!el) return;
@@ -65,23 +64,43 @@ export function ChatInput({
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
   }, [text]);
 
+  const notifySendBlocked = React.useCallback(() => {
+    toast.message(CHAT_SEND_BLOCKED_WHILE_GENERATING);
+  }, []);
+
+  const trySend = React.useCallback(
+    (payload: string) => {
+      const trimmed = payload.trim();
+      if (!trimmed) return;
+      if (disabled) return;
+      if (generating) {
+        notifySendBlocked();
+        return;
+      }
+      onSend(trimmed);
+      setText("");
+    },
+    [disabled, generating, notifySendBlocked, onSend],
+  );
+
   function submit() {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    onSend(trimmed);
-    setText("");
+    trySend(text);
   }
 
   const handleChipPick = React.useCallback(
     (chipText: string) => {
-      if (busy || disabled) return;
+      if (disabled) return;
+      if (generating) {
+        notifySendBlocked();
+        return;
+      }
       onSend(chipText);
     },
-    [busy, disabled, onSend],
+    [disabled, generating, notifySendBlocked, onSend],
   );
 
   const handleMicClick = React.useCallback(async () => {
-    if (isRecording) return; // 防重复
+    if (isRecording) return;
     setIsRecording(true);
     setInterimText("");
     try {
@@ -96,7 +115,6 @@ export function ChatInput({
         });
       }
     } catch (e) {
-      // 用户取消或浏览器不支持，静默处理
       if (process.env.NODE_ENV !== "production") {
         console.warn("[ChatInput] ASR error:", e);
       }
@@ -106,11 +124,12 @@ export function ChatInput({
     }
   }, [isRecording]);
 
-  const finalPlaceholder = busy
-    ? "AI 正在回应…"
-    : isRecording
+  const finalPlaceholder =
+    isRecording
       ? "正在聆听…"
       : placeholder ?? "把想问的写给我…";
+
+  const sendDisabled = disabled || !text.trim();
 
   return (
     <div
@@ -118,10 +137,7 @@ export function ChatInput({
         "shrink-0 flex flex-col gap-0 px-0 py-0",
         "border-t border-[var(--color-accent-lavender)]/30",
         "pb-[env(safe-area-inset-bottom,0px)]",
-        solid
-          ? "bg-[var(--color-bg-paper)]"
-          : "glass hairline",
-        busy && "opacity-70",
+        solid ? "bg-[var(--color-bg-paper)]" : "glass hairline",
       )}
       style={keyboardInset > 0 ? { transform: `translateY(-${keyboardInset}px)` } : undefined}
     >
@@ -134,49 +150,75 @@ export function ChatInput({
           {progressHint}
         </p>
       )}
-      {showQuickChips && <IntentChips onPick={handleChipPick} busy={busy} />}
+      {showQuickChips && (
+        <IntentChips
+          onPick={handleChipPick}
+          busy={disabled}
+          onBusyPick={generating ? notifySendBlocked : undefined}
+        />
+      )}
       <div className="relative flex items-end gap-2 px-3 pb-3 pt-1">
-        <div className="flex-1">
-        <Textarea
-          ref={taRef}
-          rows={1}
-          value={isRecording && interimText ? interimText : text}
-          disabled={disabled || busy || isRecording}
-          placeholder={finalPlaceholder}
-          onChange={(e) => {
+        <div className="relative flex-1">
+          <Textarea
+            ref={taRef}
+            rows={1}
+            value={isRecording && interimText ? interimText : text}
+            disabled={disabled || isRecording}
+            placeholder={finalPlaceholder}
+            onChange={(e) => {
               const v = e.target.value;
               setText(v.length > 1000 ? v.slice(0, 1000) : v);
             }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          className={cn(
-            "min-h-10 max-h-32 resize-none rounded-[20px] bg-white/40 px-4 py-2",
-            "text-sm font-[family-name:var(--font-serif)] text-[var(--color-ink-plum)]",
-            "placeholder:text-[var(--color-ink-fade)]",
-            "focus-visible:ring-1 focus-visible:ring-[var(--color-accent-lavender)]",
-            isRecording && "ring-2 ring-red-400/50",
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                if (generating) {
+                  notifySendBlocked();
+                  return;
+                }
+                submit();
+              }
+            }}
+            className={cn(
+              "min-h-10 max-h-32 resize-none rounded-[20px] bg-white/40 px-4 py-2",
+              "text-sm font-[family-name:var(--font-serif)] text-[var(--color-ink-plum)]",
+              "placeholder:text-[var(--color-ink-fade)]",
+              "focus-visible:ring-1 focus-visible:ring-[var(--color-accent-lavender)]",
+              isRecording && "ring-2 ring-red-400/50",
+              generating && "pr-12",
+            )}
+          />
+          {generating && onStop ? (
+            <button
+              type="button"
+              aria-label="停止生成"
+              data-testid="chat-stop-generation"
+              onClick={onStop}
+              className={cn(
+                "absolute right-2 bottom-2 flex h-7 w-7 items-center justify-center rounded-full",
+                "bg-[var(--color-ink-plum)]/90 text-white shadow-sm transition-opacity hover:opacity-90",
+              )}
+            >
+              <Square className="h-3 w-3 fill-current" />
+            </button>
+          ) : null}
+          {text.length > 900 && (
+            <p
+              className={cn(
+                "mt-0.5 text-[10px] text-right pr-1",
+                text.length >= 1000 ? "text-red-400" : "text-[var(--color-ink-fade)]",
+              )}
+            >
+              {text.length}/1000
+            </p>
           )}
-        />
-        {text.length > 900 && (
-          <p className={cn(
-            "mt-0.5 text-[10px] text-right pr-1",
-            text.length >= 1000 ? "text-red-400" : "text-[var(--color-ink-fade)]",
-          )}>
-            {text.length}/1000
-          </p>
-        )}
         </div>
-        {/* 🎤 麦克风按钮 */}
         {hasSpeechSupport && (
           <button
             type="button"
             aria-label={isRecording ? "正在录音" : "语音输入"}
             onClick={handleMicClick}
-            disabled={disabled || busy}
+            disabled={disabled}
             className={cn(
               "flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all",
               isRecording
@@ -191,8 +233,14 @@ export function ChatInput({
         <button
           type="button"
           aria-label="发送"
-          onClick={submit}
-          disabled={disabled || busy || !text.trim()}
+          onClick={() => {
+            if (generating) {
+              notifySendBlocked();
+              return;
+            }
+            submit();
+          }}
+          disabled={sendDisabled}
           className={cn(
             "flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all",
             "bg-gradient-to-br from-[#F0B8C8] to-[#C9A1D9] text-white shadow-pill",

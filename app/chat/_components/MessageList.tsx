@@ -22,6 +22,7 @@ interface MessageListProps {
   streamingText: string | null;
   streamingSlipReport?: StreamingSlipReport | null;
   streamingMeihuaMessageId?: string | null;
+  streamingBaziMessageId?: string | null;
   className?: string;
   empty?: React.ReactNode;
   onCardPick?: CardPickCallback;
@@ -86,6 +87,7 @@ export function MessageList({
   streamingText,
   streamingSlipReport = null,
   streamingMeihuaMessageId = null,
+  streamingBaziMessageId = null,
   className,
   empty,
   onCardPick,
@@ -182,6 +184,7 @@ export function MessageList({
                 onCardAction={onCardAction}
                 busy={busy}
                 streamingMeihuaMessageId={streamingMeihuaMessageId}
+                streamingBaziMessageId={streamingBaziMessageId}
                 userAvatarUrl={userAvatarUrl}
                 userNickname={userNickname}
               />
@@ -202,7 +205,8 @@ export function MessageList({
             )}
             {streamingText !== null &&
               streamingSlipReport === null &&
-              streamingMeihuaMessageId === null && (
+              streamingMeihuaMessageId === null &&
+              streamingBaziMessageId === null && (
                 <StreamingReadingCard text={streamingText} />
               )}
           </>

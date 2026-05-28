@@ -66,4 +66,9 @@ describe("MeihuaResultCard (M2.13)", () => {
     expect(text).not.toContain("卯时");
     expect(text).toContain("三日内");
   });
+
+  it("流式且无正文时显示思考中...", () => {
+    render(<MeihuaResultCard {...baseProps} aiText="" readingStreaming />);
+    expect(screen.getByText("思考中...")).toBeInTheDocument();
+  });
 });

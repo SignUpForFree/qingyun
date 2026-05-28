@@ -62,6 +62,8 @@ interface MessageBubbleProps {
   busy?: boolean;
   /** 梅花解读流式更新中的消息 id */
   streamingMeihuaMessageId?: string | null;
+  /** 八字解读流式更新中的消息 id */
+  streamingBaziMessageId?: string | null;
   /** user 气泡左侧头像（来自默认档案 avatar_url） */
   userAvatarUrl?: string | null;
   /** user 昵称（avatar fallback + alt） */
@@ -95,6 +97,7 @@ export function MessageBubble({
   onCardAction,
   busy,
   streamingMeihuaMessageId,
+  streamingBaziMessageId,
   userAvatarUrl,
   userNickname,
 }: MessageBubbleProps) {
@@ -375,7 +378,12 @@ export function MessageBubble({
       const m = meta as unknown as BaziResultMeta;
       return (
         <CardWrap className={className}>
-          <BaziResultCard chart={m.chart} focus={m.focus} aiText={message.content} />
+          <BaziResultCard
+            chart={m.chart}
+            focus={m.focus}
+            aiText={m.aiText ?? message.content}
+            readingStreaming={message.id === streamingBaziMessageId}
+          />
         </CardWrap>
       );
     }

@@ -19,7 +19,7 @@ describe("IntentChips", () => {
     fireEvent.click(screen.getByRole("button", { name: "测算" }));
     expect(onPick).toHaveBeenCalledWith("我要测算");
     fireEvent.click(screen.getByRole("button", { name: "AI 解梦" }));
-    expect(onPick).toHaveBeenCalledWith("我要 AI 解梦");
+    expect(onPick).toHaveBeenCalledWith("我要解梦");
     fireEvent.click(screen.getByRole("button", { name: "八字解读" }));
     expect(onPick).toHaveBeenCalledWith("我要八字解读");
   });

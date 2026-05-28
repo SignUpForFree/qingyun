@@ -106,4 +106,11 @@ describe("BaziResultCard (design §8)", () => {
     render(<BaziResultCard chart={baseChart} focus="x" aiText="y" />);
     expect(screen.queryByTestId("bazi-explain-cta")).toBeNull();
   });
+
+  it("流式且无正文时显示思考中...", () => {
+    render(
+      <BaziResultCard chart={baseChart} focus="事业学业" aiText="" readingStreaming />,
+    );
+    expect(screen.getByText("思考中...")).toBeInTheDocument();
+  });
 });

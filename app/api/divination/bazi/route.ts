@@ -10,6 +10,7 @@ import { serializeJson } from "@/lib/db/json";
 import { baziProvider } from "@/lib/divination-providers";
 import { findCity } from "@/lib/regions/data";
 import { buildBaziPrompt, type V2DivinationDim } from "@/lib/ai/prompts/bazi-interpret";
+import { buildBaziResultCardMeta } from "@/lib/bazi/card-meta";
 import { sanitizeAiOutput } from "@/lib/ai/output-sanitizer";
 import { parsePillarsCache, serializePillars } from "@/lib/profile/bazi-pillars";
 import {
@@ -387,6 +388,45 @@ export async function POST(req: Request) {
           }
         }
 
+        const shellMeta = buildBaziResultCardMeta({
+          profileId,
+          focus,
+          chartV2,
+          aiText: "",
+        });
+
+        let cardMessageId: string | undefined;
+        try {
+          const [shellRow] = await db
+            .insert(messages)
+            .values({
+              conversation_id: conversationId,
+              role: "assistant",
+              content: "",
+              intent: "bazi",
+              metadata: serializeJson(shellMeta),
+              profile_id_used: profileId,
+            })
+            .returning();
+          cardMessageId = shellRow?.id;
+        } catch (insertErr) {
+          if (process.env.NODE_ENV !== "production") {
+            console.error("[bazi] shell card insert failed", insertErr);
+          }
+        }
+
+        if (cardMessageId) {
+          safeEnqueue(
+            controller,
+            frame("card", {
+              id: cardMessageId,
+              role: "assistant",
+              content: "",
+              metadata: serializeJson(shellMeta),
+            }),
+          );
+        }
+
         const { systemPrompt, userPrompt } = buildBaziPrompt({
           chart: chartV2,
           focus: focus as V2DivinationDim,
@@ -432,43 +472,42 @@ export async function POST(req: Request) {
           );
         }
 
-        const cardMeta = {
-          ui: "bazi_result" as const,
+        const cardMeta = buildBaziResultCardMeta({
           profileId,
           focus,
-          chart: {
-            pillars: chartV2.pillars,
-            fiveElements: chartV2.fiveElements,
-            dayMaster: chartV2.dayMaster,
-            tenGods: chartV2.tenGods,
-            shensha: chartV2.shensha,
-            yongShen: chartV2.yongShen,
-            luckPillars: chartV2.luckPillars,
-            liunian: chartV2.liunian,
-            currentLuck: chartV2.luckPillars[0]
-              ? `${chartV2.luckPillars[0].gan}${chartV2.luckPillars[0].zhi}`
-              : "",
-          },
+          chartV2,
           aiText: finalText,
-        };
+        });
 
-        const [card] = await db
-          .insert(messages)
-          .values({
-            conversation_id: conversationId,
-            role: "assistant",
-            content: finalText,
-            intent: "bazi",
-            metadata: serializeJson(cardMeta),
-            tokens_used: tokens,
-            profile_id_used: profileId,
-          })
-          .returning();
+        if (cardMessageId) {
+          await db
+            .update(messages)
+            .set({
+              content: finalText,
+              metadata: serializeJson(cardMeta),
+              tokens_used: tokens,
+            })
+            .where(eq(messages.id, cardMessageId));
+        } else {
+          const [card] = await db
+            .insert(messages)
+            .values({
+              conversation_id: conversationId,
+              role: "assistant",
+              content: finalText,
+              intent: "bazi",
+              metadata: serializeJson(cardMeta),
+              tokens_used: tokens,
+              profile_id_used: profileId,
+            })
+            .returning();
+          cardMessageId = card?.id;
+        }
 
         safeEnqueue(
           controller,
           frame("card", {
-            id: card?.id,
+            id: cardMessageId,
             role: "assistant",
             content: finalText,
             metadata: serializeJson(cardMeta),

@@ -1,5 +1,6 @@
 "use client";
-import { GlassCard, Sparkle } from "@/components/su";
+import { DivinationReadingSection } from "@/components/divination/DivinationReadingSection";
+import { GlassCard } from "@/components/su";
 import { cn } from "@/lib/utils";
 import { wuxingOf } from "@/lib/bazi/stems-branches";
 import type { BaziPillars, BaziTenGods } from "@/types/domain";
@@ -19,6 +20,8 @@ interface BaziResultCardProps {
   chart: BaziChartView;
   focus: string;
   aiText: string;
+  /** 解读区流式输出中（命盘已展示） */
+  readingStreaming?: boolean;
   /** 命主称呼，default "命 主"。可填档案 nickname */
   ownerLabel?: string;
   /** 命盘小标题（如"丁丑年 三月初七 辰时"），缺则隐藏 */
@@ -78,7 +81,8 @@ export function BaziResultCard({
   chart,
   focus,
   aiText,
-  ownerLabel,
+  readingStreaming = false,
+  ownerLabel = "命 主",
   birthSummary,
   onExplain,
   className,
@@ -228,13 +232,13 @@ export function BaziResultCard({
         </p>
       </div>
 
-      {/* AI 解读 + ✦ 段首 */}
-      {aiText && (
-        <p className="whitespace-pre-wrap text-[13px] leading-[1.85] text-[var(--color-ink-plum)]">
-          <Sparkle size={10} variant="diamond" className="mr-1" />
-          {aiText}
-        </p>
-      )}
+      <DivinationReadingSection aiText={aiText} readingStreaming={readingStreaming}>
+        {aiText.trim() ? (
+          <p className="whitespace-pre-wrap text-[13px] leading-[1.85] text-[var(--color-ink-plum)]">
+            {aiText}
+          </p>
+        ) : null}
+      </DivinationReadingSection>
 
       {/* CTA */}
       {onExplain && (

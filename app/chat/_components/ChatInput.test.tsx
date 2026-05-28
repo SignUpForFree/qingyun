@@ -1,8 +1,17 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ChatInput } from "./ChatInput";
+import { CHAT_SEND_BLOCKED_WHILE_GENERATING } from "./chat-input-messages";
+
+vi.mock("sonner", () => ({
+  toast: { message: vi.fn(), error: vi.fn() },
+}));
 
 describe("ChatInput", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("无 chip prop → 不渲染 chip 行", () => {
     render(<ChatInput onSend={vi.fn()} />);
     expect(screen.queryByRole("button", { name: "抽灵签" })).toBeNull();
@@ -22,17 +31,46 @@ describe("ChatInput", () => {
     fireEvent.click(screen.getByRole("button", { name: "抽灵签" }));
     expect(onSend).toHaveBeenCalledWith("我要抽灵签");
     fireEvent.click(screen.getByRole("button", { name: "AI 解梦" }));
-    expect(onSend).toHaveBeenCalledWith("我要 AI 解梦");
+    expect(onSend).toHaveBeenCalledWith("我要解梦");
   });
 
-  it("busy=true 时 chip + textarea 禁用", () => {
+  it("generating 时 textarea 可输入，chip 拦截并 toast", async () => {
     const onSend = vi.fn();
-    render(<ChatInput onSend={onSend} showQuickChips busy />);
+    const { toast } = await import("sonner");
+    render(<ChatInput onSend={onSend} showQuickChips generating onStop={vi.fn()} />);
+    const ta = screen.getByPlaceholderText("把想问的写给我…");
+    expect(ta).not.toBeDisabled();
+    fireEvent.change(ta, { target: { value: "草稿" } });
+    expect((ta as HTMLTextAreaElement).value).toBe("草稿");
+
     const chip = screen.getByRole("button", { name: "抽灵签" });
-    expect(chip).toBeDisabled();
+    expect(chip).not.toBeDisabled();
     fireEvent.click(chip);
     expect(onSend).not.toHaveBeenCalled();
-    expect(screen.getByPlaceholderText("AI 正在回应…")).toBeDisabled();
+    expect(toast.message).toHaveBeenCalledWith(CHAT_SEND_BLOCKED_WHILE_GENERATING);
+  });
+
+  it("generating 时 Enter / 发送钮 拦截并 toast", async () => {
+    const onSend = vi.fn();
+    const { toast } = await import("sonner");
+    render(<ChatInput onSend={onSend} generating onStop={vi.fn()} />);
+    const ta = screen.getByPlaceholderText("把想问的写给我…");
+    fireEvent.change(ta, { target: { value: "你好" } });
+    fireEvent.keyDown(ta, { key: "Enter", shiftKey: false });
+    expect(onSend).not.toHaveBeenCalled();
+    expect(toast.message).toHaveBeenCalledWith(CHAT_SEND_BLOCKED_WHILE_GENERATING);
+
+    vi.clearAllMocks();
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+    expect(onSend).not.toHaveBeenCalled();
+    expect(toast.message).toHaveBeenCalledWith(CHAT_SEND_BLOCKED_WHILE_GENERATING);
+  });
+
+  it("generating 时展示停止按钮并触发 onStop", () => {
+    const onStop = vi.fn();
+    render(<ChatInput onSend={vi.fn()} generating onStop={onStop} />);
+    fireEvent.click(screen.getByTestId("chat-stop-generation"));
+    expect(onStop).toHaveBeenCalledTimes(1);
   });
 
   it("textarea 输入 + Enter 发送", () => {

@@ -1,5 +1,6 @@
 "use client";
 
+import { DivinationReadingSection } from "@/components/divination/DivinationReadingSection";
 import { GlassCard } from "@/components/su";
 import { MeihuaReadingMarkdown } from "@/components/divination/MeihuaReadingMarkdown";
 import { cn } from "@/lib/utils";
@@ -19,13 +20,9 @@ export function StreamingReadingCard({
     <div data-testid="streaming-reading-card" className={className}>
       <CardWrap>
         <GlassCard className="w-full p-5">
-          <MeihuaReadingMarkdown text={text} />
-          <span
-            aria-hidden
-            className="ml-1 inline-block animate-pulse text-[var(--color-accent-lavender)]"
-          >
-            ✦
-          </span>
+          <DivinationReadingSection aiText={text} readingStreaming withDivider={false}>
+            {text.trim() ? <MeihuaReadingMarkdown text={text} /> : null}
+          </DivinationReadingSection>
         </GlassCard>
       </CardWrap>
     </div>
